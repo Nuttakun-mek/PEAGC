@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 export type AppRole = "admin" | "member";
 
 export type AccessContext = {
+  clubId: string | null;
   displayName: string;
   email: string | null;
   isBypass: boolean;
@@ -53,28 +54,30 @@ async function getAuthenticatedContext(requiredRole: AppRole | undefined) {
       .select("display_name, phone, line_id")
       .eq("id", user.id)
       .maybeSingle(),
-    supabase.from("user_roles").select("role_key").eq("user_id", user.id),
+    supabase.from("user_roles").select("club_id, role_key").eq("user_id", user.id),
   ]);
 
+  const adminRoles = [
+    "platform_owner",
+    "club_admin",
+    "committee",
+    "finance_officer",
+    "tournament_director",
+    "scoring_officer",
+  ];
   const hasAdminRole = Boolean(
-    roles?.some((item) =>
-      [
-        "platform_owner",
-        "club_admin",
-        "committee",
-        "finance_officer",
-        "tournament_director",
-        "scoring_officer",
-      ].includes(item.role_key),
-    ),
+    roles?.some((item) => adminRoles.includes(item.role_key)),
   );
   const role: AppRole = hasAdminRole ? "admin" : "member";
+  const primaryRole =
+    roles?.find((item) => adminRoles.includes(item.role_key)) ?? roles?.[0] ?? null;
 
   if (requiredRole === "admin" && !hasAdminRole) {
     redirect("/member?status=admin-required");
   }
 
   return {
+    clubId: primaryRole?.club_id ?? null,
     displayName:
       profile?.display_name ||
       user.user_metadata?.display_name ||
@@ -103,6 +106,7 @@ export async function resolveAccess({
     const bypassRole = allowBypassRole as AppRole;
 
     return {
+      clubId: null,
       displayName: bypassRole === "admin" ? "Admin ทดลอง" : "สมาชิกทดลอง",
       email: null,
       isBypass: true,

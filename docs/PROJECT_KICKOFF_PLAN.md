@@ -172,9 +172,9 @@ Outcome: ผู้ใช้เข้าใช้งานและเห็น p
 
 Outcome: Admin จัดการสมาชิกได้จริง
 
-- Member list
-- Search and filters
-- Add / edit member
+- Member list - started in `/admin/members`
+- Search and filters - started in `/admin/members`
+- Add / edit member - started with server actions and audit log
 - Member profile
 - Member type setting
 - Handicap field
@@ -257,4 +257,3 @@ Outcome: เริ่มคำนวณคะแนนพื้นฐานไ�
 > Admin สามารถเพิ่มสมาชิก สร้างกิจกรรม เปิดรับสมัคร ให้สมาชิกลงทะเบียน แนบ slip และดูรายชื่อผู้สมัครได้จากมือถือและ desktop
 
 เมื่อ target นี้สำเร็จแล้ว จึงต่อด้วย Pairing และ Basic Competition
-

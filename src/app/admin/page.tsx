@@ -43,30 +43,35 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   const modules = [
     {
       detail: "ค้นหา เพิ่ม แก้ไข และตรวจ profile สมาชิก",
+      href: access.isBypass ? "/admin/members?bypass=admin" : "/admin/members",
       icon: UsersRound,
       title: "Member Management",
       value: memberCount,
     },
     {
       detail: "สร้างกิจกรรม เปิดรับสมัคร และดูผู้เข้าร่วม",
+      href: "#",
       icon: CalendarDays,
       title: "Event Management",
       value: eventCount,
     },
     {
       detail: "ตรวจ slip และสถานะการชำระเงิน",
+      href: "#",
       icon: CircleDollarSign,
       title: "Payment Review",
       value: paymentCount,
     },
     {
       detail: "จัดก๊วน Tee Time และ check-in หน้างาน",
+      href: "#",
       icon: ClipboardCheck,
       title: "Pairing & Check-in",
       value: 0,
     },
     {
       detail: "ตั้งค่าการแข่งขัน คะแนน และ leaderboard",
+      href: "#",
       icon: Trophy,
       title: "Competition",
       value: 0,
@@ -136,8 +141,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           </div>
           <div className="divide-y divide-[#dfe5da]">
             {modules.map((item) => (
-              <div
+              <Link
                 className="grid gap-4 px-5 py-4 sm:grid-cols-[44px_1fr_88px] sm:items-center"
+                href={item.href}
                 key={item.title}
               >
                 <div className="flex size-11 items-center justify-center rounded-md bg-[#0f2d26] text-white">
@@ -150,7 +156,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                 <span className="w-fit rounded-md bg-[#fbfcf8] px-3 py-1 text-sm font-semibold text-[#405249]">
                   {item.value}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         </div>
