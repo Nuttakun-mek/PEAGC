@@ -53,13 +53,60 @@ By default, setup is one-time only. After any `club_admin` exists, repeat setup 
 
 The app includes a Google login button powered by Supabase OAuth.
 
-Before it works outside local UI testing:
+Current project ref: `dlaeluakeqcbizvmosdg`
 
-1. Enable Google in Supabase Dashboard > Authentication > Providers.
-2. Create Google OAuth credentials in Google Auth Platform.
-3. Add the app origin to Authorized JavaScript origins.
-4. Add the Supabase callback URL from the Google provider page to Authorized redirect URIs.
-5. Add local and deployed URLs to Supabase Auth URL configuration.
+The local app uses `NEXT_PUBLIC_APP_URL=http://localhost:3000` as the canonical OAuth return origin. Open the app with [http://localhost:3000](http://localhost:3000) when testing Google auth, even if `127.0.0.1:3000` also loads the page.
+
+Required Supabase settings:
+
+1. Open Supabase Dashboard > Authentication > Providers > Google.
+2. Enable Google.
+3. Paste the Google OAuth Client ID and Client Secret.
+4. Confirm the Supabase provider callback URL is:
+
+```text
+https://dlaeluakeqcbizvmosdg.supabase.co/auth/v1/callback
+```
+
+Required Google Auth Platform settings:
+
+1. Create an OAuth Client ID with application type `Web application`.
+2. Add Authorized JavaScript origins:
+
+```text
+http://localhost:3000
+https://dlaeluakeqcbizvmosdg.supabase.co
+```
+
+3. Add Authorized redirect URIs:
+
+```text
+https://dlaeluakeqcbizvmosdg.supabase.co/auth/v1/callback
+```
+
+Required Supabase URL Configuration:
+
+1. Set Site URL:
+
+```text
+http://localhost:3000
+```
+
+2. Add Redirect URLs:
+
+```text
+http://localhost:3000/auth/confirm
+http://localhost:3000/auth/confirm?next=/profile
+http://localhost:3000/**
+```
+
+For production, add the deployed HTTPS domain as Site URL/Redirect URL and as a Google Authorized JavaScript origin before disabling `AUTH_BYPASS_ENABLED`.
+
+Troubleshooting:
+
+- `Unsupported provider: provider is not enabled` means Google is not enabled in Supabase or Client ID/Secret are missing.
+- `redirect_uri_mismatch` from Google means the Google Authorized redirect URI does not exactly match `https://dlaeluakeqcbizvmosdg.supabase.co/auth/v1/callback`.
+- Supabase redirect errors mean the app URL used in `redirectTo` is not listed in Supabase Authentication > URL Configuration.
 
 ## Temporary Auth Bypass
 

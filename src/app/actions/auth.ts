@@ -13,6 +13,18 @@ function getSafeRedirectPath(value: FormDataEntryValue | null) {
   return value;
 }
 
+async function getAuthRedirectOrigin() {
+  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
+
+  if (configuredUrl) {
+    return configuredUrl.replace(/\/$/, "");
+  }
+
+  const requestHeaders = await headers();
+
+  return requestHeaders.get("origin") ?? "http://localhost:3000";
+}
+
 export async function signInWithEmail(formData: FormData) {
   const email = String(formData.get("email") ?? "")
     .trim()
@@ -23,11 +35,7 @@ export async function signInWithEmail(formData: FormData) {
     redirect(`/login?error=invalid-email&next=${encodeURIComponent(next)}`);
   }
 
-  const requestHeaders = await headers();
-  const origin =
-    requestHeaders.get("origin") ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000";
+  const origin = await getAuthRedirectOrigin();
   const supabase = await createClient();
 
   const { error } = await supabase.auth.signInWithOtp({
@@ -46,11 +54,7 @@ export async function signInWithEmail(formData: FormData) {
 
 export async function signInWithGoogle(formData: FormData) {
   const next = getSafeRedirectPath(formData.get("next"));
-  const requestHeaders = await headers();
-  const origin =
-    requestHeaders.get("origin") ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000";
+  const origin = await getAuthRedirectOrigin();
   const supabase = await createClient();
 
   const { data, error } = await supabase.auth.signInWithOAuth({
