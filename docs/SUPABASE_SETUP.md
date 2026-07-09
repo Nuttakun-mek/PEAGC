@@ -183,6 +183,8 @@ Additional migration:
 - Member self-registration RLS for `event_registrations`, plus a partial unique index to prevent duplicate active registrations per member/event
 - Lesson/Academy tables: `lesson_programs`, `lesson_slots`, `lesson_bookings`
 - Lesson RLS for open slots/programs, own booking insert/select, and admin attendance updates
+- Member score fields on `event_registrations` for gross/net/stableford/rank history shown in the member portal
+- `member_notifications` queue for approval email notifications after Admin approves a pending member
 
 ## Security Notes
 

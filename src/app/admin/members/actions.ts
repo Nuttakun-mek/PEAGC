@@ -213,5 +213,21 @@ export async function approveMember(formData: FormData) {
     metadata: { source: "admin.members" },
   });
 
+  if (before?.email) {
+    await supabase.from("member_notifications").insert({
+      body: `เรียน ${before.full_name} บัญชีสมาชิก PEAGC ของคุณได้รับการอนุมัติแล้ว สามารถเข้าสู่ระบบเพื่อจองเรียน สมัครกิจกรรม และดูข้อมูลสมาชิกได้`,
+      channel: "email",
+      club_id: clubId,
+      created_by: userId,
+      member_id: memberId,
+      metadata: { source: "admin.members", trigger: "member.approved" },
+      notification_type: "member_approved",
+      recipient: before.email,
+      status: "queued",
+      subject: "PEAGC อนุมัติสมาชิกเรียบร้อยแล้ว",
+      updated_by: userId,
+    });
+  }
+
   redirectMembers("approved", memberId);
 }

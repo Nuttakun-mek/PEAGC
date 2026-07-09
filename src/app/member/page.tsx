@@ -6,6 +6,7 @@ import {
   Clock,
   ClipboardCheck,
   GraduationCap,
+  MailCheck,
   MapPin,
   Pencil,
   ShieldAlert,
@@ -71,8 +72,61 @@ const sampleLessonSlots = [
   },
 ];
 
+const sampleScoreHistory = [
+  {
+    events: {
+      event_date: "2026-06-20",
+      name: "PEAGC Friendly Round",
+      venue: "Bangkok Golf Club",
+    },
+    flight: "B",
+    gross_score: 88,
+    handicap_used: 14.2,
+    id: "sample-score-1",
+    net_score: 73.8,
+    overall_rank: 6,
+    score_status: "published",
+    stableford_points: 34,
+  },
+  {
+    events: {
+      event_date: "2026-05-18",
+      name: "PEAGC Monthly Round",
+      venue: "Royal Golf Club",
+    },
+    flight: "B",
+    gross_score: 91,
+    handicap_used: 14.5,
+    id: "sample-score-2",
+    net_score: 76.5,
+    overall_rank: 11,
+    score_status: "verified",
+    stableford_points: 31,
+  },
+];
+
 function firstRelated<T>(value: T | T[] | null | undefined) {
   return Array.isArray(value) ? (value[0] ?? null) : value;
+}
+
+function getScoreStatusLabel(status: string | null | undefined) {
+  if (status === "published") {
+    return "ประกาศผลแล้ว";
+  }
+
+  if (status === "verified") {
+    return "ตรวจแล้ว";
+  }
+
+  if (status === "submitted") {
+    return "ส่งคะแนนแล้ว";
+  }
+
+  if (status === "draft") {
+    return "ร่างคะแนน";
+  }
+
+  return "ยังไม่ลงคะแนน";
 }
 
 export default async function MemberPage({ searchParams }: MemberPageProps) {
@@ -93,9 +147,26 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
         .eq("user_id", access.userId)
         .maybeSingle()
     : { data: null };
-  const displayName = member?.nickname || member?.full_name || access.displayName;
+  const demoMember =
+    access.isBypass && params.status === "pending-review"
+      ? {
+          affiliation: "PEA",
+          department: "กองบริการ",
+          employee_code: "497901",
+          full_name: "สมาชิกทดลอง",
+          handicap: 14.2,
+          id: "demo-member",
+          nickname: "Demo",
+          organization: "PEA",
+          skill_level: "intermediate",
+          status: "pending_verification",
+        }
+      : null;
+  const currentMember = member ?? demoMember;
+  const displayName =
+    currentMember?.nickname || currentMember?.full_name || access.displayName;
   const profileHref = access.isBypass ? "/profile?bypass=member" : "/profile";
-  const isPending = member?.status === "pending_verification";
+  const isPending = currentMember?.status === "pending_verification";
   const { data: openEvents } = supabase
     ? await supabase
         .from("events")
@@ -107,11 +178,11 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
     : { data: sampleOpenEvents };
   const eventIds = openEvents?.map((event) => event.id) ?? [];
   const { data: registrations } =
-    supabase && member?.id && eventIds.length
+    supabase && currentMember?.id && eventIds.length
       ? await supabase
           .from("event_registrations")
           .select("event_id, status")
-          .eq("member_id", member.id)
+          .eq("member_id", currentMember.id)
           .in("event_id", eventIds)
           .not("status", "in", "(cancelled,no_show)")
       : { data: [] };
@@ -132,18 +203,30 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
     : { data: sampleLessonSlots };
   const lessonSlotIds = lessonSlots?.map((slot) => slot.id) ?? [];
   const { data: lessonBookings } =
-    supabase && member?.id && lessonSlotIds.length
+    supabase && currentMember?.id && lessonSlotIds.length
       ? await supabase
           .from("lesson_bookings")
           .select("slot_id, status")
-          .eq("member_id", member.id)
+          .eq("member_id", currentMember.id)
           .in("slot_id", lessonSlotIds)
           .not("status", "in", "(cancelled)")
       : { data: [] };
   const lessonBookingBySlot = new Map(
     lessonBookings?.map((item) => [item.slot_id, item.status]) ?? [],
   );
-  const canRegister = !access.isBypass && member?.status === "active";
+  const { data: scoreHistory } =
+    supabase && currentMember?.id
+      ? await supabase
+          .from("event_registrations")
+          .select(
+            "id, gross_score, net_score, stableford_points, handicap_used, flight, overall_rank, score_status, events(name, event_date, venue)",
+          )
+          .eq("member_id", currentMember.id)
+          .not("status", "in", "(cancelled,no_show)")
+          .order("created_at", { ascending: false })
+          .limit(12)
+      : { data: sampleScoreHistory };
+  const canRegister = !access.isBypass && currentMember?.status === "active";
 
   return (
     <main className="min-h-screen bg-[#f6f7f2] px-4 py-6 text-[#11221d]">
@@ -167,7 +250,22 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
             </div>
           ) : null}
 
-          {access.isBypass ? (
+          {isPending ? (
+            <div className="mt-5 grid gap-3 rounded-md border border-[#e0c777] bg-[#fff8e7] px-4 py-3 text-sm text-[#8a6112]">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <span>
+                  สถานะสมาชิก: รอการตรวจสอบจาก Admin ก่อน จึงจะจองเรียนหรือสมัครกิจกรรมได้
+                </span>
+              </div>
+              <div className="flex items-start gap-3">
+                <MailCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                <span>
+                  เมื่อ Admin อนุมัติ ระบบจะสร้างรายการแจ้งเตือนอีเมลเพื่อแจ้งว่าสมาชิกใช้งานได้แล้ว
+                </span>
+              </div>
+            </div>
+          ) : access.isBypass ? (
             <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff4d8] px-4 py-3 text-sm text-[#8a6112]">
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <span>โหมดทดลอง ไม่ได้ดึงข้อมูลจริงจากบัญชีผู้ใช้</span>
@@ -177,13 +275,6 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <span>กรุณากรอกข้อมูลส่วนตัวให้ครบก่อนสมัครกิจกรรม</span>
             </div>
-          ) : isPending ? (
-            <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff4d8] px-4 py-3 text-sm text-[#8a6112]">
-              <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              <span>
-                ข้อมูลอยู่ระหว่างรอ Admin ตรวจสอบรหัสพนักงาน หน่วยงาน และสังกัดก่อนอนุมัติ
-              </span>
-            </div>
           ) : null}
 
           <div className="mt-6 rounded-lg border border-[#dfe5da] bg-[#fbfcf8] p-5">
@@ -192,19 +283,19 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
               <div className="flex justify-between gap-4">
                 <span className="text-[#687a6d]">ชื่อ</span>
                 <span className="font-semibold text-[#0f2d26]">
-                  {member?.full_name ?? "สมาชิกทดลอง"}
+                  {currentMember?.full_name ?? "สมาชิกทดลอง"}
                 </span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-[#687a6d]">รหัสพนักงาน</span>
                 <span className="font-semibold text-[#0f2d26]">
-                  {member?.employee_code ?? "-"}
+                  {currentMember?.employee_code ?? "-"}
                 </span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-[#687a6d]">Handicap</span>
                 <span className="font-semibold text-[#0f2d26]">
-                  {member?.handicap ?? "-"}
+                  {currentMember?.handicap ?? "-"}
                 </span>
               </div>
               <div className="flex justify-between gap-4">
@@ -214,19 +305,21 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                     isPending ? "text-[#8a6112]" : "text-[#24613f]"
                   }`}
                 >
-                  {member?.status ? memberStatusLabels[member.status] : "ทดลอง"}
+                  {currentMember?.status
+                    ? memberStatusLabels[currentMember.status]
+                    : "ทดลอง"}
                 </span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-[#687a6d]">หน่วยงาน</span>
                 <span className="font-semibold text-[#0f2d26]">
-                  {member?.department ?? member?.organization ?? "-"}
+                  {currentMember?.department ?? currentMember?.organization ?? "-"}
                 </span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-[#687a6d]">สังกัด</span>
                 <span className="font-semibold text-[#0f2d26]">
-                  {member?.affiliation ?? "-"}
+                  {currentMember?.affiliation ?? "-"}
                 </span>
               </div>
             </div>
@@ -406,6 +499,78 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
               ) : (
                 <div className="rounded-md border border-[#dfe5da] bg-[#fbfcf8] p-4 text-sm text-[#687a6d]">
                   ยังไม่มีกิจกรรมที่เปิดรับสมัคร
+                </div>
+              )}
+            </div>
+          </article>
+
+          <article className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                  <Trophy className="size-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-[#0f2d26]">
+                    คะแนนและผลการแข่งขัน
+                  </h2>
+                  <p className="mt-1 text-sm text-[#687a6d]">
+                    ประวัติคะแนนทั้งหมดจากกิจกรรมที่เคยเข้าร่วม
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="size-5 text-[#9aa8a1]" aria-hidden="true" />
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {scoreHistory?.length ? (
+                scoreHistory.map((score) => {
+                  const event = firstRelated(score.events);
+
+                  return (
+                    <div
+                      className="rounded-md border border-[#dfe5da] bg-[#fbfcf8] p-4"
+                      key={score.id}
+                    >
+                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-[#0f2d26]">
+                              {event?.name ?? "กิจกรรม"}
+                            </p>
+                            <span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-[#687a6d]">
+                              {getScoreStatusLabel(score.score_status)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-[#687a6d]">
+                            {event?.event_date ?? "-"} · {event?.venue ?? "ยังไม่ระบุสนาม"}
+                          </p>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
+                          {[
+                            ["Gross", score.gross_score ?? "-"],
+                            ["Net", score.net_score ?? "-"],
+                            ["Stableford", score.stableford_points ?? "-"],
+                            ["Flight", score.flight ?? "-"],
+                            ["Rank", score.overall_rank ? `#${score.overall_rank}` : "-"],
+                          ].map(([label, value]) => (
+                            <div className="rounded-md bg-white px-3 py-2" key={label}>
+                              <p className="text-xs font-semibold text-[#687a6d]">
+                                {label}
+                              </p>
+                              <p className="mt-1 font-semibold text-[#0f2d26]">
+                                {value}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-md border border-[#dfe5da] bg-[#fbfcf8] p-4 text-sm text-[#687a6d]">
+                  ยังไม่มีประวัติคะแนนจากกิจกรรมที่เข้าร่วม
                 </div>
               )}
             </div>

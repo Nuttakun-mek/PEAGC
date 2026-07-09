@@ -8,7 +8,7 @@ This repository is starting with Foundation + MVP 1.
 
 - Foundation: Next.js App Router, TypeScript, Tailwind CSS, responsive admin shell
 - Auth: Supabase SSR clients, Google/magic-link login, temporary bypass, protected setup bootstrap
-- MVP 1: Employee verification, Member Management, Event Management, self-registration, and Lesson/Academy booking foundation started; Payment Slip Review, Pairing, Check-in, Excel Export next
+- MVP 1: Employee verification, Member Management, Event Management, self-registration, score history, approval notification queue, and Lesson/Academy booking foundation started; Payment Slip Review, Pairing, Check-in, Excel Export next
 - Later: Basic Competition, Rule Builder, Smart Score OCR, Academy, Finance, Sponsor, Analytics
 
 ## Tech Stack
