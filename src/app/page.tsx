@@ -3,6 +3,7 @@ import {
   CalendarDays,
   CircleDollarSign,
   ClipboardCheck,
+  DatabaseZap,
   Flag,
   LayoutDashboard,
   ListChecks,
@@ -10,6 +11,8 @@ import {
   Trophy,
   UsersRound,
 } from "lucide-react";
+
+import { hasSupabasePublicConfig } from "@/lib/supabase/env";
 
 const metrics = [
   { label: "สมาชิก", value: "0", detail: "พร้อมสำหรับระบบสมาชิก", icon: UsersRound },
@@ -44,6 +47,8 @@ const navItems = [
 ];
 
 export default function Home() {
+  const isSupabaseReady = hasSupabasePublicConfig();
+
   return (
     <main className="min-h-screen bg-[#f6f7f2] text-[#11221d]">
       <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
@@ -195,6 +200,35 @@ export default function Home() {
               </ul>
             </section>
           </div>
+
+          <section className="mt-6 rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="flex size-11 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                  <DatabaseZap className="size-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-[#5b6f62]">
+                    Supabase
+                  </p>
+                  <h2 className="mt-1 text-xl font-semibold text-[#0f2d26]">
+                    {isSupabaseReady
+                      ? "เชื่อมต่อ configuration แล้ว"
+                      : "ยังไม่ได้ตั้งค่า environment"}
+                  </h2>
+                </div>
+              </div>
+              <span
+                className={`w-fit rounded-md px-3 py-1 text-sm font-semibold ${
+                  isSupabaseReady
+                    ? "bg-[#e6f4df] text-[#24613f]"
+                    : "bg-[#fff4d8] text-[#8a6112]"
+                }`}
+              >
+                {isSupabaseReady ? "Ready" : "Pending"}
+              </span>
+            </div>
+          </section>
 
           <section className="mt-6 rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

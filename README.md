@@ -45,7 +45,9 @@ Open [http://localhost:3000](http://localhost:3000).
 
 - `src/app/page.tsx` - PEAGC dashboard shell
 - `docs/PROJECT_KICKOFF_PLAN.md` - project kickoff plan from the source PRD
+- `docs/SUPABASE_SETUP.md` - Supabase environment and migration workflow
 - `docs/DATABASE_FOUNDATION_DRAFT.sql` - Supabase foundation schema draft
+- `supabase/migrations` - versioned Supabase database migrations
 - `.env.example` - required environment variable template
 
 ## Notes
@@ -53,4 +55,4 @@ Open [http://localhost:3000](http://localhost:3000).
 - Do not commit real secrets.
 - OCR and advanced Rule Builder are intentionally out of the first MVP.
 - Critical data such as payments, scores, rules, and published results must be audit logged.
-- Supabase migrations should be generated after the real Supabase project is linked.
+- Supabase foundation migration has been pushed to the remote project.
