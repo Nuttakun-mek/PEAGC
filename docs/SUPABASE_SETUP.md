@@ -130,6 +130,7 @@ Additional migration:
 - Own-profile RLS policies for authenticated users
 - Employee verification fields on `members`: `employee_code`, `department`, `affiliation`, verification metadata, and `pending_verification` status
 - Open event RLS policy so authenticated members can see `events.status = 'open'`
+- `employee_directory` table with admin-only RLS and member-side server matching results stored on `members.employee_match_status`
 
 ## Security Notes
 

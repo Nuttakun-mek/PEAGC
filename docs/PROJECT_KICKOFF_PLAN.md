@@ -175,7 +175,8 @@ Outcome: Admin จัดการสมาชิกได้จริง
 - Member list - started in `/admin/members`
 - Search and filters - started in `/admin/members`
 - Add / edit member - started with server actions and audit log
-- Member profile
+- Employee directory matching - started in `/admin/employees`
+- Member profile - started with pending verification flow
 - Member type setting
 - Handicap field
 - Import/export planning

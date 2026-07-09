@@ -37,6 +37,18 @@ type MemberRow = {
   department: string | null;
   email: string | null;
   employee_code: string | null;
+  employee_match_detail: {
+    checks?: Record<string, boolean>;
+    directory?: {
+      affiliation?: string | null;
+      department?: string | null;
+      email?: string | null;
+      employment_status?: string | null;
+      full_name?: string | null;
+    };
+    reason?: string;
+  } | null;
+  employee_match_status: string | null;
   full_name: string;
   handicap: number | null;
   id: string;
@@ -66,6 +78,23 @@ const sampleMembers: MemberRow[] = [
   {
     email: "member01@example.com",
     employee_code: "497901",
+    employee_match_detail: {
+      checks: {
+        activeEmployee: true,
+        affiliation: true,
+        department: true,
+        email: true,
+        fullName: true,
+      },
+      directory: {
+        affiliation: "การไฟฟ้าส่วนภูมิภาค",
+        department: "กองบริการ",
+        email: "member01@example.com",
+        employment_status: "active",
+        full_name: "สมาชิก ตัวอย่างหนึ่ง",
+      },
+    },
+    employee_match_status: "matched",
     department: "กองบริการ",
     affiliation: "การไฟฟ้าส่วนภูมิภาค",
     full_name: "สมาชิก ตัวอย่างหนึ่ง",
@@ -86,6 +115,8 @@ const sampleMembers: MemberRow[] = [
   {
     email: "guest01@example.com",
     employee_code: "498888",
+    employee_match_detail: { reason: "employee_code_not_found" },
+    employee_match_status: "not_found",
     department: "กองทดสอบ",
     affiliation: "PEA",
     full_name: "แขก รับเชิญ",
@@ -122,6 +153,25 @@ const statusMessages: Record<string, string> = {
   "update-failed": "แก้ไขสมาชิกไม่สำเร็จ",
   updated: "แก้ไขสมาชิกเรียบร้อยแล้ว",
 };
+
+const employeeMatchLabels: Record<string, string> = {
+  matched: "ตรงฐานพนักงาน",
+  mismatch: "ข้อมูลไม่ตรง",
+  not_checked: "ยังไม่ตรวจ",
+  not_found: "ไม่พบรหัสพนักงาน",
+};
+
+function getEmployeeMatchClass(status: string | null) {
+  if (status === "matched") {
+    return "bg-[#e6f4df] text-[#24613f]";
+  }
+
+  if (status === "mismatch" || status === "not_found") {
+    return "bg-[#fde8df] text-[#9a3412]";
+  }
+
+  return "bg-[#f1f3ef] text-[#687a6d]";
+}
 
 function getStatusClass(status: string) {
   if (status === "active") {
@@ -389,7 +439,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
       supabase
         .from("members")
         .select(
-          "id, member_code, employee_code, department, affiliation, full_name, nickname, phone, line_id, email, organization, handicap, skill_level, status, joined_at, note, member_type_id, member_types(name)",
+          "id, member_code, employee_code, employee_match_status, employee_match_detail, department, affiliation, full_name, nickname, phone, line_id, email, organization, handicap, skill_level, status, joined_at, note, member_type_id, member_types(name)",
         )
         .eq("club_id", access.clubId)
         .is("archived_at", null)
@@ -587,6 +637,13 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                         >
                           {statusLabels[member.status] ?? member.status}
                         </span>
+                        <span
+                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getEmployeeMatchClass(member.employee_match_status)}`}
+                        >
+                          {employeeMatchLabels[
+                            member.employee_match_status ?? "not_checked"
+                          ] ?? member.employee_match_status}
+                        </span>
                       </div>
                       <p className="mt-1 text-sm text-[#687a6d]">
                         {member.employee_code ?? "ไม่มีรหัสพนักงาน"} ·{" "}
@@ -627,6 +684,49 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                           {member.affiliation ?? "-"}
                         </p>
                       </div>
+                    </div>
+
+                    <div className="mb-4 rounded-md bg-white p-4 text-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="font-semibold text-[#0f2d26]">
+                          ผลเทียบฐานพนักงาน
+                        </p>
+                        <span
+                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getEmployeeMatchClass(member.employee_match_status)}`}
+                        >
+                          {employeeMatchLabels[
+                            member.employee_match_status ?? "not_checked"
+                          ] ?? member.employee_match_status}
+                        </span>
+                      </div>
+                      {member.employee_match_detail?.checks ? (
+                        <div className="mt-3 grid gap-2 md:grid-cols-5">
+                          {Object.entries(member.employee_match_detail.checks).map(
+                            ([key, ok]) => (
+                              <div
+                                className="rounded-md bg-[#fbfcf8] px-3 py-2"
+                                key={key}
+                              >
+                                <p className="text-xs font-semibold text-[#687a6d]">
+                                  {key}
+                                </p>
+                                <p
+                                  className={`mt-1 font-semibold ${
+                                    ok ? "text-[#24613f]" : "text-[#9a3412]"
+                                  }`}
+                                >
+                                  {ok ? "ผ่าน" : "ไม่ผ่าน"}
+                                </p>
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-[#687a6d]">
+                          {member.employee_match_detail?.reason ??
+                            "ยังไม่มีผลการตรวจฐานพนักงาน"}
+                        </p>
+                      )}
                     </div>
 
                     {member.status === "pending_verification" ? (

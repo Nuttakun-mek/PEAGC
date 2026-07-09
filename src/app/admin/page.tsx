@@ -15,7 +15,9 @@ type AdminPageProps = {
   searchParams: Promise<{ bypass?: string }>;
 };
 
-async function getCount(table: "members" | "events" | "payment_records") {
+async function getCount(
+  table: "employee_directory" | "members" | "events" | "payment_records",
+) {
   const supabase = await createClient();
   const { count } = await supabase.from(table).select("id", {
     count: "exact",
@@ -33,14 +35,22 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     requiredRole: "admin",
     searchParams: params,
   });
-  const [memberCount, eventCount, paymentCount] = access.isBypass
-    ? [24, 3, 5]
+  const [memberCount, eventCount, paymentCount, employeeCount] = access.isBypass
+    ? [24, 3, 5, 2]
     : await Promise.all([
         getCount("members"),
         getCount("events"),
         getCount("payment_records"),
+        getCount("employee_directory"),
       ]);
   const modules = [
+    {
+      detail: "ฐานข้อมูลพนักงานสำหรับเทียบใบสมัครสมาชิก",
+      href: access.isBypass ? "/admin/employees?bypass=admin" : "/admin/employees",
+      icon: UsersRound,
+      title: "Employee Directory",
+      value: employeeCount,
+    },
     {
       detail: "ค้นหา เพิ่ม แก้ไข และตรวจ profile สมาชิก",
       href: access.isBypass ? "/admin/members?bypass=admin" : "/admin/members",
