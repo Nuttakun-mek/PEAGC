@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MailCheck, ShieldCheck, UserCog, UsersRound } from "lucide-react";
+import { MailCheck, PlayCircle, ShieldCheck, UserCog, UsersRound } from "lucide-react";
 
 import { signInWithEmail, signInWithGoogle } from "@/app/actions/auth";
 import { isAuthBypassEnabled } from "@/lib/supabase/env";
@@ -118,7 +118,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <p className="mt-1 text-sm leading-6 text-[#6d541c]">
               ใช้ดูหน้าระบบชั่วคราวโดยไม่ต้องล็อกอิน ต้องปิดก่อน go live
             </p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            <Link
+              className="mt-4 flex h-11 items-center justify-center gap-2 rounded-md border border-[#e0c777] bg-white px-3 text-sm font-semibold text-[#0f2d26]"
+              href="/auth/google-demo"
+            >
+              <PlayCircle className="size-4" aria-hidden="true" />
+              ทดลองโฟล Google ก่อนเชื่อมจริง
+            </Link>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <Link
                 className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#0f2d26] px-3 text-sm font-semibold text-white"
                 href="/member?bypass=member"
