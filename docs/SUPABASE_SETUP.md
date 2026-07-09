@@ -97,6 +97,8 @@ http://localhost:3000
 ```text
 http://localhost:3000/auth/confirm
 http://localhost:3000/auth/confirm?next=/profile
+http://localhost:3000/auth/confirm?next=/auth/complete
+http://localhost:3000/auth/complete
 http://localhost:3000/**
 ```
 

@@ -24,7 +24,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const next = params.next?.startsWith("/") && !params.next.startsWith("//")
     ? params.next
-    : "/profile";
+    : "/auth/complete";
   const errorMessage = params.error ? errorMessages[params.error] : null;
   const showBypass = isAuthBypassEnabled();
 

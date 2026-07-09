@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 
 function getSafeRedirectPath(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || !value.startsWith("/") || value.startsWith("//")) {
-    return "/profile";
+    return "/auth/complete";
   }
 
   return value;

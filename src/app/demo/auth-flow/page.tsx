@@ -73,7 +73,7 @@ export default function DemoAuthFlowPage() {
               จำลองการสมัครและเข้าใช้งานด้วย Google
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#687a6d]">
-              หน้านี้ใช้ดูภาพรวมก่อนเปิด Google provider จริงใน Supabase เพื่อให้เห็นว่า user และ Admin จะเจอหน้าไหนตามลำดับ
+              หน้านี้เป็นตัวช่วยเดินลิงก์ของ flow จริงก่อนเปิด Google provider ใน Supabase เพื่อให้เห็นว่า user และ Admin จะเจอหน้าไหนตามลำดับ
             </p>
           </div>
           <Link
@@ -88,7 +88,7 @@ export default function DemoAuthFlowPage() {
         <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff4d8] px-4 py-3 text-sm text-[#8a6112]">
           <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>
-            ตอนนี้ Google provider ใน Supabase ยังไม่เปิด จึงใช้ bypass links เพื่อจำลองหน้าจอ แต่ flow จริงจะเหมือนลำดับด้านล่าง
+            ตอนนี้ Google provider ใน Supabase ยังไม่เปิด จึงใช้ bypass links เพื่อเดินดูหน้าจอจริงทีละขั้น หลังเปิด provider แล้วระบบจะวิ่งผ่าน `/auth/complete` เพื่อตัดสินทางให้เอง
           </span>
         </div>
 
