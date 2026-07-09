@@ -205,6 +205,16 @@ Outcome: Admin ตรวจสถานะผู้สมัครและ slip
 - Export paid/unpaid participants
 - Audit log for payment changes
 
+### Sprint 4A: Lesson and Academy Booking
+
+Outcome: สมาชิกจองเรียนและ Admin ลงเวลาเรียนได้
+
+- Lesson program setup - started in `/admin/lessons`
+- Lesson slot schedule - started in `/admin/lessons`
+- Member lesson booking - started in `/member`
+- Attendance status update - started in `/admin/lessons`
+- RLS and duplicate active booking protection - started in Supabase migration
+
 ### Sprint 5: Pairing and Check-in
 
 Outcome: ลดงาน Excel หน้างานได้

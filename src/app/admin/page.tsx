@@ -3,6 +3,7 @@ import {
   CalendarDays,
   CircleDollarSign,
   ClipboardCheck,
+  GraduationCap,
   ShieldAlert,
   Trophy,
   UsersRound,
@@ -16,7 +17,12 @@ type AdminPageProps = {
 };
 
 async function getCount(
-  table: "employee_directory" | "members" | "events" | "payment_records",
+  table:
+    | "employee_directory"
+    | "members"
+    | "events"
+    | "payment_records"
+    | "lesson_bookings",
 ) {
   const supabase = await createClient();
   const { count } = await supabase.from(table).select("id", {
@@ -35,13 +41,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     requiredRole: "admin",
     searchParams: params,
   });
-  const [memberCount, eventCount, paymentCount, employeeCount] = access.isBypass
-    ? [24, 3, 5, 2]
+  const [memberCount, eventCount, paymentCount, employeeCount, lessonBookingCount] = access.isBypass
+    ? [24, 3, 5, 2, 8]
     : await Promise.all([
         getCount("members"),
         getCount("events"),
         getCount("payment_records"),
         getCount("employee_directory"),
+        getCount("lesson_bookings"),
       ]);
   const modules = [
     {
@@ -64,6 +71,13 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       icon: CalendarDays,
       title: "Event Management",
       value: eventCount,
+    },
+    {
+      detail: "จัดคอร์สเรียน รอบเรียน จองเรียน และลงเวลาเข้าเรียน",
+      href: access.isBypass ? "/admin/lessons?bypass=admin" : "/admin/lessons",
+      icon: GraduationCap,
+      title: "Lesson & Academy",
+      value: lessonBookingCount,
     },
     {
       detail: "ตรวจ slip และสถานะการชำระเงิน",
@@ -125,7 +139,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         ) : null}
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
-          {modules.slice(0, 3).map((item) => (
+          {modules.slice(0, 4).map((item) => (
             <article
               className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm"
               key={item.title}

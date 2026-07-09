@@ -3,7 +3,9 @@ import {
   CalendarDays,
   ChevronRight,
   CheckCircle2,
+  Clock,
   ClipboardCheck,
+  GraduationCap,
   MapPin,
   Pencil,
   ShieldAlert,
@@ -14,7 +16,7 @@ import {
 import { resolveAccess } from "@/lib/auth/access";
 import { createClient } from "@/lib/supabase/server";
 
-import { registerForEvent } from "./actions";
+import { bookLessonSlot, registerForEvent } from "./actions";
 
 type MemberPageProps = {
   searchParams: Promise<{ bypass?: string; status?: string }>;
@@ -23,6 +25,11 @@ type MemberPageProps = {
 const statusMessages: Record<string, string> = {
   "admin-required": "บัญชีนี้ยังไม่มีสิทธิ์ Admin",
   "already-registered": "คุณสมัครกิจกรรมนี้ไว้แล้ว",
+  "lesson-already-booked": "คุณจองรอบเรียนนี้ไว้แล้ว",
+  "lesson-booked": "จองเรียนเรียบร้อยแล้ว",
+  "lesson-booking-failed": "จองเรียนไม่สำเร็จ กรุณาลองใหม่",
+  "lesson-closed": "รอบเรียนนี้ปิดรับจองแล้ว",
+  "lesson-full": "รอบเรียนนี้เต็มแล้ว",
   "member-not-approved": "ต้องรอ Admin อนุมัติสมาชิกก่อน จึงจะสมัครกิจกรรมได้",
   "pending-review": "ส่งข้อมูลสมัครแล้ว กรุณารอ Admin ตรวจสอบกับฐานข้อมูลพนักงาน",
   "profile-saved": "บันทึกข้อมูลส่วนตัวเรียบร้อยแล้ว",
@@ -49,6 +56,24 @@ const sampleOpenEvents = [
     venue: "Royal Golf Club",
   },
 ];
+
+const sampleLessonSlots = [
+  {
+    capacity: 6,
+    coach_name: "Coach PEA",
+    end_time: "18:30",
+    id: "sample-slot-1",
+    lesson_date: "2026-08-20",
+    lesson_programs: { name: "Golf Foundation", price: 1200 },
+    start_time: "17:00",
+    title: "Swing Clinic รอบเย็น",
+    venue: "Driving Range A",
+  },
+];
+
+function firstRelated<T>(value: T | T[] | null | undefined) {
+  return Array.isArray(value) ? (value[0] ?? null) : value;
+}
 
 export default async function MemberPage({ searchParams }: MemberPageProps) {
   const params = await searchParams;
@@ -92,6 +117,31 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
       : { data: [] };
   const registrationByEvent = new Map(
     registrations?.map((item) => [item.event_id, item.status]) ?? [],
+  );
+  const { data: lessonSlots } = supabase
+    ? await supabase
+        .from("lesson_slots")
+        .select(
+          "id, title, coach_name, venue, lesson_date, start_time, end_time, capacity, lesson_programs(name, price)",
+        )
+        .eq("status", "open")
+        .is("archived_at", null)
+        .order("lesson_date", { ascending: true })
+        .order("start_time", { ascending: true })
+        .limit(5)
+    : { data: sampleLessonSlots };
+  const lessonSlotIds = lessonSlots?.map((slot) => slot.id) ?? [];
+  const { data: lessonBookings } =
+    supabase && member?.id && lessonSlotIds.length
+      ? await supabase
+          .from("lesson_bookings")
+          .select("slot_id, status")
+          .eq("member_id", member.id)
+          .in("slot_id", lessonSlotIds)
+          .not("status", "in", "(cancelled)")
+      : { data: [] };
+  const lessonBookingBySlot = new Map(
+    lessonBookings?.map((item) => [item.slot_id, item.status]) ?? [],
   );
   const canRegister = !access.isBypass && member?.status === "active";
 
@@ -192,6 +242,93 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
         </section>
 
         <section className="grid gap-4">
+          <article className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                  <GraduationCap className="size-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-[#0f2d26]">
+                    จองเรียน Academy
+                  </h2>
+                  <p className="mt-1 text-sm text-[#687a6d]">
+                    เลือกรอบเรียนที่เปิดจองและติดตามสถานะเข้าเรียน
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="size-5 text-[#9aa8a1]" aria-hidden="true" />
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {lessonSlots?.length ? (
+                lessonSlots.map((slot) => {
+                  const bookingStatus = lessonBookingBySlot.get(slot.id);
+                  const program = firstRelated(slot.lesson_programs);
+
+                  return (
+                    <div
+                      className="rounded-md border border-[#dfe5da] bg-[#fbfcf8] p-4"
+                      key={slot.id}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-[#0f2d26]">{slot.title}</p>
+                          <p className="mt-1 text-sm text-[#687a6d]">
+                            {program?.name ?? "-"} · รับ {slot.capacity} คน
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-3 text-sm text-[#687a6d]">
+                            <span className="flex items-center gap-1">
+                              <Clock className="size-4" aria-hidden="true" />
+                              {slot.lesson_date} · {slot.start_time?.slice(0, 5)}-
+                              {slot.end_time?.slice(0, 5)}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="size-4" aria-hidden="true" />
+                              {slot.venue ?? "ยังไม่ระบุสถานที่"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:items-end">
+                          <span className="w-fit rounded-md bg-white px-3 py-1 text-sm font-semibold text-[#0f2d26]">
+                            {(program?.price ?? 0).toLocaleString()} บาท
+                          </span>
+                          {bookingStatus ? (
+                            <span className="flex h-10 w-fit items-center gap-2 rounded-md bg-[#e6f4df] px-3 text-sm font-semibold text-[#24613f]">
+                              <CheckCircle2 className="size-4" aria-hidden="true" />
+                              จองแล้ว
+                            </span>
+                          ) : canRegister ? (
+                            <form action={bookLessonSlot}>
+                              <input name="slotId" type="hidden" value={slot.id} />
+                              <button
+                                className="flex h-10 items-center justify-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white"
+                                type="submit"
+                              >
+                                <GraduationCap className="size-4" aria-hidden="true" />
+                                จองเรียน
+                              </button>
+                            </form>
+                          ) : (
+                            <span className="w-fit rounded-md bg-[#edf1ec] px-3 py-2 text-sm font-medium text-[#687a6d]">
+                              {access.isBypass
+                                ? "โหมดทดลอง"
+                                : "รออนุมัติสมาชิก"}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-md border border-[#dfe5da] bg-[#fbfcf8] p-4 text-sm text-[#687a6d]">
+                  ยังไม่มีรอบเรียนที่เปิดจอง
+                </div>
+              )}
+            </div>
+          </article>
+
           <article className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">

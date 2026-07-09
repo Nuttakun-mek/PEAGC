@@ -132,6 +132,8 @@ Additional migration:
 - Open event RLS policy so authenticated members can see `events.status = 'open'`
 - `employee_directory` table with admin-only RLS and member-side server matching results stored on `members.employee_match_status`
 - Member self-registration RLS for `event_registrations`, plus a partial unique index to prevent duplicate active registrations per member/event
+- Lesson/Academy tables: `lesson_programs`, `lesson_slots`, `lesson_bookings`
+- Lesson RLS for open slots/programs, own booking insert/select, and admin attendance updates
 
 ## Security Notes
 
