@@ -7,12 +7,19 @@ import {
   Flag,
   LayoutDashboard,
   ListChecks,
+  LogIn,
+  LogOut,
   ShieldCheck,
   Trophy,
   UsersRound,
 } from "lucide-react";
+import Link from "next/link";
 
+import { signOut } from "@/app/actions/auth";
 import { hasSupabasePublicConfig } from "@/lib/supabase/env";
+import { createClient } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
 
 const metrics = [
   { label: "สมาชิก", value: "0", detail: "พร้อมสำหรับระบบสมาชิก", icon: UsersRound },
@@ -46,8 +53,15 @@ const navItems = [
   { label: "การแข่งขัน", icon: Trophy },
 ];
 
-export default function Home() {
+export default async function Home() {
   const isSupabaseReady = hasSupabasePublicConfig();
+  let userEmail: string | null = null;
+
+  if (isSupabaseReady) {
+    const supabase = await createClient();
+    const { data } = await supabase.auth.getUser();
+    userEmail = data.user?.email ?? null;
+  }
 
   return (
     <main className="min-h-screen bg-[#f6f7f2] text-[#11221d]">
@@ -66,8 +80,8 @@ export default function Home() {
               </div>
             </div>
             <div className="rounded-md border border-white/15 px-3 py-2 text-right lg:mt-7 lg:text-left">
-                  <p className="text-xs text-[#bed2c8]">ระยะงาน</p>
-                  <p className="text-sm font-semibold text-white">Foundation</p>
+              <p className="text-xs text-[#bed2c8]">ระยะงาน</p>
+              <p className="text-sm font-semibold text-white">Foundation</p>
             </div>
           </div>
 
@@ -100,6 +114,25 @@ export default function Home() {
               </h1>
             </div>
             <div className="flex flex-wrap gap-2">
+              {userEmail ? (
+                <form action={signOut}>
+                  <button
+                    className="flex h-11 items-center gap-2 rounded-md border border-[#cbd6c7] bg-white px-4 text-sm font-semibold text-[#0f2d26] transition hover:border-[#0f2d26]"
+                    type="submit"
+                  >
+                    <LogOut className="size-4" aria-hidden="true" />
+                    ออกจากระบบ
+                  </button>
+                </form>
+              ) : (
+                <Link
+                  className="flex h-11 items-center gap-2 rounded-md border border-[#cbd6c7] bg-white px-4 text-sm font-semibold text-[#0f2d26] transition hover:border-[#0f2d26]"
+                  href="/login"
+                >
+                  <LogIn className="size-4" aria-hidden="true" />
+                  เข้าสู่ระบบ
+                </Link>
+              )}
               <button
                 className="flex h-11 items-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#17453b]"
                 type="button"
@@ -212,9 +245,11 @@ export default function Home() {
                     Supabase
                   </p>
                   <h2 className="mt-1 text-xl font-semibold text-[#0f2d26]">
-                    {isSupabaseReady
-                      ? "เชื่อมต่อ configuration แล้ว"
-                      : "ยังไม่ได้ตั้งค่า environment"}
+                    {userEmail
+                      ? `เข้าสู่ระบบด้วย ${userEmail}`
+                      : isSupabaseReady
+                        ? "เชื่อมต่อ configuration แล้ว"
+                        : "ยังไม่ได้ตั้งค่า environment"}
                   </h2>
                 </div>
               </div>
@@ -225,7 +260,7 @@ export default function Home() {
                     : "bg-[#fff4d8] text-[#8a6112]"
                 }`}
               >
-                {isSupabaseReady ? "Ready" : "Pending"}
+                {userEmail ? "Signed in" : isSupabaseReady ? "Ready" : "Pending"}
               </span>
             </div>
           </section>

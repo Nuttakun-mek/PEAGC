@@ -30,9 +30,23 @@ Required server-only values:
 SUPABASE_SECRET_KEY=
 SUPABASE_JWKS_URL=
 DATABASE_URL=
+MIGRATION_DATABASE_URL=
+BOOTSTRAP_SETUP_TOKEN=
+BOOTSTRAP_ALLOW_REPEAT=false
 ```
 
 Never commit `.env.local` or any real secret value.
+
+## First Admin Bootstrap
+
+Use `/setup` only for the first system administrator.
+
+1. Set `BOOTSTRAP_SETUP_TOKEN` in `.env.local`.
+2. Open `/setup`.
+3. Enter the setup token, club name, admin email, display name, and initial password.
+4. The action creates or reuses the Auth user, creates or reuses the club, assigns `club_admin`, creates default member types, and writes audit logs.
+
+By default, setup is one-time only. After any `club_admin` exists, repeat setup is blocked unless `BOOTSTRAP_ALLOW_REPEAT=true` is explicitly set in server env.
 
 ## Migrations
 
@@ -45,14 +59,16 @@ npx supabase migration new migration_name
 Dry-run before pushing:
 
 ```bash
-npx supabase db push --db-url "$DATABASE_URL" --dry-run
+npx supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run
 ```
 
 Push to remote:
 
 ```bash
-npx supabase db push --db-url "$DATABASE_URL" --yes
+npx supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes
 ```
+
+Use the session pooler URL for `MIGRATION_DATABASE_URL` because schema changes can fail on the transaction pooler with prepared statement conflicts.
 
 ## Current Remote Status
 
@@ -82,6 +98,10 @@ Seeded roles:
 - `scoring_officer`
 - `member`
 - `auditor`
+
+Additional migration:
+
+- Unique active club short name index on `clubs.short_name`
 
 ## Security Notes
 

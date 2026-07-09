@@ -1,6 +1,7 @@
 const publicUrlKey = "NEXT_PUBLIC_SUPABASE_URL";
 const publicPublishableKey = "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY";
 const secretKey = "SUPABASE_SECRET_KEY";
+const bootstrapSetupTokenKey = "BOOTSTRAP_SETUP_TOKEN";
 
 export type SupabasePublicConfig = {
   url: string;
@@ -31,6 +32,20 @@ export function getSupabaseSecretKey() {
 
   if (!value) {
     throw new Error(`Missing Supabase server env. Set ${secretKey}.`);
+  }
+
+  return value;
+}
+
+export function hasBootstrapSetupToken() {
+  return Boolean(process.env[bootstrapSetupTokenKey]);
+}
+
+export function getBootstrapSetupToken() {
+  const value = process.env[bootstrapSetupTokenKey];
+
+  if (!value) {
+    throw new Error(`Missing setup env. Set ${bootstrapSetupTokenKey}.`);
   }
 
   return value;
