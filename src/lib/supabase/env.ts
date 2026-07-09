@@ -2,6 +2,7 @@ const publicUrlKey = "NEXT_PUBLIC_SUPABASE_URL";
 const publicPublishableKey = "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY";
 const secretKey = "SUPABASE_SECRET_KEY";
 const bootstrapSetupTokenKey = "BOOTSTRAP_SETUP_TOKEN";
+const authBypassEnabledKey = "AUTH_BYPASS_ENABLED";
 
 export type SupabasePublicConfig = {
   url: string;
@@ -49,4 +50,8 @@ export function getBootstrapSetupToken() {
   }
 
   return value;
+}
+
+export function isAuthBypassEnabled() {
+  return process.env[authBypassEnabledKey] === "true";
 }

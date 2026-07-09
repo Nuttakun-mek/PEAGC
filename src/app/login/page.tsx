@@ -1,6 +1,8 @@
-import { MailCheck, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { MailCheck, ShieldCheck, UserCog, UsersRound } from "lucide-react";
 
-import { signInWithEmail } from "@/app/actions/auth";
+import { signInWithEmail, signInWithGoogle } from "@/app/actions/auth";
+import { isAuthBypassEnabled } from "@/lib/supabase/env";
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -15,14 +17,16 @@ const errorMessages: Record<string, string> = {
   "invalid-email": "กรุณากรอกอีเมลให้ถูกต้อง",
   "send-failed": "ส่งลิงก์เข้าสู่ระบบไม่สำเร็จ กรุณาลองอีกครั้ง",
   "confirm-failed": "ยืนยันการเข้าสู่ระบบไม่สำเร็จ หรือลิงก์หมดอายุ",
+  "google-failed": "เข้าสู่ระบบด้วย Google ไม่สำเร็จ กรุณาตรวจการตั้งค่า Google provider",
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
   const next = params.next?.startsWith("/") && !params.next.startsWith("//")
     ? params.next
-    : "/";
+    : "/profile";
   const errorMessage = params.error ? errorMessages[params.error] : null;
+  const showBypass = isAuthBypassEnabled();
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f6f7f2] px-4 py-8 text-[#11221d]">
@@ -66,7 +70,26 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </div>
         ) : null}
 
-        <form action={signInWithEmail} className="mt-6 space-y-4">
+        <form action={signInWithGoogle} className="mt-6">
+          <input name="next" type="hidden" value={next} />
+          <button
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#17453b]"
+            type="submit"
+          >
+            <span className="flex size-5 items-center justify-center rounded-full bg-white text-xs font-bold text-[#0f2d26]">
+              G
+            </span>
+            เข้าสู่ระบบด้วย Google
+          </button>
+        </form>
+
+        <div className="my-5 flex items-center gap-3">
+          <div className="h-px flex-1 bg-[#dfe5da]" />
+          <span className="text-xs font-semibold text-[#687a6d]">หรือ</span>
+          <div className="h-px flex-1 bg-[#dfe5da]" />
+        </div>
+
+        <form action={signInWithEmail} className="space-y-4">
           <input name="next" type="hidden" value={next} />
           <label className="block">
             <span className="text-sm font-semibold text-[#405249]">อีเมล</span>
@@ -79,13 +102,40 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             />
           </label>
           <button
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#17453b]"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-md border border-[#cbd6c7] bg-white px-4 text-sm font-semibold text-[#0f2d26] transition hover:border-[#0f2d26]"
             type="submit"
           >
             <MailCheck className="size-4" aria-hidden="true" />
             ส่งลิงก์เข้าสู่ระบบ
           </button>
         </form>
+
+        {showBypass ? (
+          <div className="mt-6 rounded-lg border border-[#e0c777] bg-[#fff8e7] p-4">
+            <p className="text-sm font-semibold text-[#8a6112]">
+              ช่องทางลัดสำหรับพัฒนา
+            </p>
+            <p className="mt-1 text-sm leading-6 text-[#6d541c]">
+              ใช้ดูหน้าระบบชั่วคราวโดยไม่ต้องล็อกอิน ต้องปิดก่อน go live
+            </p>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">
+              <Link
+                className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#0f2d26] px-3 text-sm font-semibold text-white"
+                href="/member?bypass=member"
+              >
+                <UsersRound className="size-4" aria-hidden="true" />
+                หน้าสมาชิก
+              </Link>
+              <Link
+                className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#d6b25e] px-3 text-sm font-semibold text-[#0f2d26]"
+                href="/admin?bypass=admin"
+              >
+                <UserCog className="size-4" aria-hidden="true" />
+                หน้า Admin
+              </Link>
+            </div>
+          </div>
+        ) : null}
       </section>
     </main>
   );

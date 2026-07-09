@@ -33,6 +33,7 @@ DATABASE_URL=
 MIGRATION_DATABASE_URL=
 BOOTSTRAP_SETUP_TOKEN=
 BOOTSTRAP_ALLOW_REPEAT=false
+AUTH_BYPASS_ENABLED=false
 ```
 
 Never commit `.env.local` or any real secret value.
@@ -47,6 +48,29 @@ Use `/setup` only for the first system administrator.
 4. The action creates or reuses the Auth user, creates or reuses the club, assigns `club_admin`, creates default member types, and writes audit logs.
 
 By default, setup is one-time only. After any `club_admin` exists, repeat setup is blocked unless `BOOTSTRAP_ALLOW_REPEAT=true` is explicitly set in server env.
+
+## Google Login
+
+The app includes a Google login button powered by Supabase OAuth.
+
+Before it works outside local UI testing:
+
+1. Enable Google in Supabase Dashboard > Authentication > Providers.
+2. Create Google OAuth credentials in Google Auth Platform.
+3. Add the app origin to Authorized JavaScript origins.
+4. Add the Supabase callback URL from the Google provider page to Authorized redirect URIs.
+5. Add local and deployed URLs to Supabase Auth URL configuration.
+
+## Temporary Auth Bypass
+
+Set `AUTH_BYPASS_ENABLED=true` only in development or preview environments when you need to inspect screens without logging in.
+
+When enabled, `/login` shows shortcut buttons for:
+
+- `/member?bypass=member`
+- `/admin?bypass=admin`
+
+Set `AUTH_BYPASS_ENABLED=false` before go live.
 
 ## Migrations
 
@@ -102,6 +126,8 @@ Seeded roles:
 Additional migration:
 
 - Unique active club short name index on `clubs.short_name`
+- `members.user_id` for linking member profiles to Supabase Auth users
+- Own-profile RLS policies for authenticated users
 
 ## Security Notes
 

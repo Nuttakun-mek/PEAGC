@@ -45,12 +45,12 @@ const sprintFocus = [
 ];
 
 const navItems = [
-  { label: "แดชบอร์ด", icon: LayoutDashboard, active: true },
-  { label: "สมาชิก", icon: UsersRound },
-  { label: "กิจกรรม", icon: CalendarDays },
-  { label: "การชำระเงิน", icon: CircleDollarSign },
-  { label: "จัดก๊วน", icon: Flag },
-  { label: "การแข่งขัน", icon: Trophy },
+  { label: "แดชบอร์ด", href: "/", icon: LayoutDashboard, active: true },
+  { label: "สมาชิก", href: "/member", icon: UsersRound },
+  { label: "กิจกรรม", href: "/admin", icon: CalendarDays },
+  { label: "การชำระเงิน", href: "/admin", icon: CircleDollarSign },
+  { label: "จัดก๊วน", href: "/admin", icon: Flag },
+  { label: "การแข่งขัน", href: "/admin", icon: Trophy },
 ];
 
 export default async function Home() {
@@ -87,18 +87,18 @@ export default async function Home() {
 
           <nav className="mt-5 grid grid-cols-2 gap-2 lg:mt-8 lg:grid-cols-1">
             {navItems.map((item) => (
-              <button
+              <Link
                 key={item.label}
                 className={`flex h-11 items-center gap-3 rounded-md px-3 text-left text-sm transition ${
                   item.active
                     ? "bg-white text-[#0f2d26]"
                     : "text-[#dce9e2] hover:bg-white/10"
                 }`}
-                type="button"
+                href={item.href}
               >
                 <item.icon className="size-4 shrink-0" aria-hidden="true" />
                 <span className="truncate">{item.label}</span>
-              </button>
+              </Link>
             ))}
           </nav>
         </aside>
@@ -133,20 +133,20 @@ export default async function Home() {
                   เข้าสู่ระบบ
                 </Link>
               )}
-              <button
+              <Link
                 className="flex h-11 items-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#17453b]"
-                type="button"
+                href={userEmail ? "/profile" : "/login?next=/profile"}
               >
                 <UsersRound className="size-4" aria-hidden="true" />
-                เพิ่มสมาชิก
-              </button>
-              <button
+                กรอกข้อมูลส่วนตัว
+              </Link>
+              <Link
                 className="flex h-11 items-center gap-2 rounded-md border border-[#cbd6c7] bg-white px-4 text-sm font-semibold text-[#0f2d26] transition hover:border-[#0f2d26]"
-                type="button"
+                href="/admin"
               >
                 <CalendarDays className="size-4" aria-hidden="true" />
-                สร้างกิจกรรม
-              </button>
+                หน้า Admin
+              </Link>
             </div>
           </header>
 

@@ -7,7 +7,7 @@ PEA Golf Club (PEAGC) is a Thai-first responsive web application for golf club o
 This repository is starting with Foundation + MVP 1.
 
 - Foundation: Next.js App Router, TypeScript, Tailwind CSS, responsive admin shell
-- Auth: Supabase SSR clients, magic-link login, protected setup bootstrap
+- Auth: Supabase SSR clients, Google/magic-link login, temporary bypass, protected setup bootstrap
 - MVP 1: Member, Event, Registration, Payment Slip Review, Pairing, Check-in, Excel Export
 - Later: Basic Competition, Rule Builder, Smart Score OCR, Academy, Finance, Sponsor, Analytics
 
@@ -46,6 +46,9 @@ Open [http://localhost:3000](http://localhost:3000).
 
 - `src/app/page.tsx` - PEAGC dashboard shell
 - `src/app/login` - Supabase magic-link login
+- `src/app/member` - member portal preview
+- `src/app/admin` - admin portal preview
+- `src/app/profile` - member personal profile form
 - `src/app/setup` - one-time club admin bootstrap
 - `docs/PROJECT_KICKOFF_PLAN.md` - project kickoff plan from the source PRD
 - `docs/SUPABASE_SETUP.md` - Supabase environment and migration workflow
