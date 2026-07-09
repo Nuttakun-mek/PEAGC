@@ -50,7 +50,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     },
     {
       detail: "สร้างกิจกรรม เปิดรับสมัคร และดูผู้เข้าร่วม",
-      href: "#",
+      href: access.isBypass ? "/admin/events?bypass=admin" : "/admin/events",
       icon: CalendarDays,
       title: "Event Management",
       value: eventCount,

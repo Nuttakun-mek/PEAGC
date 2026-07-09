@@ -3,6 +3,7 @@ import {
   CalendarDays,
   ChevronRight,
   ClipboardCheck,
+  MapPin,
   Pencil,
   ShieldAlert,
   Trophy,
@@ -30,6 +31,17 @@ const memberStatusLabels: Record<string, string> = {
   pending_verification: "รอตรวจสอบพนักงาน",
 };
 
+const sampleOpenEvents = [
+  {
+    event_date: "2026-08-15",
+    id: "sample-event-1",
+    member_price: 2200,
+    name: "PEAGC Monthly Round",
+    tee_off_time: "11:30",
+    venue: "Royal Golf Club",
+  },
+];
+
 export default async function MemberPage({ searchParams }: MemberPageProps) {
   const params = await searchParams;
   const access = await resolveAccess({
@@ -51,6 +63,15 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
   const displayName = member?.nickname || member?.full_name || access.displayName;
   const profileHref = access.isBypass ? "/profile?bypass=member" : "/profile";
   const isPending = member?.status === "pending_verification";
+  const { data: openEvents } = supabase
+    ? await supabase
+        .from("events")
+        .select("id, name, venue, event_date, tee_off_time, member_price")
+        .eq("status", "open")
+        .is("archived_at", null)
+        .order("event_date", { ascending: true })
+        .limit(5)
+    : { data: sampleOpenEvents };
 
   return (
     <main className="min-h-screen bg-[#f6f7f2] px-4 py-6 text-[#11221d]">
@@ -149,12 +170,60 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
         </section>
 
         <section className="grid gap-4">
+          <article className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-10 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                  <CalendarDays className="size-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-[#0f2d26]">
+                    กิจกรรมที่เปิดรับสมัคร
+                  </h2>
+                  <p className="mt-1 text-sm text-[#687a6d]">
+                    เลือกกิจกรรมและเตรียมเข้าสู่ขั้นตอนสมัครใน sprint ถัดไป
+                  </p>
+                </div>
+              </div>
+              <ChevronRight className="size-5 text-[#9aa8a1]" aria-hidden="true" />
+            </div>
+
+            <div className="mt-4 grid gap-3">
+              {openEvents?.length ? (
+                openEvents.map((event) => (
+                  <div
+                    className="rounded-md border border-[#dfe5da] bg-[#fbfcf8] p-4"
+                    key={event.id}
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-semibold text-[#0f2d26]">{event.name}</p>
+                        <div className="mt-2 flex flex-wrap gap-3 text-sm text-[#687a6d]">
+                          <span className="flex items-center gap-1">
+                            <CalendarDays className="size-4" aria-hidden="true" />
+                            {event.event_date} · {event.tee_off_time?.slice(0, 5) ?? "-"}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <MapPin className="size-4" aria-hidden="true" />
+                            {event.venue ?? "ยังไม่ระบุสนาม"}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="w-fit rounded-md bg-white px-3 py-1 text-sm font-semibold text-[#0f2d26]">
+                        {event.member_price.toLocaleString()} บาท
+                      </span>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-md border border-[#dfe5da] bg-[#fbfcf8] p-4 text-sm text-[#687a6d]">
+                  ยังไม่มีกิจกรรมที่เปิดรับสมัคร
+                </div>
+              )}
+            </div>
+          </article>
+
           {[
-            {
-              detail: "ยังไม่มีกิจกรรมที่เปิดรับสมัครใน MVP นี้",
-              icon: CalendarDays,
-              title: "กิจกรรมที่เปิดรับสมัคร",
-            },
             {
               detail: "Pairing และ Tee Time จะเชื่อมกับ Event ใน sprint ถัดไป",
               icon: ClipboardCheck,

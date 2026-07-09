@@ -129,6 +129,7 @@ Additional migration:
 - `members.user_id` for linking member profiles to Supabase Auth users
 - Own-profile RLS policies for authenticated users
 - Employee verification fields on `members`: `employee_code`, `department`, `affiliation`, verification metadata, and `pending_verification` status
+- Open event RLS policy so authenticated members can see `events.status = 'open'`
 
 ## Security Notes
 

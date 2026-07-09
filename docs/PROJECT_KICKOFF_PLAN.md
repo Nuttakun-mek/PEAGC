@@ -185,8 +185,8 @@ Outcome: Admin จัดการสมาชิกได้จริง
 
 Outcome: เปิดกิจกรรมและรับสมัครได้
 
-- Event list and dashboard
-- Create / edit event
+- Event list and dashboard - started in `/admin/events`
+- Create / edit event - started with server actions and audit log
 - Event detail
 - Registration form
 - Register self / guest foundation

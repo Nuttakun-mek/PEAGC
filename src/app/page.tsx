@@ -47,7 +47,7 @@ const sprintFocus = [
 const navItems = [
   { label: "แดชบอร์ด", href: "/", icon: LayoutDashboard, active: true },
   { label: "สมาชิก", href: "/admin/members", icon: UsersRound },
-  { label: "กิจกรรม", href: "/admin", icon: CalendarDays },
+  { label: "กิจกรรม", href: "/admin/events", icon: CalendarDays },
   { label: "การชำระเงิน", href: "/admin", icon: CircleDollarSign },
   { label: "จัดก๊วน", href: "/admin", icon: Flag },
   { label: "การแข่งขัน", href: "/admin", icon: Trophy },
