@@ -9,7 +9,11 @@ import {
   Search,
 } from "lucide-react";
 
-import { createMember, updateMember } from "@/app/admin/members/actions";
+import {
+  approveMember,
+  createMember,
+  updateMember,
+} from "@/app/admin/members/actions";
 import { resolveAccess } from "@/lib/auth/access";
 import { createClient } from "@/lib/supabase/server";
 
@@ -29,7 +33,10 @@ type MemberType = {
 };
 
 type MemberRow = {
+  affiliation: string | null;
+  department: string | null;
   email: string | null;
+  employee_code: string | null;
   full_name: string;
   handicap: number | null;
   id: string;
@@ -58,6 +65,9 @@ const sampleTypes: MemberType[] = [
 const sampleMembers: MemberRow[] = [
   {
     email: "member01@example.com",
+    employee_code: "497901",
+    department: "กองบริการ",
+    affiliation: "การไฟฟ้าส่วนภูมิภาค",
     full_name: "สมาชิก ตัวอย่างหนึ่ง",
     handicap: 12.4,
     id: "sample-1",
@@ -71,10 +81,13 @@ const sampleMembers: MemberRow[] = [
     organization: "PEA HQ",
     phone: "0812345678",
     skill_level: "intermediate",
-    status: "active",
+    status: "pending_verification",
   },
   {
     email: "guest01@example.com",
+    employee_code: "498888",
+    department: "กองทดสอบ",
+    affiliation: "PEA",
     full_name: "แขก รับเชิญ",
     handicap: null,
     id: "sample-2",
@@ -97,9 +110,12 @@ const statusLabels: Record<string, string> = {
   archived: "Archived",
   guest: "Guest",
   inactive: "Inactive",
+  pending_verification: "รอตรวจสอบ",
 };
 
 const statusMessages: Record<string, string> = {
+  "approve-failed": "อนุมัติสมาชิกไม่สำเร็จ",
+  approved: "อนุมัติสมาชิกเรียบร้อยแล้ว",
   "create-failed": "เพิ่มสมาชิกไม่สำเร็จ กรุณาตรวจรหัสสมาชิกซ้ำหรือข้อมูลที่กรอก",
   created: "เพิ่มสมาชิกเรียบร้อยแล้ว",
   "missing-required": "กรุณากรอกชื่อ-นามสกุล",
@@ -110,6 +126,10 @@ const statusMessages: Record<string, string> = {
 function getStatusClass(status: string) {
   if (status === "active") {
     return "bg-[#e6f4df] text-[#24613f]";
+  }
+
+  if (status === "pending_verification") {
+    return "bg-[#fff4d8] text-[#8a6112]";
   }
 
   if (status === "guest") {
@@ -158,7 +178,16 @@ function MemberForm({
             name="memberCode"
           />
         </label>
-        <label className="block md:col-span-2">
+        <label className="block">
+          <span className="text-sm font-semibold text-[#405249]">รหัสพนักงาน</span>
+          <input
+            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            defaultValue={member?.employee_code ?? ""}
+            disabled={disabled}
+            name="employeeCode"
+          />
+        </label>
+        <label className="block">
           <span className="text-sm font-semibold text-[#405249]">ชื่อ-นามสกุล</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
@@ -210,6 +239,37 @@ function MemberForm({
         </label>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3">
+        <label className="block">
+          <span className="text-sm font-semibold text-[#405249]">หน่วยงาน</span>
+          <input
+            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            defaultValue={member?.department ?? ""}
+            disabled={disabled}
+            name="department"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-semibold text-[#405249]">สังกัด</span>
+          <input
+            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            defaultValue={member?.affiliation ?? ""}
+            disabled={disabled}
+            name="affiliation"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-semibold text-[#405249]">วันที่สมัคร</span>
+          <input
+            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            defaultValue={member?.joined_at ?? ""}
+            disabled={disabled}
+            name="joinedAt"
+            type="date"
+          />
+        </label>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-5">
         <label className="block md:col-span-2">
           <span className="text-sm font-semibold text-[#405249]">หน่วยงาน / บริษัท</span>
@@ -244,21 +304,12 @@ function MemberForm({
             disabled={disabled}
             name="status"
           >
+            <option value="pending_verification">Pending Verification</option>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
             <option value="guest">Guest</option>
             <option value="archived">Archived</option>
           </select>
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">วันที่สมัคร</span>
-          <input
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
-            defaultValue={member?.joined_at ?? ""}
-            disabled={disabled}
-            name="joinedAt"
-            type="date"
-          />
         </label>
       </div>
 
@@ -338,7 +389,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
       supabase
         .from("members")
         .select(
-          "id, member_code, full_name, nickname, phone, line_id, email, organization, handicap, skill_level, status, joined_at, note, member_type_id, member_types(name)",
+          "id, member_code, employee_code, department, affiliation, full_name, nickname, phone, line_id, email, organization, handicap, skill_level, status, joined_at, note, member_type_id, member_types(name)",
         )
         .eq("club_id", access.clubId)
         .is("archived_at", null)
@@ -362,6 +413,9 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
     const haystack = [
       member.member_code,
       member.full_name,
+      member.employee_code,
+      member.department,
+      member.affiliation,
       member.nickname,
       member.phone,
       member.email,
@@ -377,6 +431,9 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
 
   const activeCount = members.filter((member) => member.status === "active").length;
   const guestCount = members.filter((member) => member.status === "guest").length;
+  const pendingCount = members.filter(
+    (member) => member.status === "pending_verification",
+  ).length;
   const highlightedMember = params.member;
   const statusMessage = params.status ? statusMessages[params.status] : null;
   const bypassQuery = access.isBypass ? "?bypass=admin" : "";
@@ -426,6 +483,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {[
             { label: "สมาชิกที่แสดง", value: members.length },
+            { label: "รอตรวจสอบ", value: pendingCount },
             { label: "Active", value: activeCount },
             { label: "Guest", value: guestCount },
           ].map((item) => (
@@ -479,6 +537,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                   name="status"
                 >
                   <option value="all">ทุกสถานะ</option>
+                  <option value="pending_verification">รอตรวจสอบ</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                   <option value="guest">Guest</option>
@@ -530,7 +589,8 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-[#687a6d]">
-                        {member.member_code ?? "ไม่มีรหัส"} ·{" "}
+                        {member.employee_code ?? "ไม่มีรหัสพนักงาน"} ·{" "}
+                        {member.member_code ?? "ไม่มีรหัสสมาชิก"} ·{" "}
                         {member.nickname ?? "ไม่มีชื่อเล่น"}
                       </p>
                     </div>
@@ -540,9 +600,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                     </div>
                     <div className="text-sm text-[#405249]">
                       <p>{member.member_types?.name ?? "ไม่ระบุประเภท"}</p>
-                      <p className="mt-1 text-[#687a6d]">
-                        HCP {member.handicap ?? "-"}
-                      </p>
+                      <p className="mt-1 text-[#687a6d]">{member.department ?? "-"}</p>
                     </div>
                     <span className="w-fit rounded-md border border-[#cbd6c7] px-3 py-2 text-sm font-semibold text-[#0f2d26] group-open:bg-[#fbfcf8]">
                       แก้ไข
@@ -550,6 +608,55 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                   </summary>
 
                   <div className="mt-5 rounded-lg border border-[#dfe5da] bg-[#fbfcf8] p-4">
+                    <div className="mb-4 grid gap-3 rounded-md bg-white p-4 text-sm text-[#405249] md:grid-cols-3">
+                      <div>
+                        <p className="font-semibold text-[#687a6d]">รหัสพนักงาน</p>
+                        <p className="mt-1 text-[#0f2d26]">
+                          {member.employee_code ?? "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-[#687a6d]">หน่วยงาน</p>
+                        <p className="mt-1 text-[#0f2d26]">
+                          {member.department ?? "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-[#687a6d]">สังกัด</p>
+                        <p className="mt-1 text-[#0f2d26]">
+                          {member.affiliation ?? "-"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {member.status === "pending_verification" ? (
+                      <form
+                        action={approveMember}
+                        className="mb-4 grid gap-3 rounded-md border border-[#e0c777] bg-[#fff8e7] p-4 md:grid-cols-[1fr_auto]"
+                      >
+                        <input name="memberId" type="hidden" value={member.id} />
+                        <label className="block">
+                          <span className="text-sm font-semibold text-[#8a6112]">
+                            หมายเหตุการตรวจสอบ
+                          </span>
+                          <input
+                            className="mt-2 h-11 w-full rounded-md border border-[#e0c777] bg-white px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+                            disabled={access.isBypass}
+                            name="verificationNote"
+                            placeholder="ตรวจสอบกับฐานพนักงานแล้ว"
+                          />
+                        </label>
+                        <button
+                          className="flex h-11 items-center justify-center gap-2 self-end rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-[#9aa8a1]"
+                          disabled={access.isBypass}
+                          type="submit"
+                        >
+                          <BadgeCheck className="size-4" aria-hidden="true" />
+                          อนุมัติสมาชิก
+                        </button>
+                      </form>
+                    ) : null}
+
                     <MemberForm
                       action={updateMember}
                       disabled={access.isBypass}

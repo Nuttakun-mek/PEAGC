@@ -11,8 +11,9 @@ type ProfilePageProps = {
 
 const statusMessages: Record<string, string> = {
   "member-failed": "บันทึกข้อมูลสมาชิกไม่สำเร็จ",
-  "missing-required": "กรุณากรอกชื่อจริง ชื่อแสดงผล และเบอร์โทร",
+  "missing-required": "กรุณากรอกชื่อจริง ชื่อแสดงผล เบอร์โทร รหัสพนักงาน หน่วยงาน และสังกัด",
   "no-club": "ยังไม่มีชมรม active ให้ผูกข้อมูลสมาชิก",
+  "pending-review": "ส่งข้อมูลแล้ว กรุณารอ Admin ตรวจสอบและอนุมัติสมาชิก",
   "profile-failed": "บันทึกข้อมูลโปรไฟล์ไม่สำเร็จ",
 };
 
@@ -34,7 +35,9 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           .maybeSingle(),
         supabase
           .from("members")
-          .select("full_name, nickname, organization, handicap, skill_level")
+          .select(
+            "full_name, nickname, phone, employee_code, department, affiliation, organization, handicap, skill_level, status",
+          )
           .eq("user_id", access.userId)
           .maybeSingle(),
       ])
@@ -70,7 +73,14 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <span>โหมดทดลองไม่บันทึกข้อมูล กรุณาเข้าสู่ระบบจริงเพื่อบันทึกโปรไฟล์</span>
           </div>
-        ) : null}
+        ) : (
+          <div className="mt-5 flex items-start gap-3 rounded-md bg-[#edf4ea] px-4 py-3 text-sm text-[#24613f]">
+            <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <span>
+              หลังบันทึกข้อมูล สถานะจะเป็นรอ Admin ตรวจสอบกับฐานข้อมูลพนักงานก่อนอนุมัติเป็นสมาชิก
+            </span>
+          </div>
+        )}
 
         <form action={savePersonalProfile} className="mt-6 grid gap-4">
           <div className="grid gap-4 md:grid-cols-2">
@@ -128,8 +138,41 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           </div>
 
           <div className="grid gap-4 md:grid-cols-3">
+            <label className="block">
+              <span className="text-sm font-semibold text-[#405249]">รหัสพนักงาน</span>
+              <input
+                className="mt-2 h-12 w-full rounded-md border border-[#cbd6c7] px-4 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+                defaultValue={member?.employee_code ?? ""}
+                disabled={access.isBypass}
+                name="employeeCode"
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-[#405249]">หน่วยงาน</span>
+              <input
+                className="mt-2 h-12 w-full rounded-md border border-[#cbd6c7] px-4 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+                defaultValue={member?.department ?? ""}
+                disabled={access.isBypass}
+                name="department"
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-semibold text-[#405249]">สังกัด</span>
+              <input
+                className="mt-2 h-12 w-full rounded-md border border-[#cbd6c7] px-4 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+                defaultValue={member?.affiliation ?? ""}
+                disabled={access.isBypass}
+                name="affiliation"
+                required
+              />
+            </label>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3">
             <label className="block md:col-span-2">
-              <span className="text-sm font-semibold text-[#405249]">หน่วยงาน / บริษัท</span>
+              <span className="text-sm font-semibold text-[#405249]">หน่วยงาน / บริษัทเพิ่มเติม</span>
               <input
                 className="mt-2 h-12 w-full rounded-md border border-[#cbd6c7] px-4 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
                 defaultValue={member?.organization ?? ""}

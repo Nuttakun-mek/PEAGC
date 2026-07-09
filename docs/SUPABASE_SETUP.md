@@ -128,6 +128,7 @@ Additional migration:
 - Unique active club short name index on `clubs.short_name`
 - `members.user_id` for linking member profiles to Supabase Auth users
 - Own-profile RLS policies for authenticated users
+- Employee verification fields on `members`: `employee_code`, `department`, `affiliation`, verification metadata, and `pending_verification` status
 
 ## Security Notes
 

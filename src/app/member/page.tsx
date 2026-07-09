@@ -18,7 +18,16 @@ type MemberPageProps = {
 
 const statusMessages: Record<string, string> = {
   "admin-required": "บัญชีนี้ยังไม่มีสิทธิ์ Admin",
+  "pending-review": "ส่งข้อมูลสมัครแล้ว กรุณารอ Admin ตรวจสอบกับฐานข้อมูลพนักงาน",
   "profile-saved": "บันทึกข้อมูลส่วนตัวเรียบร้อยแล้ว",
+};
+
+const memberStatusLabels: Record<string, string> = {
+  active: "อนุมัติแล้ว",
+  archived: "ถูกเก็บถาวร",
+  guest: "แขก",
+  inactive: "ไม่ใช้งาน",
+  pending_verification: "รอตรวจสอบพนักงาน",
 };
 
 export default async function MemberPage({ searchParams }: MemberPageProps) {
@@ -33,12 +42,15 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
   const { data: member } = supabase
     ? await supabase
         .from("members")
-        .select("full_name, nickname, handicap, organization, skill_level, status")
+        .select(
+          "full_name, nickname, employee_code, department, affiliation, handicap, organization, skill_level, status",
+        )
         .eq("user_id", access.userId)
         .maybeSingle()
     : { data: null };
   const displayName = member?.nickname || member?.full_name || access.displayName;
   const profileHref = access.isBypass ? "/profile?bypass=member" : "/profile";
+  const isPending = member?.status === "pending_verification";
 
   return (
     <main className="min-h-screen bg-[#f6f7f2] px-4 py-6 text-[#11221d]">
@@ -72,6 +84,13 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
               <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
               <span>กรุณากรอกข้อมูลส่วนตัวให้ครบก่อนสมัครกิจกรรม</span>
             </div>
+          ) : isPending ? (
+            <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff4d8] px-4 py-3 text-sm text-[#8a6112]">
+              <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <span>
+                ข้อมูลอยู่ระหว่างรอ Admin ตรวจสอบรหัสพนักงาน หน่วยงาน และสังกัดก่อนอนุมัติ
+              </span>
+            </div>
           ) : null}
 
           <div className="mt-6 rounded-lg border border-[#dfe5da] bg-[#fbfcf8] p-5">
@@ -84,6 +103,12 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                 </span>
               </div>
               <div className="flex justify-between gap-4">
+                <span className="text-[#687a6d]">รหัสพนักงาน</span>
+                <span className="font-semibold text-[#0f2d26]">
+                  {member?.employee_code ?? "-"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
                 <span className="text-[#687a6d]">Handicap</span>
                 <span className="font-semibold text-[#0f2d26]">
                   {member?.handicap ?? "-"}
@@ -91,14 +116,24 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-[#687a6d]">สถานะ</span>
-                <span className="font-semibold text-[#24613f]">
-                  {member?.status ?? "ทดลอง"}
+                <span
+                  className={`font-semibold ${
+                    isPending ? "text-[#8a6112]" : "text-[#24613f]"
+                  }`}
+                >
+                  {member?.status ? memberStatusLabels[member.status] : "ทดลอง"}
                 </span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-[#687a6d]">หน่วยงาน</span>
                 <span className="font-semibold text-[#0f2d26]">
-                  {member?.organization ?? "-"}
+                  {member?.department ?? member?.organization ?? "-"}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span className="text-[#687a6d]">สังกัด</span>
+                <span className="font-semibold text-[#0f2d26]">
+                  {member?.affiliation ?? "-"}
                 </span>
               </div>
             </div>

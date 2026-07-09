@@ -35,11 +35,14 @@ export async function savePersonalProfile(formData: FormData) {
   const nickname = getString(formData, "nickname");
   const phone = getString(formData, "phone");
   const lineId = getString(formData, "lineId");
+  const employeeCode = getString(formData, "employeeCode");
+  const department = getString(formData, "department");
+  const affiliation = getString(formData, "affiliation");
   const organization = getString(formData, "organization");
   const handicap = getNumberOrNull(formData, "handicap");
   const skillLevel = getString(formData, "skillLevel");
 
-  if (!displayName || !fullName || !phone) {
+  if (!displayName || !fullName || !phone || !employeeCode || !department || !affiliation) {
     redirect("/profile?status=missing-required");
   }
 
@@ -72,6 +75,9 @@ export async function savePersonalProfile(formData: FormData) {
     {
       club_id: club.id,
       email: user.email,
+      affiliation,
+      department,
+      employee_code: employeeCode,
       full_name: fullName,
       handicap,
       line_id: lineId || null,
@@ -79,9 +85,10 @@ export async function savePersonalProfile(formData: FormData) {
       organization: organization || null,
       phone,
       skill_level: skillLevel || null,
-      status: "active",
+      status: "pending_verification",
       updated_by: user.id,
       user_id: user.id,
+      verification_note: null,
     },
     { onConflict: "club_id,user_id" },
   );
@@ -90,5 +97,5 @@ export async function savePersonalProfile(formData: FormData) {
     redirect("/profile?status=member-failed");
   }
 
-  redirect("/member?status=profile-saved");
+  redirect("/member?status=pending-review");
 }

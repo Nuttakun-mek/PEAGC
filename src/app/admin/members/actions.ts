@@ -72,7 +72,10 @@ function getMemberPayload(formData: FormData, clubId: string, userId: string) {
 
   return {
     club_id: clubId,
+    affiliation: getString(formData, "affiliation") || null,
+    department: getString(formData, "department") || null,
     email: getString(formData, "email") || null,
+    employee_code: getString(formData, "employeeCode") || null,
     full_name: fullName,
     handicap: getNumberOrNull(formData, "handicap"),
     joined_at: getDateOrNull(formData, "joinedAt"),
@@ -166,4 +169,49 @@ export async function updateMember(formData: FormData) {
   });
 
   redirectMembers("updated", memberId);
+}
+
+export async function approveMember(formData: FormData) {
+  const memberId = getString(formData, "memberId");
+
+  if (!memberId) {
+    redirectMembers("missing-required");
+  }
+
+  const { clubId, supabase, userId } = await requireAdminClub();
+  const { data: before } = await supabase
+    .from("members")
+    .select("*")
+    .eq("club_id", clubId)
+    .eq("id", memberId)
+    .maybeSingle();
+  const update = {
+    status: "active",
+    updated_by: userId,
+    verification_note: getString(formData, "verificationNote") || null,
+    verified_at: new Date().toISOString(),
+    verified_by: userId,
+  };
+  const { error } = await supabase
+    .from("members")
+    .update(update)
+    .eq("club_id", clubId)
+    .eq("id", memberId);
+
+  if (error) {
+    redirectMembers("approve-failed", memberId);
+  }
+
+  await supabase.from("audit_logs").insert({
+    action: "member.approved",
+    actor_user_id: userId,
+    after_data: update,
+    before_data: before,
+    club_id: clubId,
+    entity_id: memberId,
+    entity_type: "members",
+    metadata: { source: "admin.members" },
+  });
+
+  redirectMembers("approved", memberId);
 }
