@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   CalendarDays,
   ChevronRight,
+  CheckCircle2,
   ClipboardCheck,
   MapPin,
   Pencil,
@@ -13,14 +14,21 @@ import {
 import { resolveAccess } from "@/lib/auth/access";
 import { createClient } from "@/lib/supabase/server";
 
+import { registerForEvent } from "./actions";
+
 type MemberPageProps = {
   searchParams: Promise<{ bypass?: string; status?: string }>;
 };
 
 const statusMessages: Record<string, string> = {
   "admin-required": "บัญชีนี้ยังไม่มีสิทธิ์ Admin",
+  "already-registered": "คุณสมัครกิจกรรมนี้ไว้แล้ว",
+  "member-not-approved": "ต้องรอ Admin อนุมัติสมาชิกก่อน จึงจะสมัครกิจกรรมได้",
   "pending-review": "ส่งข้อมูลสมัครแล้ว กรุณารอ Admin ตรวจสอบกับฐานข้อมูลพนักงาน",
   "profile-saved": "บันทึกข้อมูลส่วนตัวเรียบร้อยแล้ว",
+  registered: "สมัครกิจกรรมเรียบร้อยแล้ว กรุณารอติดตามขั้นตอนชำระเงิน",
+  "registration-closed": "กิจกรรมนี้ปิดรับสมัครแล้ว",
+  "registration-failed": "สมัครกิจกรรมไม่สำเร็จ กรุณาลองใหม่",
 };
 
 const memberStatusLabels: Record<string, string> = {
@@ -55,7 +63,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
     ? await supabase
         .from("members")
         .select(
-          "full_name, nickname, employee_code, department, affiliation, handicap, organization, skill_level, status",
+          "id, full_name, nickname, employee_code, department, affiliation, handicap, organization, skill_level, status",
         )
         .eq("user_id", access.userId)
         .maybeSingle()
@@ -72,6 +80,20 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
         .order("event_date", { ascending: true })
         .limit(5)
     : { data: sampleOpenEvents };
+  const eventIds = openEvents?.map((event) => event.id) ?? [];
+  const { data: registrations } =
+    supabase && member?.id && eventIds.length
+      ? await supabase
+          .from("event_registrations")
+          .select("event_id, status")
+          .eq("member_id", member.id)
+          .in("event_id", eventIds)
+          .not("status", "in", "(cancelled,no_show)")
+      : { data: [] };
+  const registrationByEvent = new Map(
+    registrations?.map((item) => [item.event_id, item.status]) ?? [],
+  );
+  const canRegister = !access.isBypass && member?.status === "active";
 
   return (
     <main className="min-h-screen bg-[#f6f7f2] px-4 py-6 text-[#11221d]">
@@ -181,7 +203,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                     กิจกรรมที่เปิดรับสมัคร
                   </h2>
                   <p className="mt-1 text-sm text-[#687a6d]">
-                    เลือกกิจกรรมและเตรียมเข้าสู่ขั้นตอนสมัครใน sprint ถัดไป
+                    สมาชิกที่ผ่านอนุมัติแล้วสามารถสมัครกิจกรรมที่เปิดรับได้
                   </p>
                 </div>
               </div>
@@ -190,31 +212,60 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
 
             <div className="mt-4 grid gap-3">
               {openEvents?.length ? (
-                openEvents.map((event) => (
-                  <div
-                    className="rounded-md border border-[#dfe5da] bg-[#fbfcf8] p-4"
-                    key={event.id}
-                  >
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                      <div>
-                        <p className="font-semibold text-[#0f2d26]">{event.name}</p>
-                        <div className="mt-2 flex flex-wrap gap-3 text-sm text-[#687a6d]">
-                          <span className="flex items-center gap-1">
-                            <CalendarDays className="size-4" aria-hidden="true" />
-                            {event.event_date} · {event.tee_off_time?.slice(0, 5) ?? "-"}
+                openEvents.map((event) => {
+                  const registrationStatus = registrationByEvent.get(event.id);
+
+                  return (
+                    <div
+                      className="rounded-md border border-[#dfe5da] bg-[#fbfcf8] p-4"
+                      key={event.id}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="font-semibold text-[#0f2d26]">{event.name}</p>
+                          <div className="mt-2 flex flex-wrap gap-3 text-sm text-[#687a6d]">
+                            <span className="flex items-center gap-1">
+                              <CalendarDays className="size-4" aria-hidden="true" />
+                              {event.event_date} · {event.tee_off_time?.slice(0, 5) ?? "-"}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <MapPin className="size-4" aria-hidden="true" />
+                              {event.venue ?? "ยังไม่ระบุสนาม"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col gap-2 sm:items-end">
+                          <span className="w-fit rounded-md bg-white px-3 py-1 text-sm font-semibold text-[#0f2d26]">
+                            {event.member_price.toLocaleString()} บาท
                           </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="size-4" aria-hidden="true" />
-                            {event.venue ?? "ยังไม่ระบุสนาม"}
-                          </span>
+                          {registrationStatus ? (
+                            <span className="flex h-10 w-fit items-center gap-2 rounded-md bg-[#e6f4df] px-3 text-sm font-semibold text-[#24613f]">
+                              <CheckCircle2 className="size-4" aria-hidden="true" />
+                              สมัครแล้ว
+                            </span>
+                          ) : canRegister ? (
+                            <form action={registerForEvent}>
+                              <input name="eventId" type="hidden" value={event.id} />
+                              <button
+                                className="flex h-10 items-center justify-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white"
+                                type="submit"
+                              >
+                                <ClipboardCheck className="size-4" aria-hidden="true" />
+                                สมัครกิจกรรม
+                              </button>
+                            </form>
+                          ) : (
+                            <span className="w-fit rounded-md bg-[#edf1ec] px-3 py-2 text-sm font-medium text-[#687a6d]">
+                              {access.isBypass
+                                ? "โหมดทดลอง"
+                                : "รออนุมัติสมาชิก"}
+                            </span>
+                          )}
                         </div>
                       </div>
-                      <span className="w-fit rounded-md bg-white px-3 py-1 text-sm font-semibold text-[#0f2d26]">
-                        {event.member_price.toLocaleString()} บาท
-                      </span>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
                 <div className="rounded-md border border-[#dfe5da] bg-[#fbfcf8] p-4 text-sm text-[#687a6d]">
                   ยังไม่มีกิจกรรมที่เปิดรับสมัคร

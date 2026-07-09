@@ -8,7 +8,7 @@ This repository is starting with Foundation + MVP 1.
 
 - Foundation: Next.js App Router, TypeScript, Tailwind CSS, responsive admin shell
 - Auth: Supabase SSR clients, Google/magic-link login, temporary bypass, protected setup bootstrap
-- MVP 1: Employee verification, Member Management, and Event Management started; Registration, Payment Slip Review, Pairing, Check-in, Excel Export next
+- MVP 1: Employee verification, Member Management, Event Management, and self-registration foundation started; Payment Slip Review, Pairing, Check-in, Excel Export next
 - Later: Basic Competition, Rule Builder, Smart Score OCR, Academy, Finance, Sponsor, Analytics
 
 ## Tech Stack
@@ -51,6 +51,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - `src/app/admin/employees` - employee directory used to verify member applications
 - `src/app/admin/events` - admin event list, search, create, and edit workflow
 - `src/app/admin/members` - admin member list, search, add, and edit workflow
+- `src/app/member/actions.ts` - member self-registration server action for open events
 - `src/app/profile` - member personal profile form
 - `src/app/setup` - one-time club admin bootstrap
 - `docs/PROJECT_KICKOFF_PLAN.md` - project kickoff plan from the source PRD

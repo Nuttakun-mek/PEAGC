@@ -189,10 +189,10 @@ Outcome: เปิดกิจกรรมและรับสมัครไ�
 - Event list and dashboard - started in `/admin/events`
 - Create / edit event - started with server actions and audit log
 - Event detail
-- Registration form
-- Register self / guest foundation
-- Registration status flow
-- Mobile registration UX
+- Registration form - started on `/member`
+- Register self foundation - started for approved members and open events
+- Registration status flow - started with `pending_payment`
+- Mobile registration UX - started on member event cards
 
 ### Sprint 4: Payment and Participant Admin
 
