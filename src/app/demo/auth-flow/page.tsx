@@ -64,20 +64,20 @@ const flowSteps = [
 
 export default function DemoAuthFlowPage() {
   return (
-    <main className="min-h-screen bg-[#f6f7f2] px-4 py-6 text-[#11221d]">
+    <main className="min-h-screen bg-transparent px-4 py-6 text-[#2f3137]">
       <section className="mx-auto w-full max-w-6xl">
-        <div className="flex flex-col gap-4 border-b border-[#dfe5da] pb-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#5b6f62]">Flow Simulator</p>
-            <h1 className="mt-1 text-3xl font-semibold text-[#0f2d26]">
+            <p className="text-sm font-semibold text-[#8b5b7a]">Flow Simulator</p>
+            <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
               จำลองการสมัครและเข้าใช้งานด้วย Google
             </h1>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#687a6d]">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-[#6b6475]">
               หน้านี้เป็นตัวช่วยเดินลิงก์ของ flow จริงก่อนเปิด Google provider ใน Supabase เพื่อให้เห็นว่า user และ Admin จะเจอหน้าไหนตามลำดับ
             </p>
           </div>
           <Link
-            className="flex h-11 w-fit items-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white"
+            className="flex h-11 w-fit items-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
             href="/login"
           >
             <LogIn className="size-4" aria-hidden="true" />
@@ -85,7 +85,7 @@ export default function DemoAuthFlowPage() {
           </Link>
         </div>
 
-        <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff4d8] px-4 py-3 text-sm text-[#8a6112]">
+        <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
           <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>
             ตอนนี้ Google provider ใน Supabase ยังไม่เปิด จึงใช้ bypass links เพื่อเดินดูหน้าจอจริงทีละขั้น หลังเปิด provider แล้วระบบจะวิ่งผ่าน `/auth/complete` เพื่อตัดสินทางให้เอง
@@ -95,27 +95,27 @@ export default function DemoAuthFlowPage() {
         <div className="mt-6 grid gap-4 lg:grid-cols-2">
           {flowSteps.map((step) => (
             <article
-              className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm"
+              className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
               key={step.title}
             >
               <div className="flex items-start gap-4">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
                   <step.icon className="size-5" aria-hidden="true" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-lg font-semibold text-[#0f2d26]">
+                    <h2 className="text-lg font-semibold text-[#722257]">
                       {step.title}
                     </h2>
-                    <span className="rounded-md bg-[#fbfcf8] px-2 py-1 text-xs font-semibold text-[#687a6d]">
+                    <span className="rounded-md bg-white/70 px-2 py-1 text-xs font-semibold text-[#6b6475]">
                       {step.state}
                     </span>
                   </div>
-                  <p className="mt-2 text-sm leading-6 text-[#687a6d]">
+                  <p className="mt-2 text-sm leading-6 text-[#6b6475]">
                     {step.detail}
                   </p>
                   <Link
-                    className="mt-4 flex h-10 w-fit items-center gap-2 rounded-md border border-[#cbd6c7] bg-white px-3 text-sm font-semibold text-[#0f2d26]"
+                    className="mt-4 flex h-10 w-fit items-center gap-2 rounded-md border border-[#d9d3e6] bg-white px-3 text-sm font-semibold text-[#722257]"
                     href={step.href}
                   >
                     <ExternalLink className="size-4" aria-hidden="true" />
@@ -127,16 +127,16 @@ export default function DemoAuthFlowPage() {
           ))}
         </div>
 
-        <section className="mt-6 rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+        <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
           <div className="flex items-center gap-3">
-            <div className="flex size-10 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+            <div className="flex size-10 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
               <ClipboardCheck className="size-5" aria-hidden="true" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-[#0f2d26]">
+              <h2 className="text-lg font-semibold text-[#722257]">
                 เงื่อนไข flow จริง
               </h2>
-              <p className="mt-1 text-sm text-[#687a6d]">
+              <p className="mt-1 text-sm text-[#6b6475]">
                 Google account ใหม่จะสมัครให้อัตโนมัติใน Supabase Auth ส่วนสมาชิก PEAGC จะใช้งานเต็มระบบได้หลังกรอก profile และ Admin อนุมัติ
               </p>
             </div>

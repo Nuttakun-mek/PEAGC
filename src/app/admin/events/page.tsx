@@ -36,6 +36,11 @@ type EventRow = {
   member_price: number;
   name: string;
   status: string;
+  target_bureaus?: string[] | null;
+  target_departments?: string[] | null;
+  target_divisions?: string[] | null;
+  target_sections?: string[] | null;
+  target_work_lines?: string[] | null;
   tee_off_time: string | null;
   venue: string | null;
 };
@@ -97,18 +102,18 @@ const statusMessages: Record<string, string> = {
 
 function getStatusClass(status: string) {
   if (status === "open") {
-    return "bg-[#e6f4df] text-[#24613f]";
+    return "bg-[#f8edf4] text-[#722257]";
   }
 
   if (status === "draft") {
-    return "bg-[#fff4d8] text-[#8a6112]";
+    return "bg-[#fff5d8] text-[#805300]";
   }
 
   if (status === "closed" || status === "completed") {
     return "bg-[#eef2ff] text-[#3730a3]";
   }
 
-  return "bg-[#f1f3ef] text-[#687a6d]";
+  return "bg-[#f1f3ef] text-[#6b6475]";
 }
 
 function EventForm({
@@ -127,18 +132,18 @@ function EventForm({
       {event ? <input name="eventId" type="hidden" value={event.id} /> : null}
       <div className="flex items-center gap-2">
         {event ? (
-          <Pencil className="size-4 text-[#0f6b4f]" aria-hidden="true" />
+          <Pencil className="size-4 text-[#722257]" aria-hidden="true" />
         ) : (
-          <Plus className="size-4 text-[#0f6b4f]" aria-hidden="true" />
+          <Plus className="size-4 text-[#722257]" aria-hidden="true" />
         )}
-        <h2 className="text-lg font-semibold text-[#0f2d26]">{title}</h2>
+        <h2 className="text-lg font-semibold text-[#722257]">{title}</h2>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">ชื่อกิจกรรม</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">ชื่อกิจกรรม</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.name ?? ""}
             disabled={disabled}
             name="name"
@@ -146,9 +151,9 @@ function EventForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">ประเภท</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">ประเภท</span>
           <select
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] bg-white px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.event_type ?? "golf_round"}
             disabled={disabled}
             name="eventType"
@@ -160,9 +165,9 @@ function EventForm({
           </select>
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">สถานะ</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">สถานะ</span>
           <select
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] bg-white px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.status ?? "draft"}
             disabled={disabled}
             name="status"
@@ -179,9 +184,9 @@ function EventForm({
 
       <div className="grid gap-4 md:grid-cols-4">
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">วันที่</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">วันที่</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.event_date ?? ""}
             disabled={disabled}
             name="eventDate"
@@ -190,9 +195,9 @@ function EventForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">T-Off</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">T-Off</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.tee_off_time?.slice(0, 5) ?? ""}
             disabled={disabled}
             name="teeOffTime"
@@ -200,9 +205,9 @@ function EventForm({
           />
         </label>
         <label className="block md:col-span-2">
-          <span className="text-sm font-semibold text-[#405249]">สนาม</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">สนาม</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.venue ?? ""}
             disabled={disabled}
             name="venue"
@@ -212,9 +217,9 @@ function EventForm({
 
       <div className="grid gap-4 md:grid-cols-3">
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">จำนวนรับสมัคร</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">จำนวนรับสมัคร</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.capacity ?? ""}
             disabled={disabled}
             min="0"
@@ -223,9 +228,9 @@ function EventForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">ค่าสมัครสมาชิก</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">ค่าสมัครสมาชิก</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.member_price ?? 0}
             disabled={disabled}
             min="0"
@@ -235,9 +240,9 @@ function EventForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">ค่าสมัครแขก</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">ค่าสมัครแขก</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.guest_price ?? 0}
             disabled={disabled}
             min="0"
@@ -250,18 +255,18 @@ function EventForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">สิ่งที่รวมในราคา</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">สิ่งที่รวมในราคา</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.includes ?? ""}
             disabled={disabled}
             name="includes"
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">รายละเอียด</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">รายละเอียด</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.description ?? ""}
             disabled={disabled}
             name="description"
@@ -269,8 +274,29 @@ function EventForm({
         </label>
       </div>
 
+      <div className="grid gap-4 md:grid-cols-5">
+        {[
+          { key: "targetWorkLines", label: "สายงาน", value: event?.target_work_lines },
+          { key: "targetBureaus", label: "สำนัก", value: event?.target_bureaus },
+          { key: "targetDivisions", label: "ฝ่าย", value: event?.target_divisions },
+          { key: "targetDepartments", label: "กอง", value: event?.target_departments },
+          { key: "targetSections", label: "แผนก", value: event?.target_sections },
+        ].map((target) => (
+          <label className="block" key={target.key}>
+            <span className="text-sm font-semibold text-[#3f3a48]">{target.label}</span>
+            <input
+              className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+              defaultValue={target.value?.join(", ") ?? ""}
+              disabled={disabled}
+              name={target.key}
+              placeholder="เว้นว่าง = ทุกคน"
+            />
+          </label>
+        ))}
+      </div>
+
       <button
-        className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white transition enabled:hover:bg-[#17453b] disabled:cursor-not-allowed disabled:bg-[#9aa8a1] md:w-fit"
+        className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white transition enabled:hover:bg-[#8b2d6b] disabled:cursor-not-allowed disabled:bg-[#9a94a6] md:w-fit"
         disabled={disabled}
         type="submit"
       >
@@ -298,7 +324,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
     const { data } = await supabase
       .from("events")
       .select(
-        "id, name, event_type, venue, event_date, tee_off_time, capacity, member_price, guest_price, includes, description, status",
+        "id, name, event_type, venue, event_date, tee_off_time, capacity, member_price, guest_price, includes, description, status, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections",
       )
       .eq("club_id", access.clubId)
       .is("archived_at", null)
@@ -326,28 +352,28 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
   const bypassQuery = access.isBypass ? "?bypass=admin" : "";
 
   return (
-    <main className="min-h-screen bg-[#f6f7f2] px-4 py-6 text-[#11221d]">
+    <main className="min-h-screen bg-transparent px-4 py-6 text-[#2f3137]">
       <section className="mx-auto w-full max-w-7xl">
-        <div className="flex flex-col gap-4 border-b border-[#dfe5da] pb-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#5b6f62]">Admin Portal</p>
-            <h1 className="mt-1 text-3xl font-semibold text-[#0f2d26]">
+            <p className="text-sm font-semibold text-[#8b5b7a]">Admin Portal</p>
+            <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
               Event Management
             </h1>
-            <p className="mt-2 text-sm text-[#687a6d]">
+            <p className="mt-2 text-sm text-[#6b6475]">
               สร้างกิจกรรม เปิดรับสมัคร และจัดการรายละเอียดกิจกรรมกอล์ฟ
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-              className="flex h-11 items-center gap-2 rounded-md border border-[#cbd6c7] bg-white px-4 text-sm font-semibold text-[#0f2d26]"
+              className="flex h-11 items-center gap-2 rounded-md border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257]"
               href={`/admin${bypassQuery}`}
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
               กลับ Admin
             </Link>
             <Link
-              className="flex h-11 items-center rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white"
+              className="flex h-11 items-center rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
               href={access.isBypass ? "/member?bypass=member" : "/member"}
             >
               ดูหน้าสมาชิก
@@ -356,13 +382,13 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
         </div>
 
         {statusMessage ? (
-          <div className="mt-5 rounded-md bg-[#e6f4df] px-4 py-3 text-sm font-medium text-[#24613f]">
+          <div className="mt-5 rounded-md bg-[#f8edf4] px-4 py-3 text-sm font-medium text-[#722257]">
             {statusMessage}
           </div>
         ) : null}
 
         {access.isBypass ? (
-          <div className="mt-5 rounded-md bg-[#fff4d8] px-4 py-3 text-sm text-[#8a6112]">
+          <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
             โหมด Admin ทดลอง: แสดงข้อมูลตัวอย่างและปิดการบันทึกจริง ต้องปิดก่อน go live
           </div>
         ) : null}
@@ -374,34 +400,34 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
             { label: "Draft", value: draftCount },
           ].map((item) => (
             <article
-              className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm"
+              className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
               key={item.label}
             >
-              <p className="text-sm font-semibold text-[#687a6d]">{item.label}</p>
-              <p className="mt-2 text-3xl font-semibold text-[#0f2d26]">
+              <p className="text-sm font-semibold text-[#6b6475]">{item.label}</p>
+              <p className="mt-2 text-3xl font-semibold text-[#722257]">
                 {item.value}
               </p>
             </article>
           ))}
         </div>
 
-        <section className="mt-6 rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+        <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
           <EventForm action={createEvent} disabled={access.isBypass} title="สร้างกิจกรรมใหม่" />
         </section>
 
-        <section className="mt-6 rounded-lg border border-[#dfe5da] bg-white shadow-sm">
-          <div className="border-b border-[#dfe5da] p-5">
+        <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
+          <div className="border-b border-[#e6e2ee] p-5">
             <form className="grid gap-3 lg:grid-cols-[1fr_180px_110px]">
               {access.isBypass ? (
                 <input name="bypass" type="hidden" value="admin" />
               ) : null}
               <label className="relative block">
                 <Search
-                  className="pointer-events-none absolute left-3 top-3.5 size-4 text-[#687a6d]"
+                  className="pointer-events-none absolute left-3 top-3.5 size-4 text-[#6b6475]"
                   aria-hidden="true"
                 />
                 <input
-                  className="h-11 w-full rounded-md border border-[#cbd6c7] pl-10 pr-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+                  className="h-11 w-full rounded-md border border-[#d9d3e6] pl-10 pr-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
                   defaultValue={q}
                   name="q"
                   placeholder="ค้นหาชื่อกิจกรรม สนาม หรือรายละเอียด"
@@ -409,11 +435,11 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
               </label>
               <label className="relative block">
                 <Filter
-                  className="pointer-events-none absolute left-3 top-3.5 size-4 text-[#687a6d]"
+                  className="pointer-events-none absolute left-3 top-3.5 size-4 text-[#6b6475]"
                   aria-hidden="true"
                 />
                 <select
-                  className="h-11 w-full rounded-md border border-[#cbd6c7] bg-white pl-10 pr-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10"
+                  className="h-11 w-full rounded-md border border-[#d9d3e6] bg-white pl-10 pr-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
                   defaultValue={selectedStatus}
                   name="status"
                 >
@@ -427,7 +453,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                 </select>
               </label>
               <button
-                className="h-11 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white"
+                className="h-11 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
                 type="submit"
               >
                 ค้นหา
@@ -435,7 +461,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
             </form>
           </div>
 
-          <div className="divide-y divide-[#dfe5da]">
+          <div className="divide-y divide-[#e6e2ee]">
             {events.length ? (
               events.map((event) => (
                 <details
@@ -444,63 +470,63 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                   open={highlightedEvent === event.id}
                 >
                   <summary className="grid cursor-pointer list-none gap-4 lg:grid-cols-[44px_1fr_0.75fr_0.65fr_96px] lg:items-center">
-                    <div className="flex size-11 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                    <div className="flex size-11 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
                       <CalendarDays className="size-5" aria-hidden="true" />
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-[#0f2d26]">{event.name}</p>
+                        <p className="font-semibold text-[#722257]">{event.name}</p>
                         <span
                           className={`rounded-md px-2 py-1 text-xs font-semibold ${getStatusClass(event.status)}`}
                         >
                           {statusLabels[event.status] ?? event.status}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-[#687a6d]">
+                      <p className="mt-1 text-sm text-[#6b6475]">
                         {eventTypeLabels[event.event_type] ?? event.event_type} ·{" "}
                         {event.venue ?? "ยังไม่ระบุสนาม"}
                       </p>
                     </div>
-                    <div className="text-sm text-[#405249]">
+                    <div className="text-sm text-[#3f3a48]">
                       <p>{event.event_date}</p>
-                      <p className="mt-1 text-[#687a6d]">
+                      <p className="mt-1 text-[#6b6475]">
                         T-Off {event.tee_off_time?.slice(0, 5) ?? "-"}
                       </p>
                     </div>
-                    <div className="text-sm text-[#405249]">
+                    <div className="text-sm text-[#3f3a48]">
                       <p>รับ {event.capacity ?? "-"} คน</p>
-                      <p className="mt-1 text-[#687a6d]">
+                      <p className="mt-1 text-[#6b6475]">
                         สมาชิก {event.member_price.toLocaleString()} บาท
                       </p>
                     </div>
-                    <span className="w-fit rounded-md border border-[#cbd6c7] px-3 py-2 text-sm font-semibold text-[#0f2d26] group-open:bg-[#fbfcf8]">
+                    <span className="w-fit rounded-md border border-[#d9d3e6] px-3 py-2 text-sm font-semibold text-[#722257] group-open:bg-white/70">
                       แก้ไข
                     </span>
                   </summary>
 
-                  <div className="mt-5 rounded-lg border border-[#dfe5da] bg-[#fbfcf8] p-4">
-                    <div className="mb-4 grid gap-3 rounded-md bg-white p-4 text-sm text-[#405249] md:grid-cols-3">
+                  <div className="mt-5 rounded-lg border border-[#e6e2ee] bg-white/70 p-4">
+                    <div className="mb-4 grid gap-3 rounded-md bg-white p-4 text-sm text-[#3f3a48] md:grid-cols-3">
                       <div className="flex items-start gap-2">
-                        <MapPin className="mt-0.5 size-4 text-[#0f6b4f]" aria-hidden="true" />
+                        <MapPin className="mt-0.5 size-4 text-[#722257]" aria-hidden="true" />
                         <div>
-                          <p className="font-semibold text-[#687a6d]">สนาม</p>
-                          <p className="mt-1 text-[#0f2d26]">{event.venue ?? "-"}</p>
+                          <p className="font-semibold text-[#6b6475]">สนาม</p>
+                          <p className="mt-1 text-[#722257]">{event.venue ?? "-"}</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
-                        <UsersRound className="mt-0.5 size-4 text-[#0f6b4f]" aria-hidden="true" />
+                        <UsersRound className="mt-0.5 size-4 text-[#722257]" aria-hidden="true" />
                         <div>
-                          <p className="font-semibold text-[#687a6d]">จำนวนรับ</p>
-                          <p className="mt-1 text-[#0f2d26]">
+                          <p className="font-semibold text-[#6b6475]">จำนวนรับ</p>
+                          <p className="mt-1 text-[#722257]">
                             {event.capacity ?? "-"} คน
                           </p>
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
-                        <CircleDollarSign className="mt-0.5 size-4 text-[#0f6b4f]" aria-hidden="true" />
+                        <CircleDollarSign className="mt-0.5 size-4 text-[#722257]" aria-hidden="true" />
                         <div>
-                          <p className="font-semibold text-[#687a6d]">ราคา</p>
-                          <p className="mt-1 text-[#0f2d26]">
+                          <p className="font-semibold text-[#6b6475]">ราคา</p>
+                          <p className="mt-1 text-[#722257]">
                             สมาชิก {event.member_price.toLocaleString()} / แขก{" "}
                             {event.guest_price.toLocaleString()}
                           </p>
@@ -518,7 +544,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                 </details>
               ))
             ) : (
-              <div className="px-5 py-10 text-center text-sm text-[#687a6d]">
+              <div className="px-5 py-10 text-center text-sm text-[#6b6475]">
                 ไม่พบกิจกรรมตามเงื่อนไขที่ค้นหา
               </div>
             )}

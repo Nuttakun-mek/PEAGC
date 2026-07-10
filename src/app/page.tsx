@@ -1,4 +1,4 @@
-import {
+﻿import {
   BadgeCheck,
   CalendarDays,
   CircleDollarSign,
@@ -64,23 +64,23 @@ export default async function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f7f2] text-[#11221d]">
+    <main className="min-h-screen bg-transparent text-peagc-dark-gray">
       <div className="grid min-h-screen lg:grid-cols-[280px_1fr]">
-        <aside className="border-b border-[#dfe5da] bg-[#0f2d26] px-5 py-5 text-white lg:border-b-0 lg:border-r">
+        <aside className="border-b border-peagc-border bg-peagc-purple px-5 py-5 text-white lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between gap-4 lg:block">
             <div>
               <div className="flex items-center gap-3">
-                <div className="flex size-11 items-center justify-center rounded-md bg-[#d6b25e] text-sm font-bold text-[#0f2d26]">
+                <div className="flex size-11 items-center justify-center rounded-md bg-peagc-gold text-sm font-bold text-peagc-purple">
                   PEA
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[#f5edd7]">PEAGC</p>
-                  <p className="text-xs text-[#bed2c8]">Golf Club OS</p>
+                  <p className="text-sm font-semibold text-[#fff5d8]">PEAGC</p>
+                  <p className="text-xs text-[#d8c8e8]">Golf Club OS</p>
                 </div>
               </div>
             </div>
             <div className="rounded-md border border-white/15 px-3 py-2 text-right lg:mt-7 lg:text-left">
-              <p className="text-xs text-[#bed2c8]">ระยะงาน</p>
+              <p className="text-xs text-[#d8c8e8]">ระยะงาน</p>
               <p className="text-sm font-semibold text-white">Foundation</p>
             </div>
           </div>
@@ -91,8 +91,8 @@ export default async function Home() {
                 key={item.label}
                 className={`flex h-11 items-center gap-3 rounded-md px-3 text-left text-sm transition ${
                   item.active
-                    ? "bg-white text-[#0f2d26]"
-                    : "text-[#dce9e2] hover:bg-white/10"
+                    ? "bg-white text-peagc-purple"
+                    : "text-[#efe6f8] hover:bg-white/10"
                 }`}
                 href={item.href}
               >
@@ -104,12 +104,12 @@ export default async function Home() {
         </aside>
 
         <section className="px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
-          <header className="flex flex-col gap-4 border-b border-[#dfe5da] pb-5 xl:flex-row xl:items-center xl:justify-between">
+          <header className="flex flex-col gap-4 border-b border-peagc-border pb-5 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="text-sm font-semibold text-[#5b6f62]">
+              <p className="text-sm font-semibold text-[#8b5b7a]">
                 ระบบเว็บชมรมกอล์ฟแบบ Thai-first
               </p>
-              <h1 className="mt-2 text-3xl font-semibold text-[#0f2d26] sm:text-4xl">
+              <h1 className="mt-2 text-3xl font-semibold text-peagc-purple sm:text-4xl">
                 แดชบอร์ดบริหาร PEAGC
               </h1>
             </div>
@@ -117,7 +117,7 @@ export default async function Home() {
               {userEmail ? (
                 <form action={signOut}>
                   <button
-                    className="flex h-11 items-center gap-2 rounded-md border border-[#cbd6c7] bg-white px-4 text-sm font-semibold text-[#0f2d26] transition hover:border-[#0f2d26]"
+                    className="flex h-11 items-center gap-2 rounded-md border border-peagc-border-strong bg-white px-4 text-sm font-semibold text-peagc-purple transition hover:border-peagc-purple"
                     type="submit"
                   >
                     <LogOut className="size-4" aria-hidden="true" />
@@ -126,7 +126,7 @@ export default async function Home() {
                 </form>
               ) : (
                 <Link
-                  className="flex h-11 items-center gap-2 rounded-md border border-[#cbd6c7] bg-white px-4 text-sm font-semibold text-[#0f2d26] transition hover:border-[#0f2d26]"
+                  className="flex h-11 items-center gap-2 rounded-md border border-peagc-border-strong bg-white px-4 text-sm font-semibold text-peagc-purple transition hover:border-peagc-purple"
                   href="/login"
                 >
                   <LogIn className="size-4" aria-hidden="true" />
@@ -134,14 +134,14 @@ export default async function Home() {
                 </Link>
               )}
               <Link
-                className="flex h-11 items-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#17453b]"
+                className="flex h-11 items-center gap-2 rounded-md bg-peagc-purple px-4 text-sm font-semibold text-white shadow-[0_18px_45px_rgba(114,34,87,0.08)] transition hover:bg-[#8b2d6b]"
                 href={userEmail ? "/profile" : "/login?next=/profile"}
               >
                 <UsersRound className="size-4" aria-hidden="true" />
                 กรอกข้อมูลส่วนตัว
               </Link>
               <Link
-                className="flex h-11 items-center gap-2 rounded-md border border-[#cbd6c7] bg-white px-4 text-sm font-semibold text-[#0f2d26] transition hover:border-[#0f2d26]"
+                className="flex h-11 items-center gap-2 rounded-md border border-peagc-border-strong bg-white px-4 text-sm font-semibold text-peagc-purple transition hover:border-peagc-purple"
                 href="/admin"
               >
                 <CalendarDays className="size-4" aria-hidden="true" />
@@ -150,42 +150,68 @@ export default async function Home() {
             </div>
           </header>
 
+          <section className="golf-visual mt-6 rounded-lg border border-peagc-border bg-white/95 p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)] backdrop-blur">
+            <div className="relative z-10 grid gap-5 lg:grid-cols-[1fr_320px] lg:items-center">
+              <div>
+                <p className="text-sm font-semibold text-peagc-gold">PEA Golf Club</p>
+                <h2 className="mt-2 max-w-2xl text-2xl font-semibold text-peagc-purple sm:text-3xl">
+                  Golf operations workspace for members, lessons, events, and club admin
+                </h2>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-peagc-muted">
+                  Clean card-based workspace with purple and gold identity, unit-targeted announcements, member profiles, and academy booking workflows.
+                </p>
+              </div>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                {[
+                  { label: "Member", value: "Profile" },
+                  { label: "Academy", value: "Slots" },
+                  { label: "Events", value: "Targeted" },
+                ].map((item) => (
+                  <div className="rounded-lg border border-peagc-border bg-white/75 p-3" key={item.label}>
+                    <p className="text-xs font-semibold text-peagc-muted">{item.label}</p>
+                    <p className="mt-1 text-sm font-semibold text-peagc-purple">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
           <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {metrics.map((metric) => (
               <article
                 key={metric.label}
-                className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm"
+                className="rounded-lg border border-peagc-border bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
               >
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="text-sm font-medium text-[#687a6d]">
+                    <p className="text-sm font-medium text-peagc-muted">
                       {metric.label}
                     </p>
-                    <p className="mt-2 text-3xl font-semibold text-[#0f2d26]">
+                    <p className="mt-2 text-3xl font-semibold text-peagc-purple">
                       {metric.value}
                     </p>
                   </div>
-                  <div className="flex size-11 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                  <div className="flex size-11 items-center justify-center rounded-md bg-peagc-purple-soft text-peagc-purple">
                     <metric.icon className="size-5" aria-hidden="true" />
                   </div>
                 </div>
-                <p className="mt-4 text-sm text-[#687a6d]">{metric.detail}</p>
+                <p className="mt-4 text-sm text-peagc-muted">{metric.detail}</p>
               </article>
             ))}
           </div>
 
           <div className="mt-6 grid gap-6 xl:grid-cols-[1.35fr_0.65fr]">
-            <section className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+            <section className="rounded-lg border border-peagc-border bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-[#5b6f62]">
+                  <p className="text-sm font-semibold text-[#8b5b7a]">
                     แผน MVP 1
                   </p>
-                  <h2 className="mt-1 text-xl font-semibold text-[#0f2d26]">
+                  <h2 className="mt-1 text-xl font-semibold text-peagc-purple">
                     Club & Event Core
                   </h2>
                 </div>
-                <span className="w-fit rounded-md bg-[#fff4d8] px-3 py-1 text-sm font-semibold text-[#8a6112]">
+                <span className="w-fit rounded-md bg-[#fff5d8] px-3 py-1 text-sm font-semibold text-[#805300]">
                   สร้างก่อน
                 </span>
               </div>
@@ -194,57 +220,57 @@ export default async function Home() {
                 {workflow.map((item) => (
                   <article
                     key={item.title}
-                    className="min-h-32 rounded-lg border border-[#dfe5da] bg-[#fbfcf8] p-4"
+                    className="min-h-32 rounded-lg border border-peagc-border bg-white/70 p-4"
                   >
-                    <div className="flex size-10 items-center justify-center rounded-md bg-[#0f2d26] text-white">
+                    <div className="flex size-10 items-center justify-center rounded-md bg-peagc-purple text-white">
                       <item.icon className="size-5" aria-hidden="true" />
                     </div>
-                    <h3 className="mt-4 text-base font-semibold text-[#0f2d26]">
+                    <h3 className="mt-4 text-base font-semibold text-peagc-purple">
                       {item.title}
                     </h3>
-                    <p className="mt-1 text-sm text-[#687a6d]">{item.status}</p>
+                    <p className="mt-1 text-sm text-peagc-muted">{item.status}</p>
                   </article>
                 ))}
               </div>
             </section>
 
-            <section className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+            <section className="rounded-lg border border-peagc-border bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm font-semibold text-[#5b6f62]">
+                  <p className="text-sm font-semibold text-[#8b5b7a]">
                     Sprint 0
                   </p>
-                  <h2 className="mt-1 text-xl font-semibold text-[#0f2d26]">
+                  <h2 className="mt-1 text-xl font-semibold text-peagc-purple">
                     งานตั้งต้น
                   </h2>
                 </div>
-                <ShieldCheck className="size-6 text-[#0f6b4f]" aria-hidden="true" />
+                <ShieldCheck className="size-6 text-peagc-purple" aria-hidden="true" />
               </div>
               <ul className="mt-5 space-y-3">
                 {sprintFocus.map((item) => (
                   <li key={item} className="flex items-start gap-3 text-sm">
                     <BadgeCheck
-                      className="mt-0.5 size-4 shrink-0 text-[#0f6b4f]"
+                      className="mt-0.5 size-4 shrink-0 text-peagc-purple"
                       aria-hidden="true"
                     />
-                    <span className="text-[#405249]">{item}</span>
+                    <span className="text-[#3f3a48]">{item}</span>
                   </li>
                 ))}
               </ul>
             </section>
           </div>
 
-          <section className="mt-6 rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+          <section className="mt-6 rounded-lg border border-peagc-border bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-start gap-3">
-                <div className="flex size-11 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                <div className="flex size-11 items-center justify-center rounded-md bg-peagc-purple-soft text-peagc-purple">
                   <DatabaseZap className="size-5" aria-hidden="true" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold text-[#5b6f62]">
+                  <p className="text-sm font-semibold text-[#8b5b7a]">
                     Supabase
                   </p>
-                  <h2 className="mt-1 text-xl font-semibold text-[#0f2d26]">
+                  <h2 className="mt-1 text-xl font-semibold text-peagc-purple">
                     {userEmail
                       ? `เข้าสู่ระบบด้วย ${userEmail}`
                       : isSupabaseReady
@@ -256,8 +282,8 @@ export default async function Home() {
               <span
                 className={`w-fit rounded-md px-3 py-1 text-sm font-semibold ${
                   isSupabaseReady
-                    ? "bg-[#e6f4df] text-[#24613f]"
-                    : "bg-[#fff4d8] text-[#8a6112]"
+                    ? "bg-peagc-purple-soft text-peagc-purple"
+                    : "bg-[#fff5d8] text-[#805300]"
                 }`}
               >
                 {userEmail ? "Signed in" : isSupabaseReady ? "Ready" : "Pending"}
@@ -265,17 +291,17 @@ export default async function Home() {
             </div>
           </section>
 
-          <section className="mt-6 rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+          <section className="mt-6 rounded-lg border border-peagc-border bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-[#5b6f62]">
+                <p className="text-sm font-semibold text-[#8b5b7a]">
                   หลักการออกแบบระบบ
                 </p>
-                <h2 className="mt-1 text-xl font-semibold text-[#0f2d26]">
+                <h2 className="mt-1 text-xl font-semibold text-peagc-purple">
                   ข้อกำหนดสำคัญ
                 </h2>
               </div>
-              <ListChecks className="size-6 text-[#d6a642]" aria-hidden="true" />
+              <ListChecks className="size-6 text-peagc-gold" aria-hidden="true" />
             </div>
             <div className="mt-5 grid gap-3 md:grid-cols-3">
               {[
@@ -285,7 +311,7 @@ export default async function Home() {
               ].map((rule) => (
                 <div
                   key={rule}
-                  className="rounded-lg border border-[#dfe5da] bg-[#fbfcf8] px-4 py-3 text-sm font-medium text-[#405249]"
+                  className="rounded-lg border border-peagc-border bg-white/70 px-4 py-3 text-sm font-medium text-[#3f3a48]"
                 >
                   {rule}
                 </div>

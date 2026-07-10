@@ -25,6 +25,24 @@ function normalize(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function getAvatarFile(formData: FormData) {
+  const file = formData.get("avatar");
+
+  if (!(file instanceof File) || file.size === 0) {
+    return null;
+  }
+
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+    return { error: "invalid-avatar-type" as const, file: null };
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    return { error: "avatar-too-large" as const, file: null };
+  }
+
+  return { error: null, file };
+}
+
 function getEmployeeMatchDetail({
   affiliation,
   department,
@@ -36,11 +54,19 @@ function getEmployeeMatchDetail({
   department: string;
   directory: {
     affiliation: string | null;
+    bureau?: string | null;
     department: string | null;
+    division?: string | null;
     email: string | null;
     employment_status: string;
+    first_name?: string | null;
     full_name: string;
     id: string;
+    last_name?: string | null;
+    position?: string | null;
+    section?: string | null;
+    title_prefix?: string | null;
+    work_line?: string | null;
   } | null;
   email: string | null;
   fullName: string;
@@ -68,10 +94,18 @@ function getEmployeeMatchDetail({
       checks,
       directory: {
         affiliation: directory.affiliation,
+        bureau: directory.bureau,
         department: directory.department,
+        division: directory.division,
         email: directory.email,
         employment_status: directory.employment_status,
+        first_name: directory.first_name,
         full_name: directory.full_name,
+        last_name: directory.last_name,
+        position: directory.position,
+        section: directory.section,
+        title_prefix: directory.title_prefix,
+        work_line: directory.work_line,
       },
     },
     status,
@@ -99,9 +133,14 @@ export async function savePersonalProfile(formData: FormData) {
   const organization = getString(formData, "organization");
   const handicap = getNumberOrNull(formData, "handicap");
   const skillLevel = getString(formData, "skillLevel");
+  const avatarInput = getAvatarFile(formData);
 
   if (!displayName || !fullName || !phone || !employeeCode || !department || !affiliation) {
     redirect("/profile?status=missing-required");
+  }
+
+  if (avatarInput?.error) {
+    redirect(`/profile?status=${avatarInput.error}`);
   }
 
   const { error: profileError } = await supabase.from("profiles").upsert({
@@ -132,7 +171,7 @@ export async function savePersonalProfile(formData: FormData) {
   const admin = createAdminClient();
   const { data: directory } = await admin
     .from("employee_directory")
-    .select("id, full_name, email, department, affiliation, employment_status")
+    .select("id, title_prefix, first_name, last_name, full_name, email, position, work_line, bureau, division, department, section, affiliation, employment_status")
     .eq("club_id", club.id)
     .eq("employee_code", employeeCode)
     .is("archived_at", null)
@@ -144,35 +183,75 @@ export async function savePersonalProfile(formData: FormData) {
     email: user.email ?? null,
     fullName,
   });
+  const verifiedDirectory =
+    employeeMatch.status === "matched" && directory ? directory : null;
+  let avatarUrl: string | null = null;
 
-  const { error: memberError } = await supabase.from("members").upsert(
-    {
+  if (avatarInput?.file) {
+    const extension = avatarInput.file.type.split("/")[1] ?? "jpg";
+    const objectPath = `${club.id}/${user.id}/${Date.now()}.${extension}`;
+    const { error: uploadError } = await admin.storage
+      .from("member-avatars")
+      .upload(objectPath, avatarInput.file, {
+        contentType: avatarInput.file.type,
+        upsert: true,
+      });
+
+    if (uploadError) {
+      redirect("/profile?status=avatar-upload-failed");
+    }
+
+    const { data: publicUrl } = admin.storage
+      .from("member-avatars")
+      .getPublicUrl(objectPath);
+
+    avatarUrl = publicUrl.publicUrl;
+  }
+
+  const memberPayload = {
+      bureau: verifiedDirectory?.bureau ?? null,
       club_id: club.id,
       email: user.email,
-      affiliation,
-      department,
+      affiliation: verifiedDirectory?.affiliation ?? affiliation,
+      department: verifiedDirectory?.department ?? department,
+      division: verifiedDirectory?.division ?? null,
       employee_code: employeeCode,
       employee_directory_id: employeeMatch.directoryId,
       employee_match_checked_at: new Date().toISOString(),
       employee_match_detail: employeeMatch.detail,
       employee_match_status: employeeMatch.status,
-      full_name: fullName,
+      first_name: verifiedDirectory?.first_name ?? null,
+      full_name: verifiedDirectory?.full_name ?? fullName,
       handicap,
+      last_name: verifiedDirectory?.last_name ?? null,
       line_id: lineId || null,
       nickname: nickname || null,
       organization: organization || null,
       phone,
+      position: verifiedDirectory?.position ?? null,
+      section: verifiedDirectory?.section ?? null,
       skill_level: skillLevel || null,
       status: "pending_verification",
+      title_prefix: verifiedDirectory?.title_prefix ?? null,
       updated_by: user.id,
       user_id: user.id,
       verification_note: null,
-    },
+      work_line: verifiedDirectory?.work_line ?? null,
+    };
+  const { error: memberError } = await supabase.from("members").upsert(
+    avatarUrl ? { ...memberPayload, avatar_url: avatarUrl } : memberPayload,
     { onConflict: "club_id,user_id" },
   );
 
   if (memberError) {
     redirect("/profile?status=member-failed");
+  }
+
+  if (avatarUrl) {
+    await supabase
+      .from("profiles")
+      .update({ avatar_url: avatarUrl })
+      .eq("id", user.id);
   }
 
   redirect("/member?status=pending-review");

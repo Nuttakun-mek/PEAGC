@@ -8,7 +8,7 @@ This repository is starting with Foundation + MVP 1.
 
 - Foundation: Next.js App Router, TypeScript, Tailwind CSS, responsive admin shell
 - Auth: Supabase SSR clients, Google/magic-link login, temporary bypass, protected setup bootstrap
-- MVP 1: Employee verification, Member Management, Event Management, self-registration, score history, approval notification queue, and Lesson/Academy booking foundation started; Payment Slip Review, Pairing, Check-in, Excel Export next
+- MVP 1: Login/member onboarding, profile with avatar upload, employee verification with employee database import, targeted Event/Lesson publishing by unit, self-registration, lesson slot booking/reschedule, Payment Review, score history, approval notification queue, and Lesson/Academy booking foundation started; Pairing, Check-in, Excel Export next
 - Later: Basic Competition, Rule Builder, Smart Score OCR, Academy, Finance, Sponsor, Analytics
 
 ## Tech Stack
@@ -40,7 +40,7 @@ Run the development server:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:6001](http://localhost:6001).
 
 ## Project Files
 
@@ -48,12 +48,14 @@ Open [http://localhost:3000](http://localhost:3000).
 - `src/app/login` - Supabase magic-link login
 - `src/app/member` - member portal preview
 - `src/app/admin` - admin portal preview
-- `src/app/admin/employees` - employee directory used to verify member applications
+- `src/app/admin/employees` - employee directory, CSV/TSV employee database import, and member application verification source
 - `src/app/admin/events` - admin event list, search, create, and edit workflow
+- `src/app/admin/payments` - finance/admin payment review queue for event registrations
 - `src/app/admin/lessons` - lesson program, lesson slot, booking, and attendance workflow
 - `src/app/admin/members` - admin member list, search, add, and edit workflow
 - `src/app/member/actions.ts` - member self-registration server action for open events
 - `src/app/profile` - member personal profile form
+- `supabase/migrations/20260709143000_member_profile_targets_slot_changes.sql` - avatar storage, unit-targeted publishing, and lesson booking change history
 - `src/app/setup` - one-time club admin bootstrap
 - `docs/PROJECT_KICKOFF_PLAN.md` - project kickoff plan from the source PRD
 - `docs/SUPABASE_SETUP.md` - Supabase environment and migration workflow

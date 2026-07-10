@@ -22,6 +22,13 @@ function getNumberOrNull(formData: FormData, key: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function getStringList(formData: FormData, key: string) {
+  return getString(formData, key)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function redirectEvents(status: string, eventId?: string): never {
   const params = new URLSearchParams({ status });
 
@@ -77,6 +84,11 @@ function getEventPayload(formData: FormData, clubId: string, userId: string) {
     name,
     owner_user_id: userId,
     status: getString(formData, "status") || "draft",
+    target_bureaus: getStringList(formData, "targetBureaus"),
+    target_departments: getStringList(formData, "targetDepartments"),
+    target_divisions: getStringList(formData, "targetDivisions"),
+    target_sections: getStringList(formData, "targetSections"),
+    target_work_lines: getStringList(formData, "targetWorkLines"),
     tee_off_time: getString(formData, "teeOffTime") || null,
     updated_by: userId,
     venue: getString(formData, "venue") || null,

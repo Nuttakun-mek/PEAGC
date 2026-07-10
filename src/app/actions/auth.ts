@@ -22,7 +22,7 @@ async function getAuthRedirectOrigin() {
 
   const requestHeaders = await headers();
 
-  return requestHeaders.get("origin") ?? "http://localhost:3000";
+  return requestHeaders.get("origin") ?? "http://localhost:6001";
 }
 
 export async function signInWithEmail(formData: FormData) {

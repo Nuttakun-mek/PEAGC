@@ -22,6 +22,17 @@ function getNumberOrNull(formData: FormData, key: string) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function getBoolean(formData: FormData, key: string) {
+  return formData.get(key) === "on";
+}
+
+function getStringList(formData: FormData, key: string) {
+  return getString(formData, key)
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function redirectLessons(status: string): never {
   redirect(`/admin/lessons?status=${encodeURIComponent(status)}`);
 }
@@ -125,8 +136,15 @@ export async function createLessonSlot(formData: FormData) {
     lesson_date: lessonDate,
     note: getString(formData, "note") || null,
     program_id: programId,
+    allow_member_reschedule: getBoolean(formData, "allowMemberReschedule"),
+    reschedule_cutoff_hours: getNumberOrNull(formData, "rescheduleCutoffHours") ?? 12,
     start_time: startTime,
     status: getString(formData, "status") || "open",
+    target_bureaus: getStringList(formData, "targetBureaus"),
+    target_departments: getStringList(formData, "targetDepartments"),
+    target_divisions: getStringList(formData, "targetDivisions"),
+    target_sections: getStringList(formData, "targetSections"),
+    target_work_lines: getStringList(formData, "targetWorkLines"),
     title,
     updated_by: userId,
     venue: getString(formData, "venue") || null,

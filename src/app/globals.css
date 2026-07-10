@@ -1,27 +1,173 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f7f2;
-  --foreground: #11221d;
+  --background: #f7f6fb;
+  --foreground: #2f3137;
+  --peagc-purple: #722257;
+  --peagc-purple-soft: #f8edf4;
+  --peagc-electric-purple: #a63483;
+  --peagc-gold: #c69214;
+  --peagc-gold-soft: #fff5d8;
+  --peagc-blue: #1d4ed8;
+  --peagc-electric-blue: #00a3ff;
+  --peagc-light-gray: #f4f6fa;
+  --peagc-dark-gray: #2f3137;
+  --peagc-border: #e6e2ee;
+  --peagc-border-strong: #d9d3e6;
+  --peagc-muted: #6b6475;
+  --peagc-card: rgba(255, 255, 255, 0.94);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Geist", "Geist Fallback", "Noto Sans Thai", "Sarabun",
-    "Prompt", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace,
-    "SFMono-Regular", Consolas, monospace;
+  --color-peagc-purple: var(--peagc-purple);
+  --color-peagc-purple-soft: var(--peagc-purple-soft);
+  --color-peagc-electric-purple: var(--peagc-electric-purple);
+  --color-peagc-gold: var(--peagc-gold);
+  --color-peagc-gold-soft: var(--peagc-gold-soft);
+  --color-peagc-blue: var(--peagc-blue);
+  --color-peagc-electric-blue: var(--peagc-electric-blue);
+  --color-peagc-light-gray: var(--peagc-light-gray);
+  --color-peagc-dark-gray: var(--peagc-dark-gray);
+  --color-peagc-border: var(--peagc-border);
+  --color-peagc-border-strong: var(--peagc-border-strong);
+  --color-peagc-muted: var(--peagc-muted);
+  --font-sans: "Sarabun", "Noto Sans Thai", "Prompt", ui-sans-serif,
+    system-ui, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Geist", "Geist Fallback", "Noto Sans Thai", "Sarabun",
-    "Prompt", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Sarabun", "Noto Sans Thai", "Prompt", ui-sans-serif,
+    system-ui, sans-serif;
   text-rendering: optimizeLegibility;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  content: "";
+  background:
+    radial-gradient(circle at 82% 12%, rgba(198, 146, 20, 0.18), transparent 18rem),
+    radial-gradient(circle at 12% 20%, rgba(114, 34, 87, 0.12), transparent 22rem),
+    radial-gradient(circle at 90% 78%, rgba(0, 163, 255, 0.12), transparent 20rem),
+    linear-gradient(135deg, rgba(114, 34, 87, 0.07), rgba(255, 255, 255, 0.78) 42%, rgba(244, 246, 250, 0.9));
+}
+
+body::after {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: -1;
+  height: 42vh;
+  pointer-events: none;
+  content: "";
+  opacity: 0.42;
+  background:
+    radial-gradient(ellipse at 50% 100%, rgba(198, 146, 20, 0.18), transparent 32%),
+    repeating-radial-gradient(ellipse at 50% 105%, rgba(114, 34, 87, 0.08) 0 1px, transparent 1px 22px);
 }
 
 button {
   cursor: pointer;
+}
+
+.bg-peagc-purple {
+  background-color: var(--peagc-purple) !important;
+}
+
+.bg-peagc-purple-soft {
+  background-color: var(--peagc-purple-soft) !important;
+}
+
+.bg-peagc-gold {
+  background-color: var(--peagc-gold) !important;
+}
+
+.bg-peagc-gold-soft {
+  background-color: var(--peagc-gold-soft) !important;
+}
+
+.bg-peagc-light-gray {
+  background-color: var(--peagc-light-gray) !important;
+}
+
+.text-peagc-purple {
+  color: var(--peagc-purple) !important;
+}
+
+.text-peagc-gold {
+  color: var(--peagc-gold) !important;
+}
+
+.text-peagc-muted {
+  color: var(--peagc-muted) !important;
+}
+
+.text-peagc-dark-gray {
+  color: var(--peagc-dark-gray) !important;
+}
+
+.border-peagc-purple {
+  border-color: var(--peagc-purple) !important;
+}
+
+.border-peagc-border {
+  border-color: var(--peagc-border) !important;
+}
+
+.border-peagc-border-strong {
+  border-color: var(--peagc-border-strong) !important;
+}
+
+.hover\:bg-peagc-purple:hover {
+  background-color: var(--peagc-purple) !important;
+}
+
+.hover\:border-peagc-purple:hover {
+  border-color: var(--peagc-purple) !important;
+}
+
+.golf-visual {
+  position: relative;
+  overflow: hidden;
+}
+
+.golf-visual > * {
+  position: relative;
+  z-index: 1;
+}
+
+.golf-visual::before {
+  position: absolute;
+  right: -4rem;
+  bottom: -5rem;
+  width: min(34rem, 70vw);
+  height: min(18rem, 34vw);
+  content: "";
+  z-index: 0;
+  border-radius: 999px 999px 0 0;
+  background:
+    radial-gradient(circle at 72% 32%, rgba(198, 146, 20, 0.55) 0 0.55rem, transparent 0.6rem),
+    repeating-radial-gradient(ellipse at 50% 100%, rgba(255, 255, 255, 0.48) 0 1px, transparent 1px 18px),
+    linear-gradient(135deg, rgba(114, 34, 87, 0.16), rgba(0, 163, 255, 0.1));
+  opacity: 0.72;
+}
+
+.golf-visual::after {
+  position: absolute;
+  right: 4.5rem;
+  bottom: 6.4rem;
+  width: 4.5rem;
+  height: 5.8rem;
+  content: "";
+  z-index: 0;
+  background:
+    linear-gradient(#722257, #722257) left 0.15rem top / 2px 100% no-repeat,
+    linear-gradient(135deg, #C69214 0 52%, transparent 53%) left 0.2rem top 0.2rem / 4rem 2.3rem no-repeat;
+  opacity: 0.82;
 }

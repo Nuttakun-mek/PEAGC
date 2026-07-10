@@ -32,6 +32,7 @@ type ProgramRow = {
 };
 
 type SlotRow = {
+  allow_member_reschedule?: boolean;
   capacity: number;
   coach_name: string | null;
   id: string;
@@ -40,6 +41,12 @@ type SlotRow = {
   start_time: string;
   end_time: string;
   status: string;
+  target_bureaus?: string[] | null;
+  target_departments?: string[] | null;
+  target_divisions?: string[] | null;
+  target_sections?: string[] | null;
+  target_work_lines?: string[] | null;
+  reschedule_cutoff_hours?: number;
   title: string;
   venue: string | null;
 };
@@ -144,18 +151,18 @@ const lessonStatusLabels: Record<string, string> = {
 
 function statusClass(status: string) {
   if (["active", "attended", "open"].includes(status)) {
-    return "bg-[#e6f4df] text-[#24613f]";
+    return "bg-[#f8edf4] text-[#722257]";
   }
 
   if (["booked", "draft"].includes(status)) {
-    return "bg-[#fff4d8] text-[#8a6112]";
+    return "bg-[#fff5d8] text-[#805300]";
   }
 
   if (["cancelled", "no_show"].includes(status)) {
-    return "bg-[#fee2e2] text-[#991b1b]";
+    return "bg-[#fdecec] text-[#991b1b]";
   }
 
-  return "bg-[#f1f3ef] text-[#687a6d]";
+  return "bg-[#f1f3ef] text-[#6b6475]";
 }
 
 function firstRelated<T>(value: T | T[] | null) {
@@ -166,17 +173,17 @@ function ProgramForm({ disabled }: { disabled?: boolean }) {
   return (
     <form action={createLessonProgram} className="grid gap-4">
       <div className="flex items-center gap-2">
-        <Plus className="size-4 text-[#0f6b4f]" aria-hidden="true" />
-        <h2 className="text-lg font-semibold text-[#0f2d26]">สร้างคอร์สเรียน</h2>
+        <Plus className="size-4 text-[#722257]" aria-hidden="true" />
+        <h2 className="text-lg font-semibold text-[#722257]">สร้างคอร์สเรียน</h2>
       </div>
       <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">ชื่อคอร์ส</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled} name="name" required />
+          <span className="text-sm font-semibold text-[#3f3a48]">ชื่อคอร์ส</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name="name" required />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">ระดับ</span>
-          <select className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] bg-white px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" defaultValue="all" disabled={disabled} name="level">
+          <span className="text-sm font-semibold text-[#3f3a48]">ระดับ</span>
+          <select className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue="all" disabled={disabled} name="level">
             <option value="all">ทุกระดับ</option>
             <option value="beginner">Beginner</option>
             <option value="intermediate">Intermediate</option>
@@ -184,8 +191,8 @@ function ProgramForm({ disabled }: { disabled?: boolean }) {
           </select>
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">สถานะ</span>
-          <select className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] bg-white px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" defaultValue="active" disabled={disabled} name="status">
+          <span className="text-sm font-semibold text-[#3f3a48]">สถานะ</span>
+          <select className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue="active" disabled={disabled} name="status">
             <option value="active">ใช้งาน</option>
             <option value="inactive">ปิดใช้งาน</option>
           </select>
@@ -193,19 +200,19 @@ function ProgramForm({ disabled }: { disabled?: boolean }) {
       </div>
       <div className="grid gap-4 md:grid-cols-[1fr_160px]">
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">ผู้สอน</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled} name="coachName" />
+          <span className="text-sm font-semibold text-[#3f3a48]">ผู้สอน</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name="coachName" />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">ราคา</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" defaultValue="0" disabled={disabled} min="0" name="price" step="0.01" type="number" />
+          <span className="text-sm font-semibold text-[#3f3a48]">ราคา</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue="0" disabled={disabled} min="0" name="price" step="0.01" type="number" />
         </label>
       </div>
       <label className="block">
-        <span className="text-sm font-semibold text-[#405249]">รายละเอียด</span>
-        <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled} name="description" />
+        <span className="text-sm font-semibold text-[#3f3a48]">รายละเอียด</span>
+        <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name="description" />
       </label>
-      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white disabled:bg-[#9aa8a1] md:w-fit" disabled={disabled} type="submit">
+      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] md:w-fit" disabled={disabled} type="submit">
         <BadgeCheck className="size-4" aria-hidden="true" />
         บันทึกคอร์ส
       </button>
@@ -223,13 +230,13 @@ function SlotForm({
   return (
     <form action={createLessonSlot} className="grid gap-4">
       <div className="flex items-center gap-2">
-        <CalendarClock className="size-4 text-[#0f6b4f]" aria-hidden="true" />
-        <h2 className="text-lg font-semibold text-[#0f2d26]">สร้างรอบเรียน</h2>
+        <CalendarClock className="size-4 text-[#722257]" aria-hidden="true" />
+        <h2 className="text-lg font-semibold text-[#722257]">สร้างรอบเรียน</h2>
       </div>
       <div className="grid gap-4 md:grid-cols-[1fr_1fr_140px]">
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">คอร์ส</span>
-          <select className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] bg-white px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled || !programs.length} name="programId" required>
+          <span className="text-sm font-semibold text-[#3f3a48]">คอร์ส</span>
+          <select className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled || !programs.length} name="programId" required>
             {programs.map((program) => (
               <option key={program.id} value={program.id}>
                 {program.name}
@@ -238,12 +245,12 @@ function SlotForm({
           </select>
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">ชื่อรอบเรียน</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled} name="title" required />
+          <span className="text-sm font-semibold text-[#3f3a48]">ชื่อรอบเรียน</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name="title" required />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">สถานะ</span>
-          <select className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] bg-white px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" defaultValue="open" disabled={disabled} name="status">
+          <span className="text-sm font-semibold text-[#3f3a48]">สถานะ</span>
+          <select className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue="open" disabled={disabled} name="status">
             <option value="open">เปิดจอง</option>
             <option value="draft">Draft</option>
             <option value="closed">ปิดรับ</option>
@@ -252,37 +259,61 @@ function SlotForm({
       </div>
       <div className="grid gap-4 md:grid-cols-5">
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">วันที่</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled} name="lessonDate" required type="date" />
+          <span className="text-sm font-semibold text-[#3f3a48]">วันที่</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name="lessonDate" required type="date" />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">เริ่ม</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled} name="startTime" required type="time" />
+          <span className="text-sm font-semibold text-[#3f3a48]">เริ่ม</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name="startTime" required type="time" />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">เลิก</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled} name="endTime" required type="time" />
+          <span className="text-sm font-semibold text-[#3f3a48]">เลิก</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name="endTime" required type="time" />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">จำนวนรับ</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" defaultValue="1" disabled={disabled} min="1" name="capacity" type="number" />
+          <span className="text-sm font-semibold text-[#3f3a48]">จำนวนรับ</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue="1" disabled={disabled} min="1" name="capacity" type="number" />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">ผู้สอน</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled} name="coachName" />
+          <span className="text-sm font-semibold text-[#3f3a48]">ผู้สอน</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name="coachName" />
         </label>
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">สถานที่</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled} name="venue" />
+          <span className="text-sm font-semibold text-[#3f3a48]">สถานที่</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name="venue" />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#405249]">หมายเหตุ</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" disabled={disabled} name="note" />
+          <span className="text-sm font-semibold text-[#3f3a48]">หมายเหตุ</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name="note" />
         </label>
       </div>
-      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white disabled:bg-[#9aa8a1] md:w-fit" disabled={disabled || !programs.length} type="submit">
+      <div className="grid gap-4 md:grid-cols-5">
+        {[
+          { key: "targetWorkLines", label: "สายงาน" },
+          { key: "targetBureaus", label: "สำนัก" },
+          { key: "targetDivisions", label: "ฝ่าย" },
+          { key: "targetDepartments", label: "กอง" },
+          { key: "targetSections", label: "แผนก" },
+        ].map((target) => (
+          <label className="block" key={target.key}>
+            <span className="text-sm font-semibold text-[#3f3a48]">{target.label}</span>
+            <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" disabled={disabled} name={target.key} placeholder="เว้นว่าง = ทุกคน" />
+          </label>
+        ))}
+      </div>
+      <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+        <label className="flex items-center gap-3 rounded-md border border-[#e6e2ee] bg-white/70 px-3 py-3 text-sm font-semibold text-[#3f3a48]">
+          <input defaultChecked disabled={disabled} name="allowMemberReschedule" type="checkbox" />
+          อนุญาตให้สมาชิกเปลี่ยนเวลาเรียนเอง
+        </label>
+        <label className="block">
+          <span className="text-sm font-semibold text-[#3f3a48]">Cutoff ชั่วโมง</span>
+          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue="12" disabled={disabled} min="0" name="rescheduleCutoffHours" type="number" />
+        </label>
+      </div>
+      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] md:w-fit" disabled={disabled || !programs.length} type="submit">
         <BadgeCheck className="size-4" aria-hidden="true" />
         บันทึกรอบเรียน
       </button>
@@ -314,7 +345,7 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
         .limit(50),
       supabase
         .from("lesson_slots")
-        .select("id, title, coach_name, venue, lesson_date, start_time, end_time, capacity, status, lesson_programs(name)")
+        .select("id, title, coach_name, venue, lesson_date, start_time, end_time, capacity, status, allow_member_reschedule, reschedule_cutoff_hours, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections, lesson_programs(name)")
         .eq("club_id", access.clubId)
         .is("archived_at", null)
         .order("lesson_date", { ascending: true })
@@ -340,32 +371,32 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
   const bypassQuery = access.isBypass ? "?bypass=admin" : "";
 
   return (
-    <main className="min-h-screen bg-[#f6f7f2] px-4 py-6 text-[#11221d]">
+    <main className="min-h-screen bg-transparent px-4 py-6 text-[#2f3137]">
       <section className="mx-auto w-full max-w-7xl">
-        <div className="flex flex-col gap-4 border-b border-[#dfe5da] pb-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#5b6f62]">Admin Portal</p>
-            <h1 className="mt-1 text-3xl font-semibold text-[#0f2d26]">
+            <p className="text-sm font-semibold text-[#8b5b7a]">Admin Portal</p>
+            <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
               Lesson & Academy
             </h1>
-            <p className="mt-2 text-sm text-[#687a6d]">
+            <p className="mt-2 text-sm text-[#6b6475]">
               จัดคอร์สเรียน เปิดรอบจอง และลงเวลาเข้าเรียนของสมาชิก
             </p>
           </div>
-          <Link className="flex h-11 w-fit items-center gap-2 rounded-md border border-[#cbd6c7] bg-white px-4 text-sm font-semibold text-[#0f2d26]" href={`/admin${bypassQuery}`}>
+          <Link className="flex h-11 w-fit items-center gap-2 rounded-md border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257]" href={`/admin${bypassQuery}`}>
             <ArrowLeft className="size-4" aria-hidden="true" />
             กลับ Admin
           </Link>
         </div>
 
         {statusMessage ? (
-          <div className="mt-5 rounded-md bg-[#e6f4df] px-4 py-3 text-sm font-medium text-[#24613f]">
+          <div className="mt-5 rounded-md bg-[#f8edf4] px-4 py-3 text-sm font-medium text-[#722257]">
             {statusMessage}
           </div>
         ) : null}
 
         {access.isBypass ? (
-          <div className="mt-5 rounded-md bg-[#fff4d8] px-4 py-3 text-sm text-[#8a6112]">
+          <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
             โหมด Admin ทดลอง: แสดงข้อมูลตัวอย่างและปิดการบันทึกจริง ต้องปิดก่อน go live
           </div>
         ) : null}
@@ -376,13 +407,13 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
             { icon: CalendarClock, label: "รอบเปิดจอง", value: openSlots.length },
             { icon: ClipboardCheck, label: "รอลงเวลา", value: bookedCount },
           ].map((item) => (
-            <article className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm" key={item.label}>
+            <article className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]" key={item.label}>
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-[#687a6d]">{item.label}</p>
-                  <p className="mt-2 text-3xl font-semibold text-[#0f2d26]">{item.value}</p>
+                  <p className="text-sm font-semibold text-[#6b6475]">{item.label}</p>
+                  <p className="mt-2 text-3xl font-semibold text-[#722257]">{item.value}</p>
                 </div>
-                <div className="flex size-11 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                <div className="flex size-11 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
                   <item.icon className="size-5" aria-hidden="true" />
                 </div>
               </div>
@@ -391,58 +422,58 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
         </div>
 
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
-          <section className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+          <section className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
             <ProgramForm disabled={access.isBypass} />
           </section>
-          <section className="rounded-lg border border-[#dfe5da] bg-white p-5 shadow-sm">
+          <section className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
             <SlotForm disabled={access.isBypass} programs={activePrograms} />
           </section>
         </div>
 
-        <section className="mt-6 rounded-lg border border-[#dfe5da] bg-white shadow-sm">
-          <div className="border-b border-[#dfe5da] p-5">
-            <h2 className="text-xl font-semibold text-[#0f2d26]">รอบเรียนที่เปิดไว้</h2>
+        <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
+          <div className="border-b border-[#e6e2ee] p-5">
+            <h2 className="text-xl font-semibold text-[#722257]">รอบเรียนที่เปิดไว้</h2>
           </div>
-          <div className="divide-y divide-[#dfe5da]">
+          <div className="divide-y divide-[#e6e2ee]">
             {slots.length ? (
               slots.map((slot) => {
                 const program = firstRelated(slot.lesson_programs);
 
                 return (
                   <div className="grid gap-4 px-5 py-4 lg:grid-cols-[44px_1fr_0.7fr_0.55fr_92px] lg:items-center" key={slot.id}>
-                    <div className="flex size-11 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                    <div className="flex size-11 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
                       <CalendarClock className="size-5" aria-hidden="true" />
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-[#0f2d26]">{slot.title}</p>
+                        <p className="font-semibold text-[#722257]">{slot.title}</p>
                         <span className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass(slot.status)}`}>
                           {lessonStatusLabels[slot.status] ?? slot.status}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-[#687a6d]">
+                      <p className="mt-1 text-sm text-[#6b6475]">
                         {program?.name ?? "-"} · {slot.venue ?? "ยังไม่ระบุสถานที่"}
                       </p>
                     </div>
-                    <p className="text-sm text-[#405249]">
+                    <p className="text-sm text-[#3f3a48]">
                       {slot.lesson_date} · {slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)}
                     </p>
-                    <p className="text-sm text-[#405249]">รับ {slot.capacity} คน</p>
-                    <p className="text-sm text-[#687a6d]">{slot.coach_name ?? "-"}</p>
+                    <p className="text-sm text-[#3f3a48]">รับ {slot.capacity} คน</p>
+                    <p className="text-sm text-[#6b6475]">{slot.coach_name ?? "-"}</p>
                   </div>
                 );
               })
             ) : (
-              <div className="px-5 py-10 text-center text-sm text-[#687a6d]">ยังไม่มีรอบเรียน</div>
+              <div className="px-5 py-10 text-center text-sm text-[#6b6475]">ยังไม่มีรอบเรียน</div>
             )}
           </div>
         </section>
 
-        <section className="mt-6 rounded-lg border border-[#dfe5da] bg-white shadow-sm">
-          <div className="border-b border-[#dfe5da] p-5">
-            <h2 className="text-xl font-semibold text-[#0f2d26]">ลงเวลาเรียน</h2>
+        <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
+          <div className="border-b border-[#e6e2ee] p-5">
+            <h2 className="text-xl font-semibold text-[#722257]">ลงเวลาเรียน</h2>
           </div>
-          <div className="divide-y divide-[#dfe5da]">
+          <div className="divide-y divide-[#e6e2ee]">
             {bookings.length ? (
               bookings.map((booking) => {
                 const member = firstRelated(booking.members);
@@ -450,35 +481,35 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
 
                 return (
                   <div className="grid gap-4 px-5 py-4 xl:grid-cols-[44px_1fr_1fr] xl:items-start" key={booking.id}>
-                    <div className="flex size-11 items-center justify-center rounded-md bg-[#edf4ea] text-[#0f6b4f]">
+                    <div className="flex size-11 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
                       <CircleUserRound className="size-5" aria-hidden="true" />
                     </div>
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-[#0f2d26]">
+                        <p className="font-semibold text-[#722257]">
                           {member?.full_name ?? "-"}
                         </p>
                         <span className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass(booking.status)}`}>
                           {lessonStatusLabels[booking.status] ?? booking.status}
                         </span>
                       </div>
-                      <p className="mt-1 text-sm text-[#687a6d]">
+                      <p className="mt-1 text-sm text-[#6b6475]">
                         {member?.employee_code ?? "-"} · {slot?.title ?? "-"}
                       </p>
-                      <p className="mt-1 text-sm text-[#687a6d]">
+                      <p className="mt-1 text-sm text-[#6b6475]">
                         {slot?.lesson_date ?? "-"} · {slot?.start_time?.slice(0, 5) ?? "-"}
                       </p>
                     </div>
                     <form action={updateLessonAttendance} className="grid gap-3 md:grid-cols-[160px_1fr_120px]">
                       <input name="bookingId" type="hidden" value={booking.id} />
-                      <select className="h-11 rounded-md border border-[#cbd6c7] bg-white px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" defaultValue={booking.status} disabled={access.isBypass} name="attendanceStatus">
+                      <select className="h-11 rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={booking.status} disabled={access.isBypass} name="attendanceStatus">
                         <option value="booked">จองแล้ว</option>
                         <option value="attended">เข้าเรียนแล้ว</option>
                         <option value="no_show">ไม่มาเรียน</option>
                         <option value="cancelled">ยกเลิก</option>
                       </select>
-                      <input className="h-11 rounded-md border border-[#cbd6c7] px-3 outline-none focus:border-[#0f6b4f] focus:ring-4 focus:ring-[#0f6b4f]/10" defaultValue={booking.attendance_note ?? ""} disabled={access.isBypass} name="attendanceNote" placeholder="หมายเหตุ" />
-                      <button className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#0f2d26] px-4 text-sm font-semibold text-white disabled:bg-[#9aa8a1]" disabled={access.isBypass} type="submit">
+                      <input className="h-11 rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={booking.attendance_note ?? ""} disabled={access.isBypass} name="attendanceNote" placeholder="หมายเหตุ" />
+                      <button className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6]" disabled={access.isBypass} type="submit">
                         <ClipboardCheck className="size-4" aria-hidden="true" />
                         บันทึก
                       </button>
@@ -487,7 +518,7 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
                 );
               })
             ) : (
-              <div className="px-5 py-10 text-center text-sm text-[#687a6d]">ยังไม่มีรายการจองเรียน</div>
+              <div className="px-5 py-10 text-center text-sm text-[#6b6475]">ยังไม่มีรายการจองเรียน</div>
             )}
           </div>
         </section>
