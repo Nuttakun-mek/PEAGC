@@ -31,6 +31,7 @@ type PaymentRecord = {
   id: string;
   note: string | null;
   status: string;
+  slip_file_id: string | null;
   transferred_at: string | null;
 };
 
@@ -69,15 +70,15 @@ const sampleRegistrations: RegistrationRow[] = [
     events: {
       event_date: "2026-08-15",
       member_price: 2200,
-      name: "PEAGC Monthly Round",
+      name: "ออกรอบประจำเดือน PEAGC",
       tee_off_time: "11:30",
-      venue: "Royal Golf Club",
+      venue: "สนามกอล์ฟรอยัล",
     },
     guest_name: null,
     id: "sample-registration-1",
     members: {
       email: "member@example.com",
-      full_name: "Demo Member",
+      full_name: "สมาชิกทดลอง",
       member_code: "PEA001",
       phone: "0812345678",
     },
@@ -85,7 +86,8 @@ const sampleRegistrations: RegistrationRow[] = [
       {
         amount: 2200,
         id: "sample-payment-1",
-        note: "Waiting for slip review",
+        note: "รอตรวจหลักฐานการชำระเงิน",
+        slip_file_id: null,
         status: "review",
         transferred_at: "2026-07-09T08:45:00.000Z",
       },
@@ -99,15 +101,15 @@ const sampleRegistrations: RegistrationRow[] = [
     events: {
       event_date: "2026-08-15",
       member_price: 2200,
-      name: "PEAGC Monthly Round",
+      name: "ออกรอบประจำเดือน PEAGC",
       tee_off_time: "11:30",
-      venue: "Royal Golf Club",
+      venue: "สนามกอล์ฟรอยัล",
     },
     guest_name: null,
     id: "sample-registration-2",
     members: {
       email: "new.member@example.com",
-      full_name: "Pending Member",
+      full_name: "สมาชิกรอตรวจสอบ",
       member_code: "PEA002",
       phone: "0898765432",
     },
@@ -118,28 +120,28 @@ const sampleRegistrations: RegistrationRow[] = [
 ];
 
 const statusLabels: Record<string, string> = {
-  checked_in: "Checked in",
-  paid: "Paid",
-  payment_review: "Review",
-  pending_payment: "Pending payment",
-  registered: "Registered",
-  waitlist: "Waitlist",
+  checked_in: "ลงทะเบียนหน้างานแล้ว",
+  paid: "ชำระเงินแล้ว",
+  payment_review: "กำลังตรวจสอบ",
+  pending_payment: "รอชำระเงิน",
+  registered: "สมัครแล้ว",
+  waitlist: "รายชื่อสำรอง",
 };
 
 const paymentStatusLabels: Record<string, string> = {
-  approved: "Approved",
-  pending: "Pending",
-  refunded: "Refunded",
-  rejected: "Rejected",
-  review: "Review",
+  approved: "อนุมัติแล้ว",
+  pending: "รอตรวจสอบ",
+  refunded: "คืนเงินแล้ว",
+  rejected: "ไม่อนุมัติ",
+  review: "กำลังตรวจสอบ",
 };
 
 const statusMessages: Record<string, string> = {
-  "invalid-status": "Payment status is invalid.",
-  "missing-registration": "Registration was not found.",
-  "payment-update-failed": "Payment review could not be saved.",
-  "payment-updated": "Payment review saved.",
-  "registration-update-failed": "Payment saved, but registration status could not be updated.",
+  "invalid-status": "สถานะการชำระเงินไม่ถูกต้อง",
+  "missing-registration": "ไม่พบรายการสมัครกิจกรรม",
+  "payment-update-failed": "ไม่สามารถบันทึกผลตรวจสอบการชำระเงินได้",
+  "payment-updated": "บันทึกผลตรวจสอบการชำระเงินแล้ว",
+  "registration-update-failed": "บันทึกการชำระเงินแล้ว แต่ปรับสถานะการสมัครไม่สำเร็จ",
 };
 
 function getLatestPayment(registration: RegistrationRow) {
@@ -194,7 +196,7 @@ function PaymentReviewForm({
 
       <div className="grid gap-4 md:grid-cols-[160px_180px_1fr]">
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">Amount</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">จำนวนเงิน</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={defaultAmount}
@@ -206,7 +208,7 @@ function PaymentReviewForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">Transferred at</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">วันเวลาที่โอน</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={payment?.transferred_at?.slice(0, 16) ?? ""}
@@ -216,31 +218,31 @@ function PaymentReviewForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">Review note</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">หมายเหตุการตรวจสอบ</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={payment?.note ?? ""}
             disabled={disabled}
             name="note"
-            placeholder="Slip checked, amount matched, or reason for rejection"
+            placeholder="ผลการตรวจยอดเงิน หรือเหตุผลที่ไม่อนุมัติ"
           />
         </label>
       </div>
 
       <div className="grid gap-3 md:grid-cols-[220px_1fr] md:items-end">
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">Payment status</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">สถานะการชำระเงิน</span>
           <select
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={payment?.status ?? "review"}
             disabled={disabled}
             name="paymentStatus"
           >
-            <option value="pending">Pending</option>
-            <option value="review">Review</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-            <option value="refunded">Refunded</option>
+            <option value="pending">รอตรวจสอบ</option>
+            <option value="review">กำลังตรวจสอบ</option>
+            <option value="approved">อนุมัติแล้ว</option>
+            <option value="rejected">ไม่อนุมัติ</option>
+            <option value="refunded">คืนเงินแล้ว</option>
           </select>
         </label>
         <button
@@ -249,7 +251,7 @@ function PaymentReviewForm({
           type="submit"
         >
           <BadgeCheck className="size-4" aria-hidden="true" />
-          Save review
+          บันทึกผลตรวจสอบ
         </button>
       </div>
     </form>
@@ -268,7 +270,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
   const selectedStatus = params.status ?? "all";
   const selectedEvent = params.event ?? "all";
   let registrations = sampleRegistrations;
-  let events: EventOption[] = [{ id: "sample-event-1", name: "PEAGC Monthly Round" }];
+  let events: EventOption[] = [{ id: "sample-event-1", name: "ออกรอบประจำเดือน PEAGC" }];
 
   if (!access.isBypass && access.clubId) {
     const supabase = await createClient();
@@ -276,7 +278,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
       supabase
         .from("event_registrations")
         .select(
-          "id, event_id, guest_name, registration_type, status, created_at, members(full_name, member_code, phone, email), events(name, venue, event_date, tee_off_time, member_price), payment_records(id, amount, status, transferred_at, note)",
+          "id, event_id, guest_name, registration_type, status, created_at, members(full_name, member_code, phone, email), events(name, venue, event_date, tee_off_time, member_price), payment_records(id, amount, status, transferred_at, note, slip_file_id)",
         )
         .eq("club_id", access.clubId)
         .not("status", "in", "(cancelled,no_show)")
@@ -330,10 +332,10 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
       <section className="mx-auto w-full max-w-7xl">
         <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">Admin Portal</p>
-            <h1 className="mt-1 text-3xl font-semibold text-[#722257]">Payment Review</h1>
+            <p className="text-sm font-semibold text-[#8b5b7a]">ระบบผู้ดูแล</p>
+            <h1 className="mt-1 text-3xl font-semibold text-[#722257]">ตรวจสอบการชำระเงิน</h1>
             <p className="mt-2 text-sm text-[#6b6475]">
-              Review event registration payments, update payment status, and keep the registration queue ready for pairing.
+              ตรวจหลักฐาน อนุมัติยอดชำระ และติดตามสถานะผู้สมัครกิจกรรมในจุดเดียว
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -342,13 +344,13 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
               href={`/admin${bypassQuery}`}
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
-              Back to Admin
+              กลับหน้าผู้ดูแล
             </Link>
             <Link
               className="flex h-11 items-center rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
               href={`/admin/events${bypassQuery}`}
             >
-              Event Management
+              จัดการกิจกรรม
             </Link>
           </div>
         </div>
@@ -361,16 +363,16 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
 
         {access.isBypass ? (
           <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
-            Admin demo mode: sample payment data is shown and saving is disabled.
+            โหมดผู้ดูแลทดลอง: แสดงข้อมูลการชำระเงินตัวอย่างและปิดการบันทึกจริง
           </div>
         ) : null}
 
         <div className="mt-6 grid gap-4 md:grid-cols-4">
           {[
-            { label: "Registrations", value: registrations.length },
-            { label: "Pending", value: pendingCount },
-            { label: "In review", value: reviewCount },
-            { label: "Paid", value: paidCount },
+            { label: "รายการสมัคร", value: registrations.length },
+            { label: "รอตรวจสอบ", value: pendingCount },
+            { label: "กำลังตรวจสอบ", value: reviewCount },
+            { label: "ชำระแล้ว", value: paidCount },
           ].map((item) => (
             <article className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]" key={item.label}>
               <p className="text-sm font-semibold text-[#6b6475]">{item.label}</p>
@@ -389,7 +391,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
                   className="h-11 w-full rounded-md border border-[#d9d3e6] pl-10 pr-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
                   defaultValue={q}
                   name="q"
-                  placeholder="Search member, code, phone, event, or venue"
+                  placeholder="ค้นหาชื่อ เลขสมาชิก โทรศัพท์ กิจกรรม หรือสนาม"
                 />
               </label>
               <label className="relative block">
@@ -399,7 +401,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
                   defaultValue={selectedEvent}
                   name="event"
                 >
-                  <option value="all">All events</option>
+                  <option value="all">ทุกกิจกรรม</option>
                   {events.map((event) => (
                     <option key={event.id} value={event.id}>
                       {event.name}
@@ -414,16 +416,16 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
                   defaultValue={selectedStatus}
                   name="status"
                 >
-                  <option value="all">All statuses</option>
-                  <option value="pending_payment">Pending payment</option>
-                  <option value="review">Review</option>
-                  <option value="approved">Approved</option>
-                  <option value="paid">Paid</option>
-                  <option value="rejected">Rejected</option>
+                  <option value="all">ทุกสถานะ</option>
+                  <option value="pending_payment">รอชำระเงิน</option>
+                  <option value="review">กำลังตรวจสอบ</option>
+                  <option value="approved">อนุมัติแล้ว</option>
+                  <option value="paid">ชำระแล้ว</option>
+                  <option value="rejected">ไม่อนุมัติ</option>
                 </select>
               </label>
               <button className="h-11 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white" type="submit">
-                Search
+                ค้นหา
               </button>
             </form>
           </div>
@@ -433,7 +435,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
               registrations.map((registration) => {
                 const payment = getLatestPayment(registration);
                 const paymentStatus = getPaymentStatus(registration);
-                const memberName = registration.members?.full_name ?? registration.guest_name ?? "Guest";
+                const memberName = registration.members?.full_name ?? registration.guest_name ?? "ผู้สมัคร";
 
                 return (
                   <details className="group px-5 py-4" key={registration.id} open={params.registration === registration.id}>
@@ -460,34 +462,44 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
                         <p className="mt-1 text-[#6b6475]">{registration.events?.venue ?? "-"}</p>
                       </div>
                       <div className="text-sm text-[#3f3a48]">
-                        <p>{(payment?.amount ?? registration.events?.member_price ?? 0).toLocaleString()} baht</p>
+                        <p>{(payment?.amount ?? registration.events?.member_price ?? 0).toLocaleString()} บาท</p>
                         <p className="mt-1 text-[#6b6475]">{formatDateTime(payment?.transferred_at ?? null)}</p>
                       </div>
                       <span className="w-fit rounded-md border border-[#d9d3e6] px-3 py-2 text-sm font-semibold text-[#722257] group-open:bg-white/70">
-                        Review
+                        ตรวจสอบ
                       </span>
                     </summary>
 
                     <div className="mt-5 grid gap-4">
+                      {payment?.slip_file_id ? (
+                        <Link
+                          className="flex h-11 w-fit items-center gap-2 rounded-md border border-[#722257] bg-white px-4 text-sm font-semibold text-[#722257]"
+                          href={`/admin/payments/proof/${payment.slip_file_id}`}
+                          target="_blank"
+                        >
+                          <ReceiptText className="size-4" aria-hidden="true" />
+                          เปิดหลักฐานการชำระเงิน
+                        </Link>
+                      ) : null}
                       <div className="grid gap-3 rounded-md bg-white/70 p-4 text-sm text-[#3f3a48] md:grid-cols-3">
                         <div className="flex items-start gap-2">
                           <UserRound className="mt-0.5 size-4 text-[#722257]" aria-hidden="true" />
                           <div>
-                            <p className="font-semibold text-[#6b6475]">Participant</p>
+                            <p className="font-semibold text-[#6b6475]">ผู้สมัคร</p>
                             <p className="mt-1 text-[#722257]">{memberName}</p>
                           </div>
                         </div>
                         <div className="flex items-start gap-2">
                           <CircleDollarSign className="mt-0.5 size-4 text-[#722257]" aria-hidden="true" />
                           <div>
-                            <p className="font-semibold text-[#6b6475]">Expected amount</p>
+                            <p className="font-semibold text-[#6b6475]">ยอดที่ต้องชำระ</p>
                             <p className="mt-1 text-[#722257]">{(registration.events?.member_price ?? 0).toLocaleString()} baht</p>
                           </div>
                         </div>
                         <div className="flex items-start gap-2">
                           <Clock className="mt-0.5 size-4 text-[#722257]" aria-hidden="true" />
                           <div>
-                            <p className="font-semibold text-[#6b6475]">Registered at</p>
+                            <p className="font-semibold text-[#6b6475]">วันที่สมัคร</p>
                             <p className="mt-1 text-[#722257]">{formatDateTime(registration.created_at)}</p>
                           </div>
                         </div>

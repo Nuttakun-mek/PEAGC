@@ -99,16 +99,16 @@ export default async function GoogleDemoPage({ searchParams }: GoogleDemoPagePro
     return (
       <PageShell
         current="accounts"
-        eyebrow="Google"
-        title="เลือกบัญชี Google"
+        eyebrow="กูเกิล"
+        title="เลือกบัญชีกูเกิล"
       >
         <p className="mt-2 text-sm leading-6 text-[#6b6475]">
-          หน้านี้แทนหน้าจอ Google จริง เมื่อเปิด provider แล้ว user จะเห็นบัญชี Google ของตัวเองหรือปุ่มใช้อีกบัญชี
+          หน้านี้แทนหน้าจอกูเกิลจริง เมื่อเปิดผู้ให้บริการแล้ว ผู้ใช้จะเห็นบัญชีกูเกิลของตนเองหรือปุ่มใช้อีกบัญชี
         </p>
         <div className="mt-6 grid gap-3">
           {[
             ["สมาชิก ทดสอบ", "member.demo@gmail.com"],
-            ["ใช้อีกบัญชี", "กรอกอีเมล Google อื่น"],
+            ["ใช้อีกบัญชี", "กรอกอีเมลกูเกิลอื่น"],
           ].map(([name, email]) => (
             <Link
               className="flex items-center justify-between gap-4 rounded-md border border-[#e6e2ee] bg-white/70 p-4 transition hover:border-[#722257]"
@@ -134,14 +134,14 @@ export default async function GoogleDemoPage({ searchParams }: GoogleDemoPagePro
 
   if (step === "consent") {
     return (
-      <PageShell current="consent" eyebrow="Google OAuth" title="ยืนยันการเข้าใช้งาน">
+      <PageShell current="consent" eyebrow="การยืนยันจากกูเกิล" title="ยืนยันการเข้าใช้งาน">
         <div className="mt-5 rounded-md border border-[#e6e2ee] bg-white/70 p-4">
           <div className="flex items-start gap-3">
             <ShieldCheck className="mt-0.5 size-5 text-[#722257]" aria-hidden="true" />
             <div>
               <p className="font-semibold text-[#722257]">PEAGC ต้องการข้อมูลพื้นฐาน</p>
               <p className="mt-1 text-sm leading-6 text-[#6b6475]">
-                ระบบจะใช้ชื่อ อีเมล และรูปโปรไฟล์จาก Google เพื่อสร้าง session เข้าสู่ระบบ แต่ข้อมูลสมาชิก PEAGC ต้องกรอกเพิ่มเติมในขั้นถัดไป
+                ระบบจะใช้ชื่อ อีเมล และรูปประจำตัวจากกูเกิลเพื่อสร้างการเข้าสู่ระบบ แต่ข้อมูลสมาชิก PEAGC ต้องกรอกเพิ่มเติมในขั้นถัดไป
               </p>
             </div>
           </div>
@@ -170,9 +170,9 @@ export default async function GoogleDemoPage({ searchParams }: GoogleDemoPagePro
       <PageShell current="callback" eyebrow="PEAGC Auth" title="กำลังกลับเข้าสู่ระบบ PEAGC">
         <div className="mt-5 grid gap-3">
           {[
-            "Supabase รับ callback จาก Google",
+            "ฐานข้อมูลรับผลยืนยันจากกูเกิล",
             "PEAGC แลก code เป็น session",
-            "ระบบตรวจว่า user นี้มี profile สมาชิกหรือยัง",
+            "ระบบตรวจว่าผู้ใช้นี้มีประวัติสมาชิกหรือยัง",
           ].map((item) => (
             <div
               className="flex items-center gap-3 rounded-md bg-white/70 px-4 py-3 text-sm text-[#3f3a48]"
@@ -196,9 +196,9 @@ export default async function GoogleDemoPage({ searchParams }: GoogleDemoPagePro
 
   if (step === "profile") {
     return (
-      <PageShell current="profile" eyebrow="Member Profile" title="กรอกข้อมูลสมัครสมาชิก">
+      <PageShell current="profile" eyebrow="ประวัติสมาชิก" title="กรอกข้อมูลสมัครสมาชิก">
         <p className="mt-2 text-sm leading-6 text-[#6b6475]">
-          หลัง Google login สำเร็จ user ใหม่จะต้องกรอกข้อมูลนี้ก่อน ระบบจึงส่งให้ Admin ตรวจอนุมัติ
+          หลังเข้าสู่ระบบด้วยกูเกิลสำเร็จ ผู้ใช้ใหม่ต้องกรอกข้อมูลนี้ก่อน ระบบจึงส่งให้ผู้ดูแลตรวจอนุมัติ
         </p>
         <div className="mt-6 grid gap-4">
           <div className="grid gap-4 md:grid-cols-2">
@@ -207,7 +207,7 @@ export default async function GoogleDemoPage({ searchParams }: GoogleDemoPagePro
               <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3" defaultValue="สมาชิก ทดสอบ" readOnly />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-[#3f3a48]">อีเมล Google</span>
+              <span className="text-sm font-semibold text-[#3f3a48]">อีเมลกูเกิล</span>
               <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3" defaultValue="member.demo@gmail.com" readOnly />
             </label>
           </div>
@@ -238,12 +238,12 @@ export default async function GoogleDemoPage({ searchParams }: GoogleDemoPagePro
   }
 
   return (
-    <PageShell current="pending" eyebrow="Member Status" title="รอ Admin อนุมัติก่อนเข้าระบบสมาชิกเต็มรูปแบบ">
+    <PageShell current="pending" eyebrow="สถานะสมาชิก" title="รอผู้ดูแลอนุมัติก่อนเข้าระบบสมาชิกเต็มรูปแบบ">
       <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
         <div className="flex items-start gap-3">
           <Clock3 className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <span>
-            ตอนนี้ user login สำเร็จแล้ว แต่ยังเป็นสถานะรอตรวจสอบ จึงยังจองเรียนหรือสมัครกิจกรรมไม่ได้จนกว่า Admin จะอนุมัติ
+            ขณะนี้เข้าสู่ระบบสำเร็จแล้ว แต่ยังอยู่ในสถานะรอตรวจสอบ จึงยังจองเรียนหรือสมัครกิจกรรมไม่ได้จนกว่าผู้ดูแลจะอนุมัติ
           </span>
         </div>
       </div>
@@ -253,7 +253,7 @@ export default async function GoogleDemoPage({ searchParams }: GoogleDemoPagePro
           href="/admin/members?bypass=admin&status=pending_verification"
         >
           <CircleUserRound className="size-4" aria-hidden="true" />
-          ดูหน้า Admin อนุมัติ
+          ดูหน้าผู้ดูแลอนุมัติ
         </Link>
         <Link
           className="flex h-11 items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"

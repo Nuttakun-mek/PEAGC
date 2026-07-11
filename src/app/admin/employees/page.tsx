@@ -71,8 +71,8 @@ const sampleEmployees: EmployeeRow[] = [
 ];
 
 const statusLabels: Record<string, string> = {
-  active: "Active",
-  inactive: "Inactive",
+  active: "ปฏิบัติงาน",
+  inactive: "ไม่ปฏิบัติงาน",
   retired: "Retired",
   unknown: "Unknown",
 };
@@ -175,7 +175,7 @@ function EmployeeForm({
 
       <div className="grid gap-4 md:grid-cols-4">
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">Email องค์กร</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">อีเมลองค์กร</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={employee?.email ?? ""}
@@ -210,10 +210,10 @@ function EmployeeForm({
             disabled={disabled}
             name="employmentStatus"
           >
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="retired">Retired</option>
-            <option value="unknown">Unknown</option>
+            <option value="active">ปฏิบัติงาน</option>
+            <option value="inactive">ไม่ปฏิบัติงาน</option>
+            <option value="retired">เกษียณ</option>
+            <option value="unknown">ไม่ระบุ</option>
           </select>
         </label>
       </div>
@@ -356,12 +356,12 @@ export default async function AdminEmployeesPage({
       <section className="mx-auto w-full max-w-7xl">
         <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">Admin Portal</p>
+            <p className="text-sm font-semibold text-[#8b5b7a]">ระบบผู้ดูแล</p>
             <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
-              Employee Directory
+              ฐานข้อมูลพนักงาน
             </h1>
             <p className="mt-2 text-sm text-[#6b6475]">
-              ฐานข้อมูลพนักงานสำหรับเทียบใบสมัครสมาชิกจาก Google login
+              ฐานข้อมูลพนักงานสำหรับตรวจสอบใบสมัครสมาชิกจากการเข้าสู่ระบบ
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -370,7 +370,7 @@ export default async function AdminEmployeesPage({
               href={`/admin${bypassQuery}`}
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
-              กลับ Admin
+              กลับหน้าผู้ดูแล
             </Link>
             <Link
               className="flex h-11 items-center rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
@@ -389,14 +389,14 @@ export default async function AdminEmployeesPage({
 
         {access.isBypass ? (
           <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
-            โหมด Admin ทดลอง: แสดงข้อมูลตัวอย่างและปิดการบันทึกจริง ต้องปิดก่อน go live
+            โหมดผู้ดูแลทดลอง: แสดงข้อมูลตัวอย่างและปิดการบันทึกจริง ต้องปิดก่อนเปิดใช้งาน
           </div>
         ) : null}
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {[
             { label: "พนักงานที่แสดง", value: employees.length },
-            { label: "Active", value: activeCount },
+            { label: "ปฏิบัติงาน", value: activeCount },
             { label: "รอตรวจสมาชิก", value: "Match" },
           ].map((item) => (
             <article
@@ -437,7 +437,7 @@ export default async function AdminEmployeesPage({
                 type="submit"
               >
                 <Upload className="size-4" aria-hidden="true" />
-                Import
+                นำเข้าข้อมูล
               </button>
             </div>
           </form>
@@ -480,10 +480,10 @@ export default async function AdminEmployeesPage({
                   name="status"
                 >
                   <option value="all">ทุกสถานะ</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="retired">Retired</option>
-                  <option value="unknown">Unknown</option>
+                  <option value="active">ปฏิบัติงาน</option>
+                  <option value="inactive">ไม่ปฏิบัติงาน</option>
+                  <option value="retired">เกษียณ</option>
+                  <option value="unknown">ไม่ระบุ</option>
                 </select>
               </label>
               <button

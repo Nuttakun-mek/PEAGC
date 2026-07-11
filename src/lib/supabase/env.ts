@@ -3,6 +3,7 @@ const publicPublishableKey = "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY";
 const secretKey = "SUPABASE_SECRET_KEY";
 const bootstrapSetupTokenKey = "BOOTSTRAP_SETUP_TOKEN";
 const authBypassEnabledKey = "AUTH_BYPASS_ENABLED";
+const googleAuthEnabledKey = "NEXT_PUBLIC_GOOGLE_AUTH_ENABLED";
 
 export type SupabasePublicConfig = {
   url: string;
@@ -54,4 +55,8 @@ export function getBootstrapSetupToken() {
 
 export function isAuthBypassEnabled() {
   return process.env[authBypassEnabledKey] === "true";
+}
+
+export function isGoogleAuthEnabled() {
+  return process.env[googleAuthEnabledKey] === "true";
 }

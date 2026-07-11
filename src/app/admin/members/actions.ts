@@ -28,6 +28,36 @@ function getDateOrNull(formData: FormData, key: string) {
   return value || null;
 }
 
+function normalizeMemberCode(value: string) {
+  return value.trim().toUpperCase();
+}
+
+async function resolveMemberCode(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  clubId: string,
+  requestedCode: string,
+) {
+  const normalized = normalizeMemberCode(requestedCode);
+
+  if (normalized) {
+    if (!/^PEAGC-\d{4,}$/.test(normalized)) {
+      return { code: null, error: "member-code-invalid" } as const;
+    }
+
+    return { code: normalized, error: null } as const;
+  }
+
+  const { data, error } = await supabase.rpc("next_member_code", {
+    target_club_id: clubId,
+  });
+
+  if (error || typeof data !== "string") {
+    return { code: null, error: "member-code-generate-failed" } as const;
+  }
+
+  return { code: data, error: null } as const;
+}
+
 function redirectMembers(status: string, memberId?: string): never {
   const params = new URLSearchParams({ status });
 
@@ -100,6 +130,18 @@ export async function createMember(formData: FormData) {
     redirectMembers("missing-required");
   }
 
+  const memberCode = await resolveMemberCode(
+    supabase,
+    clubId,
+    getString(formData, "memberCode"),
+  );
+
+  if (memberCode.error || !memberCode.code) {
+    redirectMembers(memberCode.error ?? "member-code-generate-failed");
+  }
+
+  payload.member_code = memberCode.code;
+
   const { data: member, error } = await supabase
     .from("members")
     .insert({
@@ -110,7 +152,7 @@ export async function createMember(formData: FormData) {
     .single();
 
   if (error || !member) {
-    redirectMembers("create-failed");
+    redirectMembers(error?.code === "23505" ? "member-code-taken" : "create-failed");
   }
 
   await supabase.from("audit_logs").insert({
@@ -140,6 +182,18 @@ export async function updateMember(formData: FormData) {
     redirectMembers("missing-required", memberId);
   }
 
+  const memberCode = await resolveMemberCode(
+    supabase,
+    clubId,
+    getString(formData, "memberCode"),
+  );
+
+  if (memberCode.error || !memberCode.code) {
+    redirectMembers(memberCode.error ?? "member-code-generate-failed", memberId);
+  }
+
+  payload.member_code = memberCode.code;
+
   const { data: before } = await supabase
     .from("members")
     .select("*")
@@ -154,7 +208,7 @@ export async function updateMember(formData: FormData) {
     .eq("id", memberId);
 
   if (error) {
-    redirectMembers("update-failed", memberId);
+    redirectMembers(error.code === "23505" ? "member-code-taken" : "update-failed", memberId);
   }
 
   await supabase.from("audit_logs").insert({
@@ -185,7 +239,18 @@ export async function approveMember(formData: FormData) {
     .eq("club_id", clubId)
     .eq("id", memberId)
     .maybeSingle();
+  const memberCode = await resolveMemberCode(
+    supabase,
+    clubId,
+    getString(formData, "memberCode") || before?.member_code || "",
+  );
+
+  if (memberCode.error || !memberCode.code) {
+    redirectMembers(memberCode.error ?? "member-code-generate-failed", memberId);
+  }
+
   const update = {
+    member_code: memberCode.code,
     status: "active",
     updated_by: userId,
     verification_note: getString(formData, "verificationNote") || null,
@@ -199,7 +264,7 @@ export async function approveMember(formData: FormData) {
     .eq("id", memberId);
 
   if (error) {
-    redirectMembers("approve-failed", memberId);
+    redirectMembers(error.code === "23505" ? "member-code-taken" : "approve-failed", memberId);
   }
 
   await supabase.from("audit_logs").insert({

@@ -13,11 +13,11 @@ type SetupPageProps = {
 const statusMessages: Record<string, { tone: "success" | "warning" | "danger"; text: string }> = {
   "already-bootstrapped": {
     tone: "warning",
-    text: "ระบบมี club admin แล้ว หน้า setup จึงถูกปิดสำหรับการสร้างซ้ำ",
+    text: "ระบบมีผู้ดูแลชมรมแล้ว หน้าตั้งค่าจึงไม่อนุญาตให้สร้างซ้ำ",
   },
   created: {
     tone: "success",
-    text: "สร้าง/ผูก club admin สำเร็จแล้ว สามารถเข้าสู่ระบบด้วยอีเมลนี้ได้",
+    text: "สร้างผู้ดูแลชมรมสำเร็จแล้ว สามารถเข้าสู่ระบบด้วยอีเมลและรหัสผ่านนี้ได้",
   },
   failed: {
     tone: "danger",
@@ -61,13 +61,13 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
       <section className="mx-auto w-full max-w-3xl rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-6 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
         <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">PEAGC Setup</p>
+            <p className="text-sm font-semibold text-[#8b5b7a]">ตั้งค่าระบบ PEAGC</p>
             <h1 className="mt-2 text-3xl font-semibold text-[#722257]">
-              ตั้งค่า Club Admin คนแรก
+              ตั้งค่าผู้ดูแลชมรมคนแรก
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-[#3f3a48]">
-              หน้านี้ใช้สำหรับ bootstrap ระบบครั้งแรกเท่านั้น
-              หลังจากสร้าง admin แล้วควรใช้ระบบจัดการผู้ใช้ภายในแอปแทน
+              หน้านี้ใช้สำหรับตั้งค่าระบบครั้งแรกเท่านั้น
+              หลังจากสร้างผู้ดูแลแล้วควรใช้ระบบจัดการผู้ใช้ภายในแอปแทน
             </p>
           </div>
           <div className="flex size-12 items-center justify-center rounded-md bg-[#722257] text-white">
@@ -90,9 +90,9 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
                 <ShieldAlert className="mt-0.5 size-5 text-[#8a1f11]" aria-hidden="true" />
               )}
               <div>
-                <p className="text-sm font-semibold text-[#722257]">Supabase env</p>
+                <p className="text-sm font-semibold text-[#722257]">ค่าการเชื่อมต่อฐานข้อมูล</p>
                 <p className="mt-1 text-sm text-[#6b6475]">
-                  {isSupabaseReady ? "พร้อมใช้งาน" : "ยังไม่ได้ตั้งค่า public env"}
+                  {isSupabaseReady ? "พร้อมใช้งาน" : "ยังไม่ได้ตั้งค่าการเชื่อมต่อสาธารณะ"}
                 </p>
               </div>
             </div>
@@ -105,9 +105,9 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
                 <ShieldAlert className="mt-0.5 size-5 text-[#8a1f11]" aria-hidden="true" />
               )}
               <div>
-                <p className="text-sm font-semibold text-[#722257]">Setup token</p>
+                <p className="text-sm font-semibold text-[#722257]">รหัสตั้งค่าระบบ</p>
                 <p className="mt-1 text-sm text-[#6b6475]">
-                  {hasSetupToken ? "พร้อมใช้งาน" : "ยังไม่ได้ตั้งค่า token"}
+                  {hasSetupToken ? "พร้อมใช้งาน" : "ยังไม่ได้ตั้งค่ารหัสตั้งระบบ"}
                 </p>
               </div>
             </div>
@@ -116,7 +116,7 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
 
         <form action={bootstrapClubAdmin} className="mt-6 grid gap-4">
           <label className="block">
-            <span className="text-sm font-semibold text-[#3f3a48]">Setup token</span>
+            <span className="text-sm font-semibold text-[#3f3a48]">รหัสตั้งค่าระบบ</span>
             <input
               className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 text-base outline-none transition focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
               name="setupToken"
@@ -130,7 +130,7 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
               <span className="text-sm font-semibold text-[#3f3a48]">ชื่อชมรม</span>
               <input
                 className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 text-base outline-none transition focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
-                defaultValue="PEA Golf Club"
+                defaultValue="ชมรมกอล์ฟการไฟฟ้าส่วนภูมิภาค"
                 name="clubName"
                 required
               />
@@ -184,7 +184,7 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
             disabled={!canSubmit}
             type="submit"
           >
-            สร้าง Club Admin
+            สร้างผู้ดูแลชมรม
           </button>
         </form>
       </section>

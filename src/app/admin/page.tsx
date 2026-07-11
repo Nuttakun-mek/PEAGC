@@ -2,10 +2,8 @@ import Link from "next/link";
 import {
   CalendarDays,
   CircleDollarSign,
-  ClipboardCheck,
   GraduationCap,
   ShieldAlert,
-  Trophy,
   UsersRound,
 } from "lucide-react";
 
@@ -55,78 +53,64 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       detail: "ฐานข้อมูลพนักงานสำหรับเทียบใบสมัครสมาชิก",
       href: access.isBypass ? "/admin/employees?bypass=admin" : "/admin/employees",
       icon: UsersRound,
-      title: "Employee Directory",
+      title: "ฐานข้อมูลพนักงาน",
       value: employeeCount,
     },
     {
-      detail: "ค้นหา เพิ่ม แก้ไข และตรวจ profile สมาชิก",
+      detail: "ค้นหา เพิ่ม แก้ไข และตรวจข้อมูลสมาชิก",
       href: access.isBypass ? "/admin/members?bypass=admin" : "/admin/members",
       icon: UsersRound,
-      title: "Member Management",
+      title: "จัดการสมาชิก",
       value: memberCount,
     },
     {
       detail: "สร้างกิจกรรม เปิดรับสมัคร และดูผู้เข้าร่วม",
       href: access.isBypass ? "/admin/events?bypass=admin" : "/admin/events",
       icon: CalendarDays,
-      title: "Event Management",
+      title: "จัดการกิจกรรม",
       value: eventCount,
     },
     {
       detail: "จัดคอร์สเรียน รอบเรียน จองเรียน และลงเวลาเข้าเรียน",
       href: access.isBypass ? "/admin/lessons?bypass=admin" : "/admin/lessons",
       icon: GraduationCap,
-      title: "Lesson & Academy",
+      title: "จัดการตารางเรียน",
       value: lessonBookingCount,
     },
     {
-      detail: "ตรวจ slip และสถานะการชำระเงิน",
+      detail: "ตรวจหลักฐานและสถานะการชำระเงิน",
       href: access.isBypass ? "/admin/payments?bypass=admin" : "/admin/payments",
       icon: CircleDollarSign,
-      title: "Payment Review",
+      title: "ตรวจสอบการชำระเงิน",
       value: paymentCount,
-    },
-    {
-      detail: "จัดก๊วน Tee Time และ check-in หน้างาน",
-      href: "#",
-      icon: ClipboardCheck,
-      title: "Pairing & Check-in",
-      value: 0,
-    },
-    {
-      detail: "ตั้งค่าการแข่งขัน คะแนน และ leaderboard",
-      href: "#",
-      icon: Trophy,
-      title: "Competition",
-      value: 0,
     },
   ];
 
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-[#2f3137]">
       <section className="mx-auto w-full max-w-6xl">
-        <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="golf-visual flex flex-col gap-5 rounded-lg bg-[#722257] p-6 text-white shadow-[0_14px_34px_rgba(114,34,87,0.18)] sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">Admin Portal</p>
-            <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
+            <p className="text-sm font-semibold text-[#efd798]">ระบบผู้ดูแล</p>
+            <h1 className="mt-1 text-3xl font-semibold text-white">
               แผงควบคุมผู้ดูแลระบบ
             </h1>
-            <p className="mt-2 text-sm text-[#6b6475]">
+            <p className="mt-2 text-sm text-white/70">
               ผู้ใช้: {access.displayName}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Link
-              className="flex h-11 items-center rounded-md border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257]"
+              className="flex h-11 items-center rounded-md border border-white/25 bg-white/10 px-4 text-sm font-semibold text-white"
               href={access.isBypass ? "/member?bypass=member" : "/member"}
             >
               ดูหน้าสมาชิก
             </Link>
             <Link
-              className="flex h-11 items-center rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
+              className="flex h-11 items-center rounded-md bg-[#C69214] px-4 text-sm font-semibold text-white"
               href="/"
             >
-              Dashboard
+              หน้าหลัก
             </Link>
           </div>
         </div>
@@ -134,24 +118,24 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         {access.isBypass ? (
           <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <span>โหมด Admin ทดลอง ใช้ดูหน้าจอก่อนเปิด auth จริงและต้องปิดก่อน go live</span>
+            <span>โหมดผู้ดูแลทดลอง ใช้ตรวจหน้าจอก่อนเปิดระบบเข้าสู่ระบบจริง และต้องปิดก่อนเปิดใช้งาน</span>
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {modules.slice(0, 4).map((item) => (
             <article
-              className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
+              className="rounded-lg border border-[#e2e8ef] bg-white/95 p-4 shadow-sm"
               key={item.title}
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-[#6b6475]">{item.title}</p>
-                  <p className="mt-2 text-3xl font-semibold text-[#722257]">
+                  <p className="mt-2 text-3xl font-semibold text-[#1f2937]">
                     {item.value}
                   </p>
                 </div>
-                <div className="flex size-11 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
+                <div className="flex size-10 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
                   <item.icon className="size-5" aria-hidden="true" />
                 </div>
               </div>
@@ -161,7 +145,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
         <div className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
           <div className="border-b border-[#e6e2ee] px-5 py-4">
-            <h2 className="text-xl font-semibold text-[#722257]">Admin Modules</h2>
+            <h2 className="text-xl font-semibold text-[#722257]">เมนูจัดการระบบ</h2>
           </div>
           <div className="divide-y divide-[#e6e2ee]">
             {modules.map((item) => (

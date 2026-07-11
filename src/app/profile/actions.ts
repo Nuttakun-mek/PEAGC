@@ -25,6 +25,12 @@ function normalize(value: string | null | undefined) {
   return (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function normalizePersonName(value: string | null | undefined) {
+  return normalize(value)
+    .replace(/^(นาย|นางสาว|นาง|ดร\.|ดร)\s*/, "")
+    .replace(/[.]/g, "");
+}
+
 function getAvatarFile(formData: FormData) {
   const file = formData.get("avatar");
 
@@ -44,14 +50,10 @@ function getAvatarFile(formData: FormData) {
 }
 
 function getEmployeeMatchDetail({
-  affiliation,
-  department,
   directory,
   email,
   fullName,
 }: {
-  affiliation: string;
-  department: string;
   directory: {
     affiliation: string | null;
     bureau?: string | null;
@@ -81,10 +83,9 @@ function getEmployeeMatchDetail({
 
   const checks = {
     activeEmployee: directory.employment_status === "active",
-    affiliation: !directory.affiliation || normalize(directory.affiliation) === normalize(affiliation),
-    department: !directory.department || normalize(directory.department) === normalize(department),
     email: !directory.email || normalize(directory.email) === normalize(email),
-    fullName: normalize(directory.full_name) === normalize(fullName),
+    fullName:
+      normalizePersonName(directory.full_name) === normalizePersonName(fullName),
   };
   const status = Object.values(checks).every(Boolean) ? "matched" : "mismatch";
 
@@ -135,7 +136,7 @@ export async function savePersonalProfile(formData: FormData) {
   const skillLevel = getString(formData, "skillLevel");
   const avatarInput = getAvatarFile(formData);
 
-  if (!displayName || !fullName || !phone || !employeeCode || !department || !affiliation) {
+  if (!displayName || !fullName || !phone || !employeeCode) {
     redirect("/profile?status=missing-required");
   }
 
@@ -177,14 +178,26 @@ export async function savePersonalProfile(formData: FormData) {
     .is("archived_at", null)
     .maybeSingle();
   const employeeMatch = getEmployeeMatchDetail({
-    affiliation,
-    department,
     directory,
     email: user.email ?? null,
     fullName,
   });
   const verifiedDirectory =
     employeeMatch.status === "matched" && directory ? directory : null;
+  const { data: existingMember } = await admin
+    .from("members")
+    .select("employee_code, member_code, status")
+    .eq("club_id", club.id)
+    .eq("user_id", user.id)
+    .is("archived_at", null)
+    .maybeSingle();
+  const keepApprovedStatus =
+    existingMember?.status === "active" &&
+    existingMember.employee_code === employeeCode &&
+    employeeMatch.status === "matched";
+  const isAutomaticallyApproved =
+    employeeMatch.status === "matched" || keepApprovedStatus;
+  const memberCode = existingMember?.member_code ?? null;
   let avatarUrl: string | null = null;
 
   if (avatarInput?.file) {
@@ -209,6 +222,7 @@ export async function savePersonalProfile(formData: FormData) {
   }
 
   const memberPayload = {
+      avatar_url: avatarUrl || undefined,
       bureau: verifiedDirectory?.bureau ?? null,
       club_id: club.id,
       email: user.email,
@@ -225,21 +239,25 @@ export async function savePersonalProfile(formData: FormData) {
       handicap,
       last_name: verifiedDirectory?.last_name ?? null,
       line_id: lineId || null,
+      member_code: memberCode,
       nickname: nickname || null,
       organization: organization || null,
       phone,
       position: verifiedDirectory?.position ?? null,
       section: verifiedDirectory?.section ?? null,
       skill_level: skillLevel || null,
-      status: "pending_verification",
+      status: isAutomaticallyApproved ? "active" : "pending_verification",
       title_prefix: verifiedDirectory?.title_prefix ?? null,
       updated_by: user.id,
       user_id: user.id,
-      verification_note: null,
+      verification_note: isAutomaticallyApproved
+        ? "ตรวจสอบอัตโนมัติจากฐานข้อมูลพนักงาน"
+        : null,
+      verified_at: isAutomaticallyApproved ? new Date().toISOString() : null,
       work_line: verifiedDirectory?.work_line ?? null,
     };
   const { error: memberError } = await supabase.from("members").upsert(
-    avatarUrl ? { ...memberPayload, avatar_url: avatarUrl } : memberPayload,
+    memberPayload,
     { onConflict: "club_id,user_id" },
   );
 
@@ -254,5 +272,9 @@ export async function savePersonalProfile(formData: FormData) {
       .eq("id", user.id);
   }
 
-  redirect("/member?status=pending-review");
+  redirect(
+    isAutomaticallyApproved
+      ? "/member?status=profile-approved"
+      : "/member?status=pending-review",
+  );
 }
