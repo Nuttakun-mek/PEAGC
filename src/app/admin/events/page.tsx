@@ -45,6 +45,26 @@ type EventRow = {
   venue: string | null;
 };
 
+type EventRegistrationRow = {
+  event_id: string;
+  id: string;
+  members: {
+    full_name: string;
+    member_code: string | null;
+    phone: string | null;
+  } | null;
+  status: string;
+};
+
+const registrationStatusLabels: Record<string, string> = {
+  checked_in: "ลงทะเบียนหน้างานแล้ว",
+  paid: "ชำระเงินแล้ว",
+  payment_review: "กำลังตรวจสอบการชำระเงิน",
+  pending_payment: "รอชำระเงิน",
+  registered: "สมัครแล้ว",
+  waitlist: "รายชื่อสำรอง",
+};
+
 const sampleEvents: EventRow[] = [
   {
     capacity: 72,
@@ -55,10 +75,10 @@ const sampleEvents: EventRow[] = [
     id: "sample-event-1",
     includes: "Green fee, caddie, dinner",
     member_price: 2200,
-    name: "PEAGC Monthly Round",
+    name: "ออกรอบประจำเดือน PEAGC",
     status: "open",
     tee_off_time: "11:30",
-    venue: "Royal Golf Club",
+    venue: "สนามกอล์ฟรอยัล",
   },
   {
     capacity: 48,
@@ -69,10 +89,10 @@ const sampleEvents: EventRow[] = [
     id: "sample-event-2",
     includes: "Green fee, trophy, dinner",
     member_price: 3000,
-    name: "PEAGC Club Challenge",
+    name: "การแข่งขันชมรม PEAGC",
     status: "draft",
     tee_off_time: "12:00",
-    venue: "Bangkok Golf Club",
+    venue: "สนามกอล์ฟกรุงเทพ",
   },
 ];
 
@@ -80,12 +100,12 @@ const eventTypeLabels: Record<string, string> = {
   charity: "Charity",
   golf_round: "ออกรอบ",
   tournament: "แข่งขัน",
-  training: "Academy",
+  training: "ฝึกอบรมกอล์ฟ",
 };
 
 const statusLabels: Record<string, string> = {
   archived: "Archived",
-  cancelled: "Cancelled",
+  cancelled: "ยกเลิก",
   closed: "Closed",
   completed: "Completed",
   draft: "Draft",
@@ -160,8 +180,8 @@ function EventForm({
           >
             <option value="golf_round">ออกรอบ</option>
             <option value="tournament">แข่งขัน</option>
-            <option value="charity">Charity</option>
-            <option value="training">Academy</option>
+            <option value="charity">การกุศล</option>
+            <option value="training">ฝึกอบรมกอล์ฟ</option>
           </select>
         </label>
         <label className="block">
@@ -172,12 +192,12 @@ function EventForm({
             disabled={disabled}
             name="status"
           >
-            <option value="draft">Draft</option>
-            <option value="open">Open</option>
-            <option value="closed">Closed</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-            <option value="archived">Archived</option>
+            <option value="draft">ฉบับร่าง</option>
+            <option value="open">เปิดรับสมัคร</option>
+            <option value="closed">ปิดรับสมัคร</option>
+            <option value="completed">เสร็จสิ้น</option>
+            <option value="cancelled">ยกเลิก</option>
+            <option value="archived">เก็บถาวร</option>
           </select>
         </label>
       </div>
@@ -195,7 +215,7 @@ function EventForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">T-Off</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">เวลาออกรอบ</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={event?.tee_off_time?.slice(0, 5) ?? ""}
@@ -318,20 +338,31 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
   const q = params.q?.trim() ?? "";
   const selectedStatus = params.status ?? "all";
   let events = sampleEvents;
+  let registrations: EventRegistrationRow[] = [];
 
   if (!access.isBypass && access.clubId) {
     const supabase = await createClient();
-    const { data } = await supabase
-      .from("events")
-      .select(
-        "id, name, event_type, venue, event_date, tee_off_time, capacity, member_price, guest_price, includes, description, status, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections",
-      )
-      .eq("club_id", access.clubId)
-      .is("archived_at", null)
-      .order("event_date", { ascending: true })
-      .limit(80);
+    const [{ data }, { data: registrationData }] = await Promise.all([
+      supabase
+        .from("events")
+        .select(
+          "id, name, event_type, venue, event_date, tee_off_time, capacity, member_price, guest_price, includes, description, status, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections",
+        )
+        .eq("club_id", access.clubId)
+        .is("archived_at", null)
+        .order("event_date", { ascending: true })
+        .limit(80),
+      supabase
+        .from("event_registrations")
+        .select("id, event_id, status, members(full_name, member_code, phone)")
+        .eq("club_id", access.clubId)
+        .not("status", "in", "(cancelled,no_show)")
+        .order("created_at", { ascending: true })
+        .limit(500),
+    ]);
 
     events = (data ?? []) as EventRow[];
+    registrations = (registrationData ?? []) as unknown as EventRegistrationRow[];
   }
 
   events = events.filter((event) => {
@@ -350,15 +381,21 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
   const highlightedEvent = params.event;
   const statusMessage = params.status ? statusMessages[params.status] : null;
   const bypassQuery = access.isBypass ? "?bypass=admin" : "";
+  const registrationsByEvent = new Map<string, EventRegistrationRow[]>();
+  registrations.forEach((registration) => {
+    const current = registrationsByEvent.get(registration.event_id) ?? [];
+    current.push(registration);
+    registrationsByEvent.set(registration.event_id, current);
+  });
 
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-[#2f3137]">
       <section className="mx-auto w-full max-w-7xl">
         <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">Admin Portal</p>
+            <p className="text-sm font-semibold text-[#8b5b7a]">ระบบผู้ดูแล</p>
             <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
-              Event Management
+              จัดการกิจกรรม
             </h1>
             <p className="mt-2 text-sm text-[#6b6475]">
               สร้างกิจกรรม เปิดรับสมัคร และจัดการรายละเอียดกิจกรรมกอล์ฟ
@@ -370,7 +407,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
               href={`/admin${bypassQuery}`}
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
-              กลับ Admin
+              กลับหน้าผู้ดูแล
             </Link>
             <Link
               className="flex h-11 items-center rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
@@ -389,15 +426,15 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
 
         {access.isBypass ? (
           <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
-            โหมด Admin ทดลอง: แสดงข้อมูลตัวอย่างและปิดการบันทึกจริง ต้องปิดก่อน go live
+            โหมดผู้ดูแลทดลอง: แสดงข้อมูลตัวอย่างและปิดการบันทึกจริง ต้องปิดก่อนเปิดใช้งาน
           </div>
         ) : null}
 
         <div className="mt-6 grid gap-4 md:grid-cols-3">
           {[
             { label: "กิจกรรมที่แสดง", value: events.length },
-            { label: "Open", value: openCount },
-            { label: "Draft", value: draftCount },
+            { label: "เปิดรับสมัคร", value: openCount },
+            { label: "ฉบับร่าง", value: draftCount },
           ].map((item) => (
             <article
               className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
@@ -444,12 +481,12 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                   name="status"
                 >
                   <option value="all">ทุกสถานะ</option>
-                  <option value="draft">Draft</option>
-                  <option value="open">Open</option>
-                  <option value="closed">Closed</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                  <option value="archived">Archived</option>
+                  <option value="draft">ฉบับร่าง</option>
+                  <option value="open">เปิดรับสมัคร</option>
+                  <option value="closed">ปิดรับสมัคร</option>
+                  <option value="completed">เสร็จสิ้น</option>
+                  <option value="cancelled">ยกเลิก</option>
+                  <option value="archived">เก็บถาวร</option>
                 </select>
               </label>
               <button
@@ -490,11 +527,14 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                     <div className="text-sm text-[#3f3a48]">
                       <p>{event.event_date}</p>
                       <p className="mt-1 text-[#6b6475]">
-                        T-Off {event.tee_off_time?.slice(0, 5) ?? "-"}
+                        เวลาออกรอบ {event.tee_off_time?.slice(0, 5) ?? "-"}
                       </p>
                     </div>
                     <div className="text-sm text-[#3f3a48]">
-                      <p>รับ {event.capacity ?? "-"} คน</p>
+                      <p>
+                        สมัครแล้ว {registrationsByEvent.get(event.id)?.length ?? 0}
+                        {event.capacity ? ` / ${event.capacity} คน` : " คน"}
+                      </p>
                       <p className="mt-1 text-[#6b6475]">
                         สมาชิก {event.member_price.toLocaleString()} บาท
                       </p>
@@ -505,6 +545,33 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                   </summary>
 
                   <div className="mt-5 rounded-lg border border-[#e6e2ee] bg-white/70 p-4">
+                    <section className="mb-4 rounded-md border border-[#e6e2ee] bg-white p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="font-semibold text-[#722257]">รายชื่อผู้สมัคร</h3>
+                        <span className="rounded-md bg-[#f8edf4] px-2 py-1 text-xs font-semibold text-[#722257]">
+                          {registrationsByEvent.get(event.id)?.length ?? 0} คน
+                        </span>
+                      </div>
+                      {registrationsByEvent.get(event.id)?.length ? (
+                        <div className="mt-3 grid gap-2 md:grid-cols-2">
+                          {registrationsByEvent.get(event.id)?.map((registration) => (
+                            <div className="flex items-center justify-between gap-3 rounded-md bg-[#f8f7fa] px-3 py-2 text-sm" key={registration.id}>
+                              <div>
+                                <p className="font-semibold text-[#3f3a48]">{registration.members?.full_name ?? "ผู้สมัคร"}</p>
+                                <p className="mt-0.5 text-xs text-[#6b6475]">
+                                  {registration.members?.member_code ?? "ยังไม่มีเลขสมาชิก"} · {registration.members?.phone ?? "-"}
+                                </p>
+                              </div>
+                              <span className="text-xs font-semibold text-[#722257]">
+                                {registrationStatusLabels[registration.status] ?? registration.status}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm text-[#6b6475]">ยังไม่มีผู้สมัครกิจกรรมนี้</p>
+                      )}
+                    </section>
                     <div className="mb-4 grid gap-3 rounded-md bg-white p-4 text-sm text-[#3f3a48] md:grid-cols-3">
                       <div className="flex items-start gap-2">
                         <MapPin className="mt-0.5 size-4 text-[#722257]" aria-hidden="true" />

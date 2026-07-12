@@ -14,15 +14,15 @@ import {
 const flowSteps = [
   {
     action: "เปิดหน้า Login",
-    detail: "ผู้ใช้กดปุ่มเข้าสู่ระบบด้วย Google ปุ่มเดียวกันนี้ใช้ได้ทั้งสมัครใหม่และเข้าใช้งานเดิม",
+    detail: "ผู้ใช้กดปุ่มเข้าสู่ระบบด้วยกูเกิล ปุ่มเดียวกันนี้ใช้ได้ทั้งสมัครใหม่และเข้าใช้งานเดิม",
     href: "/login?next=/profile",
     icon: LogIn,
-    state: "ยังไม่ login",
-    title: "1. เข้าสู่ระบบด้วย Google",
+    state: "ยังไม่เข้าสู่ระบบ",
+    title: "1. เข้าสู่ระบบด้วยกูเกิล",
   },
   {
     action: "ดูหน้ากรอกข้อมูล",
-    detail: "หลัง Google กลับเข้าระบบ ถ้า user ยังไม่มีข้อมูลสมาชิก ระบบพาไปกรอกชื่อ เบอร์ รหัสพนักงาน หน่วยงาน และสังกัด",
+    detail: "หลังกูเกิลกลับเข้าระบบ หากผู้ใช้ยังไม่มีข้อมูลสมาชิก ระบบจะพาไปกรอกชื่อ เบอร์ รหัสพนักงาน หน่วยงาน และสังกัด",
     href: "/profile?bypass=member",
     icon: FilePenLine,
     state: "สมัครครั้งแรก",
@@ -30,23 +30,23 @@ const flowSteps = [
   },
   {
     action: "ดูสถานะรอตรวจ",
-    detail: "เมื่อบันทึก profile แล้ว ระบบตั้งสถานะสมาชิกเป็นรอตรวจสอบ เพื่อให้ Admin เทียบกับฐานข้อมูลพนักงานก่อน",
+    detail: "เมื่อบันทึกประวัติแล้ว ระบบตั้งสถานะสมาชิกเป็นรอตรวจสอบ เพื่อให้ผู้ดูแลเทียบกับฐานข้อมูลพนักงานก่อน",
     href: "/member?bypass=member&status=pending-review",
     icon: CircleUserRound,
     state: "pending_verification",
-    title: "3. รอ Admin อนุมัติ",
+    title: "3. รอผู้ดูแลอนุมัติ",
   },
   {
-    action: "เปิดหน้า Admin ตรวจ",
-    detail: "Admin เห็นสมาชิกที่รอตรวจ ผลเทียบฐานพนักงาน และปุ่มอนุมัติสมาชิก",
+    action: "เปิดหน้าผู้ดูแลตรวจสอบ",
+    detail: "ผู้ดูแลเห็นสมาชิกที่รอตรวจ ผลเทียบฐานพนักงาน และปุ่มอนุมัติสมาชิก",
     href: "/admin/members?bypass=admin&status=all",
     icon: UserCheck,
     state: "admin review",
-    title: "4. Admin ตรวจและอนุมัติ",
+    title: "4. ผู้ดูแลตรวจและอนุมัติ",
   },
   {
     action: "ดูหน้าสมาชิก",
-    detail: "หลังอนุมัติแล้ว user เข้าด้วย Google account เดิม ระบบพาเข้าหน้าสมาชิก ใช้จองเรียนและสมัครกิจกรรมได้",
+    detail: "หลังอนุมัติแล้ว ผู้ใช้เข้าด้วยบัญชีกูเกิลเดิม ระบบจะพาเข้าหน้าสมาชิกเพื่อจองเรียนและสมัครกิจกรรม",
     href: "/member?bypass=member",
     icon: BadgeCheck,
     state: "active member",
@@ -54,7 +54,7 @@ const flowSteps = [
   },
   {
     action: "ดูระบบจองเรียน",
-    detail: "สมาชิกที่ active เลือกรอบเรียน Academy ได้ ส่วน Admin ลงเวลาเข้าเรียนจากเมนู Lesson & Academy",
+    detail: "สมาชิกที่อนุมัติแล้วเลือกรอบเรียนได้ ส่วนผู้ดูแลลงเวลาเข้าเรียนจากเมนูตารางเรียน",
     href: "/admin/lessons?bypass=admin",
     icon: GraduationCap,
     state: "lesson booking",
@@ -68,12 +68,12 @@ export default function DemoAuthFlowPage() {
       <section className="mx-auto w-full max-w-6xl">
         <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">Flow Simulator</p>
+            <p className="text-sm font-semibold text-[#8b5b7a]">ตัวอย่างขั้นตอนการใช้งาน</p>
             <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
-              จำลองการสมัครและเข้าใช้งานด้วย Google
+              จำลองการสมัครและเข้าใช้งานด้วยกูเกิล
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-[#6b6475]">
-              หน้านี้เป็นตัวช่วยเดินลิงก์ของ flow จริงก่อนเปิด Google provider ใน Supabase เพื่อให้เห็นว่า user และ Admin จะเจอหน้าไหนตามลำดับ
+              หน้านี้ใช้ทดลองขั้นตอนจริงก่อนเปิดผู้ให้บริการกูเกิล เพื่อให้เห็นว่าผู้ใช้และผู้ดูแลจะพบหน้าใดตามลำดับ
             </p>
           </div>
           <Link
@@ -88,7 +88,7 @@ export default function DemoAuthFlowPage() {
         <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
           <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           <span>
-            ตอนนี้ Google provider ใน Supabase ยังไม่เปิด จึงใช้ bypass links เพื่อเดินดูหน้าจอจริงทีละขั้น หลังเปิด provider แล้วระบบจะวิ่งผ่าน `/auth/complete` เพื่อตัดสินทางให้เอง
+            ขณะนี้ยังไม่เปิดผู้ให้บริการกูเกิล จึงใช้ลิงก์โหมดทดลองเพื่อดูหน้าจอทีละขั้น เมื่อเปิดแล้วระบบจะเลือกเส้นทางให้อัตโนมัติ
           </span>
         </div>
 
@@ -137,7 +137,7 @@ export default function DemoAuthFlowPage() {
                 เงื่อนไข flow จริง
               </h2>
               <p className="mt-1 text-sm text-[#6b6475]">
-                Google account ใหม่จะสมัครให้อัตโนมัติใน Supabase Auth ส่วนสมาชิก PEAGC จะใช้งานเต็มระบบได้หลังกรอก profile และ Admin อนุมัติ
+                บัญชีกูเกิลใหม่จะสมัครให้อัตโนมัติ ส่วนสมาชิก PEAGC จะใช้งานเต็มระบบได้หลังกรอกประวัติและผู้ดูแลอนุมัติ
               </p>
             </div>
           </div>

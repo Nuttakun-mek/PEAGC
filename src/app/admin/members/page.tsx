@@ -106,7 +106,7 @@ const sampleMembers: MemberRow[] = [
     member_type_id: "regular",
     member_types: { name: "สมาชิก" },
     nickname: "หนึ่ง",
-    note: "ข้อมูลทดลองสำหรับ preview",
+    note: "ข้อมูลทดลองสำหรับหน้าตัวอย่าง",
     organization: "PEA HQ",
     phone: "0812345678",
     skill_level: "intermediate",
@@ -137,10 +137,10 @@ const sampleMembers: MemberRow[] = [
 ];
 
 const statusLabels: Record<string, string> = {
-  active: "Active",
-  archived: "Archived",
-  guest: "Guest",
-  inactive: "Inactive",
+  active: "ใช้งาน",
+  archived: "เก็บถาวร",
+  guest: "บุคคลภายนอก",
+  inactive: "ไม่ใช้งาน",
   pending_verification: "รอตรวจสอบ",
 };
 
@@ -150,6 +150,9 @@ const statusMessages: Record<string, string> = {
   "create-failed": "เพิ่มสมาชิกไม่สำเร็จ กรุณาตรวจรหัสสมาชิกซ้ำหรือข้อมูลที่กรอก",
   created: "เพิ่มสมาชิกเรียบร้อยแล้ว",
   "missing-required": "กรุณากรอกชื่อ-นามสกุล",
+  "member-code-generate-failed": "สร้างเลขสมาชิกอัตโนมัติไม่สำเร็จ",
+  "member-code-invalid": "เลขสมาชิกต้องอยู่ในรูปแบบ PEAGC-0001",
+  "member-code-taken": "เลขสมาชิกนี้ถูกใช้งานแล้ว กรุณาเลือกเลขอื่น",
   "update-failed": "แก้ไขสมาชิกไม่สำเร็จ",
   updated: "แก้ไขสมาชิกเรียบร้อยแล้ว",
 };
@@ -197,12 +200,14 @@ function MemberForm({
   action,
   disabled,
   member,
+  memberCodeOptions,
   memberTypes,
   title,
 }: {
   action: (formData: FormData) => void;
   disabled?: boolean;
   member?: MemberRow;
+  memberCodeOptions: string[];
   memberTypes: MemberType[];
   title: string;
 }) {
@@ -220,13 +225,24 @@ function MemberForm({
 
       <div className="grid gap-4 md:grid-cols-3">
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">รหัสสมาชิก</span>
-          <input
-            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+          <span className="text-sm font-semibold text-[#3f3a48]">เลขสมาชิก</span>
+          <select
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={member?.member_code ?? ""}
             disabled={disabled}
             name="memberCode"
-          />
+            required
+          >
+            <option value="">เลือกเลขสมาชิก</option>
+            {member?.member_code ? (
+              <option value={member.member_code}>{member.member_code} (เลขปัจจุบัน)</option>
+            ) : null}
+            {memberCodeOptions
+              .filter((code) => code !== member?.member_code)
+              .map((code) => (
+                <option key={code} value={code}>{code}</option>
+              ))}
+          </select>
         </label>
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">รหัสพนักงาน</span>
@@ -269,7 +285,7 @@ function MemberForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">Email</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">อีเมล</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={member?.email ?? ""}
@@ -279,7 +295,7 @@ function MemberForm({
           />
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">Line ID</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">ไอดีไลน์</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={member?.line_id ?? ""}
@@ -354,18 +370,18 @@ function MemberForm({
             disabled={disabled}
             name="status"
           >
-            <option value="pending_verification">Pending Verification</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="guest">Guest</option>
-            <option value="archived">Archived</option>
+            <option value="pending_verification">รอตรวจสอบ</option>
+            <option value="active">ใช้งาน</option>
+            <option value="inactive">ไม่ใช้งาน</option>
+            <option value="guest">บุคคลภายนอก</option>
+            <option value="archived">เก็บถาวร</option>
           </select>
         </label>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">Handicap</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">แต้มต่อ</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={member?.handicap ?? ""}
@@ -384,9 +400,9 @@ function MemberForm({
             name="skillLevel"
           >
             <option value="">ยังไม่ระบุ</option>
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
+            <option value="beginner">เริ่มต้น</option>
+            <option value="intermediate">ปานกลาง</option>
+            <option value="advanced">ชำนาญ</option>
           </select>
         </label>
         <label className="block">
@@ -456,6 +472,27 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
     }));
   }
 
+  const usedMemberCodes = new Set(
+    members.map((member) => member.member_code).filter((code): code is string => Boolean(code)),
+  );
+  const highestMemberNumber = [...usedMemberCodes].reduce((highest, code) => {
+    const match = /^PEAGC-(\d+)$/.exec(code);
+
+    return match ? Math.max(highest, Number(match[1])) : highest;
+  }, 0);
+  const memberCodeOptions: string[] = [];
+  let candidateNumber = highestMemberNumber + 1;
+
+  while (memberCodeOptions.length < 20) {
+    const candidate = `PEAGC-${String(candidateNumber).padStart(4, "0")}`;
+
+    if (!usedMemberCodes.has(candidate)) {
+      memberCodeOptions.push(candidate);
+    }
+
+    candidateNumber += 1;
+  }
+
   members = members.filter((member) => {
     const matchesStatus = selectedStatus === "all" || member.status === selectedStatus;
     const matchesType =
@@ -493,9 +530,9 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
       <section className="mx-auto w-full max-w-7xl">
         <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">Admin Portal</p>
+            <p className="text-sm font-semibold text-[#8b5b7a]">ระบบผู้ดูแล</p>
             <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
-              Member Management
+              จัดการสมาชิก
             </h1>
             <p className="mt-2 text-sm text-[#6b6475]">
               ค้นหา เพิ่ม แก้ไข และตรวจข้อมูลสมาชิกชมรม
@@ -507,7 +544,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
               href={`/admin${bypassQuery}`}
             >
               <ArrowLeft className="size-4" aria-hidden="true" />
-              กลับ Admin
+              กลับหน้าผู้ดูแล
             </Link>
             <Link
               className="flex h-11 items-center rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
@@ -526,7 +563,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
 
         {access.isBypass ? (
           <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
-            โหมด Admin ทดลอง: แสดงข้อมูลตัวอย่างและปิดการบันทึกจริง ต้องปิดก่อน go live
+            โหมดผู้ดูแลทดลอง: แสดงข้อมูลตัวอย่างและปิดการบันทึกจริง ต้องปิดก่อนเปิดใช้งาน
           </div>
         ) : null}
 
@@ -534,8 +571,8 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
           {[
             { label: "สมาชิกที่แสดง", value: members.length },
             { label: "รอตรวจสอบ", value: pendingCount },
-            { label: "Active", value: activeCount },
-            { label: "Guest", value: guestCount },
+            { label: "ใช้งาน", value: activeCount },
+            { label: "บุคคลภายนอก", value: guestCount },
           ].map((item) => (
             <article
               className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
@@ -553,6 +590,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
           <MemberForm
             action={createMember}
             disabled={access.isBypass}
+            memberCodeOptions={memberCodeOptions}
             memberTypes={memberTypes}
             title="เพิ่มสมาชิกใหม่"
           />
@@ -588,10 +626,10 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                 >
                   <option value="all">ทุกสถานะ</option>
                   <option value="pending_verification">รอตรวจสอบ</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                  <option value="guest">Guest</option>
-                  <option value="archived">Archived</option>
+                  <option value="active">ใช้งาน</option>
+                  <option value="inactive">ไม่ใช้งาน</option>
+                  <option value="guest">บุคคลภายนอก</option>
+                  <option value="archived">เก็บถาวร</option>
                 </select>
               </label>
               <select
@@ -732,9 +770,24 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                     {member.status === "pending_verification" ? (
                       <form
                         action={approveMember}
-                        className="mb-4 grid gap-3 rounded-md border border-[#d7a52c] bg-[#fff9ed] p-4 md:grid-cols-[1fr_auto]"
+                        className="mb-4 grid gap-3 rounded-md border border-[#d7a52c] bg-[#fff9ed] p-4 md:grid-cols-[190px_1fr_auto]"
                       >
                         <input name="memberId" type="hidden" value={member.id} />
+                        <label className="block">
+                          <span className="text-sm font-semibold text-[#805300]">เลขสมาชิก</span>
+                          <select
+                            className="mt-2 h-11 w-full rounded-md border border-[#d7a52c] bg-white px-3 outline-none focus:border-[#722257]"
+                            defaultValue={member.member_code ?? memberCodeOptions[0]}
+                            disabled={access.isBypass}
+                            name="memberCode"
+                            required
+                          >
+                            {member.member_code ? <option value={member.member_code}>{member.member_code} (เลขปัจจุบัน)</option> : null}
+                            {memberCodeOptions.filter((code) => code !== member.member_code).map((code) => (
+                              <option key={code} value={code}>{code}</option>
+                            ))}
+                          </select>
+                        </label>
                         <label className="block">
                           <span className="text-sm font-semibold text-[#805300]">
                             หมายเหตุการตรวจสอบ
@@ -761,6 +814,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                       action={updateMember}
                       disabled={access.isBypass}
                       member={member}
+                      memberCodeOptions={memberCodeOptions}
                       memberTypes={memberTypes}
                       title={`แก้ไข ${member.full_name}`}
                     />

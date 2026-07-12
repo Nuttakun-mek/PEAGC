@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "PEAGC | Golf Club Operating System",
+  title: "PEAGC | ระบบบริหารชมรมกอล์ฟ",
   description:
-    "Thai-first operating system for PEA Golf Club member, event, payment, pairing, and competition workflows.",
+    "ระบบบริหารสมาชิก กิจกรรม การเรียนกอล์ฟ และการแข่งขันของชมรมกอล์ฟการไฟฟ้าส่วนภูมิภาค",
 };
 
 export default function RootLayout({
@@ -13,8 +13,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="th" className="h-full antialiased" suppressHydrationWarning>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        {children}
+      </body>
     </html>
   );
 }

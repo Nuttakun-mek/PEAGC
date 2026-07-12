@@ -151,7 +151,7 @@ export async function bootstrapClubAdmin(formData: FormData) {
   const email = getString(formData, "email").toLowerCase();
   const password = getString(formData, "password");
   const displayName = getString(formData, "displayName") || email;
-  const clubName = getString(formData, "clubName") || "PEA Golf Club";
+  const clubName = getString(formData, "clubName") || "ชมรมกอล์ฟการไฟฟ้าส่วนภูมิภาค";
   const shortName = (getString(formData, "shortName") || "PEAGC").toUpperCase();
 
   if (!email.includes("@")) {

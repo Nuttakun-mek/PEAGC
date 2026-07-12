@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { isAuthBypassEnabled } from "@/lib/supabase/env";
+import { hasSupabasePublicConfig, isAuthBypassEnabled } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 export type AppRole = "admin" | "member";
@@ -36,6 +36,18 @@ function canUseBypass(role: AppRole | undefined, requiredRole: AppRole | undefin
   }
 
   return role === "admin";
+}
+
+function getBypassContext(role: AppRole) {
+  return {
+    clubId: null,
+    displayName: role === "admin" ? "ผู้ดูแลระบบทดลอง" : "สมาชิกทดลอง",
+    email: null,
+    isBypass: true,
+    isProfileComplete: true,
+    role,
+    userId: null,
+  } satisfies AccessContext;
 }
 
 async function getAuthenticatedContext(requiredRole: AppRole | undefined) {
@@ -100,20 +112,19 @@ export async function resolveAccess({
 }: ResolveAccessOptions) {
   if (
     isAuthBypassEnabled() &&
+    allowBypassRole &&
     searchParams?.bypass === allowBypassRole &&
     canUseBypass(allowBypassRole, requiredRole)
   ) {
-    const bypassRole = allowBypassRole as AppRole;
+    return getBypassContext(allowBypassRole);
+  }
 
-    return {
-      clubId: null,
-      displayName: bypassRole === "admin" ? "Admin ทดลอง" : "สมาชิกทดลอง",
-      email: null,
-      isBypass: true,
-      isProfileComplete: true,
-      role: bypassRole,
-      userId: null,
-    } satisfies AccessContext;
+  if (!hasSupabasePublicConfig()) {
+    if (allowBypassRole && canUseBypass(allowBypassRole, requiredRole)) {
+      return getBypassContext(allowBypassRole);
+    }
+
+    redirect(`/login?next=${encodeURIComponent(nextPath)}&error=missing-config`);
   }
 
   const context = await getAuthenticatedContext(requiredRole);

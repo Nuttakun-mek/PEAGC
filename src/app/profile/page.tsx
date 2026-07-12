@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft, Save, ShieldAlert } from "lucide-react";
 
 import { savePersonalProfile } from "@/app/profile/actions";
+import { SubmitButton } from "@/components/submit-button";
 import { resolveAccess } from "@/lib/auth/access";
 import { createClient } from "@/lib/supabase/server";
 
@@ -10,11 +11,13 @@ type ProfilePageProps = {
 };
 
 const statusMessages: Record<string, string> = {
+  "account-created": "สร้างบัญชีสำเร็จแล้ว กรุณากรอกข้อมูลสมาชิกให้ครบ",
   "member-failed": "บันทึกข้อมูลสมาชิกไม่สำเร็จ",
-  "missing-required": "กรุณากรอกชื่อจริง ชื่อแสดงผล เบอร์โทร รหัสพนักงาน หน่วยงาน และสังกัด",
-  "no-club": "ยังไม่มีชมรม active ให้ผูกข้อมูลสมาชิก",
-  "pending-review": "ส่งข้อมูลแล้ว กรุณารอ Admin ตรวจสอบและอนุมัติสมาชิก",
-  "profile-failed": "บันทึกข้อมูลโปรไฟล์ไม่สำเร็จ",
+  "member-code-failed": "สร้างเลขสมาชิกไม่สำเร็จ กรุณาลองอีกครั้ง",
+  "missing-required": "กรุณากรอกชื่อแสดงผล ชื่อ-นามสกุล เบอร์โทร และรหัสพนักงาน",
+  "no-club": "ยังไม่มีชมรมที่เปิดใช้งานสำหรับผูกข้อมูลสมาชิก",
+  "pending-review": "ส่งข้อมูลแล้ว กรุณารอผู้ดูแลตรวจสอบและอนุมัติสมาชิก",
+  "profile-failed": "บันทึกประวัติสมาชิกไม่สำเร็จ",
 };
 
 export default async function ProfilePage({ searchParams }: ProfilePageProps) {
@@ -36,7 +39,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
         supabase
           .from("members")
           .select(
-            "avatar_url, full_name, nickname, phone, employee_code, department, affiliation, organization, handicap, skill_level, status",
+            "avatar_url, title_prefix, first_name, last_name, full_name, nickname, phone, employee_code, position, work_line, bureau, division, department, section, affiliation, organization, handicap, skill_level, status, employee_match_status",
           )
           .eq("user_id", access.userId)
           .maybeSingle(),
@@ -48,7 +51,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
       <section className="mx-auto w-full max-w-4xl golf-visual rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
         <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">Member Profile</p>
+            <p className="text-sm font-semibold text-[#8b5b7a]">ประวัติสมาชิก</p>
             <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
               ข้อมูลส่วนตัวสำหรับสมัครสมาชิก
             </h1>
@@ -67,7 +70,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           "avatar-upload-failed": "อัปโหลดรูปโปรไฟล์ไม่สำเร็จ",
           "invalid-avatar-type": "รองรับเฉพาะรูป JPG, PNG หรือ WebP",
         }[params.status]) ? (
-          <div className="mt-5 rounded-md bg-[#fdecec] px-4 py-3 text-sm font-medium text-[#8a1f11]">
+          <div className={`mt-5 rounded-md px-4 py-3 text-sm font-medium ${params.status === "account-created" ? "bg-[#f8edf4] text-[#722257]" : "bg-[#fdecec] text-[#8a1f11]"}`}>
             {statusMessages[params.status] || {
               "avatar-too-large": "รูปโปรไฟล์ต้องมีขนาดไม่เกิน 5MB",
               "avatar-upload-failed": "อัปโหลดรูปโปรไฟล์ไม่สำเร็จ",
@@ -79,13 +82,13 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
         {access.isBypass ? (
           <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-            <span>โหมดทดลองไม่บันทึกข้อมูล กรุณาเข้าสู่ระบบจริงเพื่อบันทึกโปรไฟล์</span>
+            <span>โหมดทดลองไม่บันทึกข้อมูล กรุณาเข้าสู่ระบบจริงเพื่อบันทึกประวัติสมาชิก</span>
           </div>
         ) : (
           <div className="mt-5 flex items-start gap-3 rounded-md bg-[#f8edf4] px-4 py-3 text-sm text-[#722257]">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <span>
-              หลังบันทึกข้อมูล สถานะจะเป็นรอ Admin ตรวจสอบกับฐานข้อมูลพนักงานก่อนอนุมัติเป็นสมาชิก
+              กรอกรหัสพนักงานและชื่อให้ตรงกับฐานพนักงาน ระบบจะเติมตำแหน่งและหน่วยงานให้อัตโนมัติ
             </span>
           </div>
         )}
@@ -96,7 +99,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               {member?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  alt="Member avatar"
+                  alt="รูปประจำตัวสมาชิก"
                   className="size-full object-cover"
                   src={member.avatar_url}
                 />
@@ -140,7 +143,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             </label>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2">
             <label className="block">
               <span className="text-sm font-semibold text-[#3f3a48]">ชื่อเล่น</span>
               <input
@@ -161,7 +164,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-[#3f3a48]">Line ID</span>
+              <span className="text-sm font-semibold text-[#3f3a48]">ไอดีไลน์</span>
               <input
                 className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
                 defaultValue={profile?.line_id ?? ""}
@@ -182,27 +185,33 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                 required
               />
             </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-[#3f3a48]">หน่วยงาน</span>
-              <input
-                className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
-                defaultValue={member?.department ?? ""}
-                disabled={access.isBypass}
-                name="department"
-                required
-              />
-            </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-[#3f3a48]">สังกัด</span>
-              <input
-                className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
-                defaultValue={member?.affiliation ?? ""}
-                disabled={access.isBypass}
-                name="affiliation"
-                required
-              />
-            </label>
+            <div className="rounded-md border border-[#e6e2ee] bg-[#f8edf4] px-4 py-3 text-sm text-[#722257]">
+              <p className="font-semibold">ข้อมูลหน่วยงาน</p>
+              <p className="mt-1 leading-6">ระบบจะดึงจากฐานข้อมูลพนักงานหลังบันทึก</p>
+            </div>
           </div>
+
+          {member?.employee_match_status === "matched" ? (
+            <div className="rounded-lg border border-[#e6e2ee] bg-white/70 p-4">
+              <p className="text-sm font-semibold text-[#722257]">ข้อมูลจากฐานพนักงาน</p>
+              <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                {[
+                  ["ชื่อ", [member.title_prefix, member.first_name, member.last_name].filter(Boolean).join(" ")],
+                  ["ตำแหน่ง", member.position],
+                  ["สายงาน", member.work_line],
+                  ["สำนัก", member.bureau],
+                  ["ฝ่าย", member.division],
+                  ["กอง", member.department],
+                  ["แผนก", member.section],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <dt className="text-[#6b6475]">{label}</dt>
+                    <dd className="mt-1 font-semibold text-[#3f3a48]">{value || "-"}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ) : null}
 
           <div className="grid gap-4 md:grid-cols-3">
             <label className="block md:col-span-2">
@@ -215,7 +224,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               />
             </label>
             <label className="block">
-              <span className="text-sm font-semibold text-[#3f3a48]">Handicap</span>
+              <span className="text-sm font-semibold text-[#3f3a48]">แต้มต่อ</span>
               <input
                 className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
                 defaultValue={member?.handicap ?? ""}
@@ -236,20 +245,20 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               name="skillLevel"
             >
               <option value="">ยังไม่ระบุ</option>
-              <option value="beginner">Beginner</option>
-              <option value="intermediate">Intermediate</option>
-              <option value="advanced">Advanced</option>
+              <option value="beginner">เริ่มต้น</option>
+              <option value="intermediate">ปานกลาง</option>
+              <option value="advanced">ชำนาญ</option>
             </select>
           </label>
 
-          <button
+          <SubmitButton
             className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white shadow-[0_18px_45px_rgba(114,34,87,0.08)] transition enabled:hover:bg-[#8b2d6b] disabled:cursor-not-allowed disabled:bg-[#9a94a6]"
             disabled={access.isBypass}
-            type="submit"
+            pendingText="กำลังตรวจสอบข้อมูล..."
           >
             <Save className="size-4" aria-hidden="true" />
-            บันทึกและไปหน้าสมาชิก
-          </button>
+            ตรวจสอบและบันทึกข้อมูล
+          </SubmitButton>
         </form>
       </section>
     </main>

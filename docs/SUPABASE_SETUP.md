@@ -55,7 +55,7 @@ The app includes a Google login button powered by Supabase OAuth.
 
 Current project ref: `dlaeluakeqcbizvmosdg`
 
-The local app uses `NEXT_PUBLIC_APP_URL=http://localhost:6001` as the canonical OAuth return origin. Open the app with [http://localhost:6001](http://localhost:6001) when testing Google auth, even if `127.0.0.1:6001` also loads the page.
+The local app uses `NEXT_PUBLIC_APP_URL=http://localhost:3555` as the canonical OAuth return origin. Open the app with [http://localhost:3555](http://localhost:3555) when testing Google auth, even if `127.0.0.1:3555` also loads the page.
 
 Required Supabase settings:
 
@@ -74,7 +74,7 @@ Required Google Auth Platform settings:
 2. Add Authorized JavaScript origins:
 
 ```text
-http://localhost:6001
+http://localhost:3555
 https://dlaeluakeqcbizvmosdg.supabase.co
 ```
 
@@ -89,17 +89,17 @@ Required Supabase URL Configuration:
 1. Set Site URL:
 
 ```text
-http://localhost:6001
+http://localhost:3555
 ```
 
 2. Add Redirect URLs:
 
 ```text
-http://localhost:6001/auth/confirm
-http://localhost:6001/auth/confirm?next=/profile
-http://localhost:6001/auth/confirm?next=/auth/complete
-http://localhost:6001/auth/complete
-http://localhost:6001/**
+http://localhost:3555/auth/confirm
+http://localhost:3555/auth/confirm?next=/profile
+http://localhost:3555/auth/confirm?next=/auth/complete
+http://localhost:3555/auth/complete
+http://localhost:3555/**
 ```
 
 For production, add the deployed HTTPS domain as Site URL/Redirect URL and as a Google Authorized JavaScript origin before disabling `AUTH_BYPASS_ENABLED`.

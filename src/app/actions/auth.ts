@@ -1,8 +1,8 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
+import { hasSupabasePublicConfig, isGoogleAuthEnabled } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 function getSafeRedirectPath(value: FormDataEntryValue | null) {
@@ -13,48 +13,85 @@ function getSafeRedirectPath(value: FormDataEntryValue | null) {
   return value;
 }
 
-async function getAuthRedirectOrigin() {
-  const configuredUrl = process.env.NEXT_PUBLIC_APP_URL;
-
-  if (configuredUrl) {
-    return configuredUrl.replace(/\/$/, "");
-  }
-
-  const requestHeaders = await headers();
-
-  return requestHeaders.get("origin") ?? "http://localhost:6001";
+function getAppOrigin() {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3555").replace(/\/$/, "");
 }
 
-export async function signInWithEmail(formData: FormData) {
-  const email = String(formData.get("email") ?? "")
-    .trim()
-    .toLowerCase();
-  const next = getSafeRedirectPath(formData.get("next"));
+export async function signUpWithPassword(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const confirmPassword = String(formData.get("confirmPassword") ?? "");
 
-  if (!email || !email.includes("@")) {
-    redirect(`/login?error=invalid-email&next=${encodeURIComponent(next)}`);
+  if (!email.includes("@")) {
+    redirect("/login?mode=signup&error=invalid-email");
   }
 
-  const origin = await getAuthRedirectOrigin();
-  const supabase = await createClient();
+  if (password.length < 8) {
+    redirect("/login?mode=signup&error=weak-password");
+  }
 
-  const { error } = await supabase.auth.signInWithOtp({
+  if (password !== confirmPassword) {
+    redirect("/login?mode=signup&error=password-mismatch");
+  }
+
+  if (!hasSupabasePublicConfig()) {
+    redirect("/login?mode=signup&error=missing-config");
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signUp({
     email,
+    password,
     options: {
-      emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(next)}`,
+      emailRedirectTo: `${getAppOrigin()}/auth/confirm?next=/profile`,
     },
   });
 
-  if (error) {
-    redirect(`/login?error=send-failed&next=${encodeURIComponent(next)}`);
+  if (error || !data.user) {
+    const reason = error?.message.toLowerCase().includes("already")
+      ? "email-in-use"
+      : "signup-failed";
+    redirect(`/login?mode=signup&error=${reason}`);
   }
 
-  redirect(`/login?sent=1&next=${encodeURIComponent(next)}`);
+  if (!data.session) {
+    redirect("/login?mode=signin&registered=1");
+  }
+
+  redirect("/profile?status=account-created");
+}
+
+export async function signInWithPassword(formData: FormData) {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const next = getSafeRedirectPath(formData.get("next"));
+
+  if (!email.includes("@") || password.length < 8) {
+    redirect(`/login?error=invalid-credentials&next=${encodeURIComponent(next)}`);
+  }
+
+  if (!hasSupabasePublicConfig()) {
+    redirect(`/login?error=missing-config&next=${encodeURIComponent(next)}`);
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    redirect(`/login?error=invalid-credentials&next=${encodeURIComponent(next)}`);
+  }
+
+  redirect(next);
 }
 
 export async function signInWithGoogle(formData: FormData) {
   const next = getSafeRedirectPath(formData.get("next"));
-  const origin = await getAuthRedirectOrigin();
+
+  if (!hasSupabasePublicConfig() || !isGoogleAuthEnabled()) {
+    redirect(`/login?error=missing-config&next=${encodeURIComponent(next)}`);
+  }
+
+  const origin = getAppOrigin();
   const supabase = await createClient();
 
   const { data, error } = await supabase.auth.signInWithOAuth({

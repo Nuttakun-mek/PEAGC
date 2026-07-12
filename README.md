@@ -40,7 +40,7 @@ Run the development server:
 npm run dev
 ```
 
-Open [http://localhost:6001](http://localhost:6001).
+Open [http://localhost:3555](http://localhost:3555).
 
 ## Project Files
 

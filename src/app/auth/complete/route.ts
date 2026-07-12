@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     roles?.some((item) => adminRoles.includes(item.role_key)),
   );
 
-  if (hasAdminRole && !member) {
+  if (hasAdminRole) {
     return NextResponse.redirect(new URL("/admin", requestUrl.origin));
   }
 

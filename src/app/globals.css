@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f7f6fb;
+  --background: #f2f5f8;
   --foreground: #2f3137;
   --peagc-purple: #722257;
   --peagc-purple-soft: #f8edf4;
@@ -12,8 +12,8 @@
   --peagc-electric-blue: #00a3ff;
   --peagc-light-gray: #f4f6fa;
   --peagc-dark-gray: #2f3137;
-  --peagc-border: #e6e2ee;
-  --peagc-border-strong: #d9d3e6;
+  --peagc-border: #e2e8ef;
+  --peagc-border-strong: #d4dce6;
   --peagc-muted: #6b6475;
   --peagc-card: rgba(255, 255, 255, 0.94);
 }
@@ -52,11 +52,7 @@ body::before {
   z-index: -1;
   pointer-events: none;
   content: "";
-  background:
-    radial-gradient(circle at 82% 12%, rgba(198, 146, 20, 0.18), transparent 18rem),
-    radial-gradient(circle at 12% 20%, rgba(114, 34, 87, 0.12), transparent 22rem),
-    radial-gradient(circle at 90% 78%, rgba(0, 163, 255, 0.12), transparent 20rem),
-    linear-gradient(135deg, rgba(114, 34, 87, 0.07), rgba(255, 255, 255, 0.78) 42%, rgba(244, 246, 250, 0.9));
+  background: linear-gradient(145deg, rgba(114, 34, 87, 0.025), transparent 38%, rgba(33, 118, 174, 0.035));
 }
 
 body::after {
@@ -66,10 +62,41 @@ body::after {
   height: 42vh;
   pointer-events: none;
   content: "";
-  opacity: 0.42;
+  display: none;
+}
+
+input,
+select,
+textarea {
+  box-shadow: 0 1px 2px rgba(30, 41, 59, 0.025);
+}
+
+[class*="bg-white/95"] {
+  box-shadow: 0 1px 2px rgba(30, 41, 59, 0.04), 0 8px 24px rgba(30, 41, 59, 0.045) !important;
+}
+
+.app-topbar {
+  background: rgba(255, 255, 255, 0.9);
+  border-bottom: 1px solid var(--peagc-border);
+  backdrop-filter: blur(14px);
+}
+
+.login-visual {
   background:
-    radial-gradient(ellipse at 50% 100%, rgba(198, 146, 20, 0.18), transparent 32%),
-    repeating-radial-gradient(ellipse at 50% 105%, rgba(114, 34, 87, 0.08) 0 1px, transparent 1px 22px);
+    linear-gradient(135deg, rgba(70, 16, 52, 0.95), rgba(114, 34, 87, 0.91) 52%, rgba(36, 79, 108, 0.9)),
+    radial-gradient(circle at 80% 24%, rgba(198, 146, 20, 0.5), transparent 24rem);
+}
+
+.login-visual::after {
+  position: absolute;
+  inset: auto -10% -18% 12%;
+  height: 56%;
+  content: "";
+  border-radius: 50% 50% 0 0;
+  background:
+    radial-gradient(circle at 72% 26%, #fff 0 0.45rem, transparent 0.5rem),
+    repeating-radial-gradient(ellipse at 50% 100%, rgba(255,255,255,.16) 0 1px, transparent 1px 24px),
+    linear-gradient(160deg, rgba(198,146,20,.34), rgba(255,255,255,.04));
 }
 
 button {
