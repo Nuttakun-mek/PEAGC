@@ -13,6 +13,10 @@ function getSafeRedirectPath(value: FormDataEntryValue | null) {
   return value;
 }
 
+function getAppOrigin() {
+  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3555").replace(/\/$/, "");
+}
+
 export async function signUpWithPassword(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
@@ -35,7 +39,13 @@ export async function signUpWithPassword(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      emailRedirectTo: `${getAppOrigin()}/auth/confirm?next=/profile`,
+    },
+  });
 
   if (error || !data.user) {
     const reason = error?.message.toLowerCase().includes("already")
@@ -81,7 +91,7 @@ export async function signInWithGoogle(formData: FormData) {
     redirect(`/login?error=missing-config&next=${encodeURIComponent(next)}`);
   }
 
-  const origin = (process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3555").replace(/\/$/, "");
+  const origin = getAppOrigin();
   const supabase = await createClient();
 
   const { data, error } = await supabase.auth.signInWithOAuth({
