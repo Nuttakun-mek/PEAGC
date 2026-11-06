@@ -102,11 +102,11 @@ function getMembershipClass(status: string | null | undefined) {
 }
 
 const statusMessages: Record<string, string> = {
-  "create-failed": "เพิ่มข้อมูลพนักงานไม่สำเร็จ กรุณาตรวจรหัสพนักงานซ้ำ",
-  created: "เพิ่มข้อมูลพนักงานเรียบร้อยแล้ว",
-  "missing-required": "กรุณากรอกรหัสพนักงานและชื่อ-นามสกุล",
-  "update-failed": "แก้ไขข้อมูลพนักงานไม่สำเร็จ",
-  updated: "แก้ไขข้อมูลพนักงานเรียบร้อยแล้ว",
+  "create-failed": "เพิ่มไม่สำเร็จ รหัสพนักงานอาจซ้ำ",
+  created: "เพิ่มรายชื่อแล้ว",
+  "missing-required": "กรอกรหัสพนักงานและชื่อ-นามสกุล",
+  "update-failed": "แก้ไขไม่สำเร็จ",
+  updated: "บันทึกแล้ว",
 };
 
 function EmployeeForm({
@@ -325,7 +325,7 @@ function EmployeeForm({
         type="submit"
       >
         <BadgeCheck className="size-4" aria-hidden="true" />
-        {employee ? "บันทึกข้อมูลพนักงาน" : "เพิ่มข้อมูลพนักงาน"}
+        {employee ? "บันทึก" : "เพิ่มรายชื่อ"}
       </button>
     </form>
   );
@@ -416,16 +416,16 @@ export default async function AdminEmployeesPage({
         "import-empty": "ไม่พบข้อมูลพนักงานในไฟล์ที่อัปโหลด",
         "import-failed": "นำเข้าฐานข้อมูลพนักงานไม่สำเร็จ",
         "import-missing-employee-code": "ไฟล์ต้องมีคอลัมน์ รหัสพนักงาน",
-        "import-finalize-failed": "นำเข้าแล้ว แต่ปรับสถานะคนที่หายจากไฟล์ไม่สำเร็จ กรุณาลองอีกครั้ง",
-        "import-missing-file": "กรุณาเลือกไฟล์ Excel (.xlsx) หรือ CSV",
+        "import-finalize-failed": "นำเข้าแล้ว แต่อัปเดตสถานะคนที่หายไปไม่สำเร็จ",
+        "import-missing-file": "เลือกไฟล์ Excel หรือ CSV",
         "import-too-large": "ไฟล์ใหญ่เกิน 15 MB",
-        "import-unreadable": "อ่านไฟล์ไม่ได้ กรุณาตรวจว่าเป็น Excel (.xlsx) หรือ CSV ที่ไม่เสียหาย",
-        imported: "นำเข้าฐานข้อมูลเรียบร้อยแล้ว",
+        "import-unreadable": "อ่านไฟล์ไม่ได้ ตรวจสอบว่าเป็น Excel หรือ CSV",
+        imported: "นำเข้าแล้ว",
       }[params.status] ??
       (params.status.startsWith("imported:")
         ? (() => {
             const [, imported, skipped, deactivated, flagged] = params.status.split(":");
-            return `นำเข้า ${imported} รายชื่อแล้ว${Number(skipped) ? ` · ข้าม ${skipped} แถวที่ไม่มีรหัส/ชื่อ` : ""}${Number(deactivated) ? ` · ตั้งเป็นพ้นสภาพ ${deactivated} คนที่ไม่อยู่ในไฟล์` : ""}${Number(flagged) ? ` · มีสมาชิกที่ต้องตรวจ ${flagged} คน` : ""}`;
+            return `นำเข้า ${imported} รายชื่อ${Number(skipped) ? ` · ข้าม ${skipped} แถว` : ""}${Number(deactivated) ? ` · พ้นสภาพ ${deactivated}` : ""}${Number(flagged) ? ` · ต้องตรวจสอบ ${flagged}` : ""}`;
           })()
         : null)
     : null;
@@ -441,7 +441,7 @@ export default async function AdminEmployeesPage({
               ฐานข้อมูลสมาชิกสมาคม
             </h1>
             <p className="mt-2 text-sm text-[#6b6475]">
-              รายชื่อสมาชิกสมาคมใหญ่ที่อัปเดตทุกเดือน ใช้ตรวจสอบรหัสพนักงาน ชื่อ และสถานะตอนสมัครสมาชิกชมรม
+              รายชื่อจากสมาคม อัปเดตทุกเดือน ใช้ตรวจสอบผู้สมัครสมาชิก
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -477,7 +477,7 @@ export default async function AdminEmployeesPage({
           <div className="mt-5 flex items-start gap-3 rounded-md border border-[#d7a52c] bg-[#fff9ed] px-4 py-3 text-sm text-[#805300]">
             <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
             <span>
-              ฐานข้อมูลสมาชิกสมาคม{lastImport ? ` อัปเดตล่าสุด ${formatBangkokDateTime(lastImport.imported_at)} (เกิน 31 วัน)` : "ยังไม่เคยนำเข้า"} กรุณาอัปโหลดไฟล์รายชื่อประจำเดือนนี้ เพื่อให้การตรวจสอบผู้สมัครถูกต้อง
+              {lastImport ? `อัปเดตล่าสุด ${formatBangkokDateTime(lastImport.imported_at)} เกิน 31 วันแล้ว` : "ยังไม่เคยนำเข้ารายชื่อ"} อัปโหลดไฟล์ของเดือนนี้เพื่อให้การตรวจสอบผู้สมัครถูกต้อง
             </span>
           </div>
         ) : null}
@@ -486,7 +486,7 @@ export default async function AdminEmployeesPage({
           {[
             { label: "รายชื่อที่แสดง", value: String(employees.length) },
             { label: "สมาชิกสมาคมปัจจุบัน", value: String(totalActiveMembers) },
-            { label: "ปฏิบัติงาน (ในผลค้นหา)", value: String(activeCount) },
+            { label: "ปฏิบัติงาน", value: String(activeCount) },
             { label: "อัปเดตล่าสุด", value: lastImport ? formatBangkokDateTime(lastImport.imported_at) : "ยังไม่เคยนำเข้า" },
           ].map((item) => (
             <article
@@ -506,13 +506,13 @@ export default async function AdminEmployeesPage({
             <div className="flex items-center gap-2">
               <Upload className="size-4 text-[#722257]" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-[#722257]">
-                อัปโหลดรายชื่อสมาชิกสมาคมประจำเดือน
+                อัปโหลดรายชื่อประจำเดือน
               </h2>
             </div>
             <div className="grid gap-3 rounded-md bg-[#fbf9fc] p-4 text-sm text-[#3f3a48] md:grid-cols-[1fr_auto]">
               <div>
-                <p className="font-semibold">ไฟล์ Excel (.xlsx) หรือ CSV ใช้แถวแรกเป็นหัวคอลัมน์</p>
-                <p className="mt-1 text-[#6b6475]">คอลัมน์ที่ระบบรู้จัก: <b>รหัสพนักงาน</b> (บังคับ), ชื่อ, สกุล หรือ ชื่อ-นามสกุล, <b>สถานะ</b> (ปกติ/พ้นสภาพ/ระงับ), <b>ประเภท</b>, <b>รหัสสมาชิกสมาคมสโมสร</b> และ อีเมล/ตำแหน่ง/สายงาน/สำนัก/ฝ่าย/กอง/แผนก ถ้ามี</p>
+                <p className="font-semibold">Excel (.xlsx) หรือ CSV แถวแรกเป็นหัวคอลัมน์</p>
+                <p className="mt-1 text-[#6b6475]">คอลัมน์: <b>รหัสพนักงาน</b> (จำเป็น), ชื่อ, สกุล, <b>สถานะ</b>, <b>ประเภท</b>, <b>รหัสสมาชิกสมาคมสโมสร</b> และคอลัมน์อื่นถ้ามี เช่น อีเมล ตำแหน่ง สายงาน</p>
               </div>
               {lastImport ? (
                 <div className="text-xs text-[#6b6475] md:text-right">
@@ -542,8 +542,8 @@ export default async function AdminEmployeesPage({
             <label className="flex items-start gap-3 rounded-md border border-[#e6e2ee] bg-white/70 px-3 py-3 text-sm text-[#3f3a48]">
               <input className="mt-0.5 size-4 accent-[#722257]" defaultChecked disabled={access.isBypass} name="replaceMode" type="checkbox" />
               <span>
-                <span className="font-semibold">ไฟล์นี้คือรายชื่อสมาชิกทั้งหมดของเดือนนี้</span>
-                <span className="block text-xs text-[#6b6475]">รายชื่อที่ไม่อยู่ในไฟล์จะถูกตั้งเป็น &quot;พ้นสภาพสมาชิก&quot; และสมาชิกชมรมที่เคยอนุมัติแล้วแต่หายไปจะถูกแจ้งให้ผู้ดูแลตรวจในหน้าจัดการสมาชิก (ไม่ปิดบัญชีอัตโนมัติ) ยกเลิกติ๊กถ้าต้องการเพิ่ม/แก้บางรายชื่อเท่านั้น</span>
+                <span className="font-semibold">ไฟล์นี้คือรายชื่อทั้งหมดของเดือนนี้</span>
+                <span className="block text-xs text-[#6b6475]">คนที่ไม่อยู่ในไฟล์จะถูกตั้งเป็นพ้นสภาพ และสมาชิกชมรมที่หายไปจะถูกแจ้งให้ตรวจสอบ ไม่ปิดบัญชีอัตโนมัติ</span>
               </span>
             </label>
           </form>
@@ -553,7 +553,7 @@ export default async function AdminEmployeesPage({
           <EmployeeForm
             action={createEmployee}
             disabled={access.isBypass}
-            title="เพิ่มข้อมูลพนักงาน"
+            title="เพิ่มรายชื่อ"
           />
         </section>
 

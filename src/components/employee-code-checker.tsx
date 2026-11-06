@@ -11,7 +11,7 @@ const membershipLabel: Record<string, string> = {
   active: "สมาชิกสมาคมปัจจุบัน",
   inactive: "พ้นสภาพสมาชิกสมาคม",
   suspended: "พักสิทธิ์สมาชิกสมาคม",
-  unknown: "สถานะสมาชิกไม่ชัดเจน",
+  unknown: "ไม่ระบุสถานะสมาชิก",
 };
 
 /**
@@ -56,10 +56,10 @@ export function EmployeeCodeChecker({
   let feedback: React.ReactNode = null;
   if (effective.kind === "loading") {
     feedback = (
-      <p className="flex items-center gap-2 text-xs text-[#6b6475]"><Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> กำลังตรวจกับฐานสมาชิกสมาคม...</p>
+      <p className="flex items-center gap-2 text-xs text-[#6b6475]"><Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> กำลังตรวจสอบ...</p>
     );
   } else if (effective.kind === "error") {
-    feedback = <p className="flex items-center gap-2 text-xs text-[#805300]"><CircleDashed className="size-3.5" aria-hidden="true" /> ตรวจอัตโนมัติไม่ได้ในขณะนี้ ระบบจะตรวจอีกครั้งเมื่อบันทึก</p>;
+    feedback = <p className="flex items-center gap-2 text-xs text-[#805300]"><CircleDashed className="size-3.5" aria-hidden="true" /> ตรวจสอบอัตโนมัติไม่ได้ในขณะนี้ จะตรวจอีกครั้งเมื่อบันทึก</p>;
   } else if (effective.kind === "done" && effective.result.found) {
     const active = effective.result.membershipStatus === "active";
     feedback = (
@@ -69,7 +69,7 @@ export function EmployeeCodeChecker({
           พบข้อมูล <b>{effective.result.maskedName}</b>
           {effective.result.unit ? ` · ${effective.result.unit}` : ""}
           {effective.result.memberType ? ` · ประเภท ${effective.result.memberType}` : ""}
-          <span className="block">{membershipLabel[effective.result.membershipStatus] ?? effective.result.membershipStatus}{active ? " ชื่อ-นามสกุลที่กรอกต้องตรงกับฐานข้อมูลจึงจะอนุมัติอัตโนมัติ" : " สมัครได้แต่ต้องรอผู้ดูแลตรวจสอบ"}</span>
+          <span className="block">{membershipLabel[effective.result.membershipStatus] ?? effective.result.membershipStatus}{active ? "" : " · สมัครได้ แต่รอผู้ดูแลตรวจสอบ"}</span>
         </span>
       </div>
     );
@@ -78,7 +78,7 @@ export function EmployeeCodeChecker({
       <div className="flex items-start gap-2 rounded-md bg-[#fff9ed] px-3 py-2 text-xs text-[#805300]">
         <SearchX className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <span>
-          ไม่พบรหัสนี้ในฐานสมาชิกสมาคมเดือนล่าสุด ตรวจรหัสอีกครั้ง หรือสมัครต่อได้แล้วรอผู้ดูแลตรวจสอบ
+          ไม่พบรหัสนี้ในฐานสมาชิกสมาคม ตรวจสอบรหัสอีกครั้ง หรือสมัครต่อแล้วรอผู้ดูแลตรวจสอบ
         </span>
       </div>
     );

@@ -13,15 +13,15 @@ type ProfilePageProps = {
 };
 
 const statusMessages: Record<string, string> = {
-  "account-created": "สร้างบัญชีสำเร็จแล้ว กรอกข้อมูลสมาชิกให้ครบเพื่อเปิดใช้งาน",
+  "account-created": "สร้างบัญชีแล้ว กรอกข้อมูลสมาชิกต่อได้เลย",
   "avatar-too-large": "รูปโปรไฟล์ต้องมีขนาดไม่เกิน 5MB",
   "avatar-upload-failed": "อัปโหลดรูปโปรไฟล์ไม่สำเร็จ",
   "invalid-avatar-type": "รองรับเฉพาะรูป JPG, PNG หรือ WebP",
-  "member-code-failed": "สร้างเลขสมาชิกไม่สำเร็จ กรุณาลองอีกครั้ง",
+  "member-code-failed": "ออกเลขสมาชิกไม่สำเร็จ ลองอีกครั้ง",
   "member-failed": "บันทึกข้อมูลสมาชิกไม่สำเร็จ",
-  "missing-required": "กรุณากรอกชื่อแสดงผล ชื่อ-นามสกุล เบอร์โทร และรหัสพนักงาน",
-  "no-club": "ยังไม่มีชมรมที่เปิดใช้งานสำหรับผูกข้อมูลสมาชิก",
-  "pending-review": "ส่งข้อมูลแล้ว กรุณารอผู้ดูแลตรวจสอบและอนุมัติสมาชิก",
+  "missing-required": "กรอกข้อมูลที่มีเครื่องหมาย * ให้ครบ",
+  "no-club": "ยังไม่มีชมรมที่เปิดใช้งาน",
+  "pending-review": "ส่งข้อมูลแล้ว รอผู้ดูแลตรวจสอบ",
   "profile-failed": "บันทึกประวัติสมาชิกไม่สำเร็จ",
 };
 
@@ -88,9 +88,9 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
   const isFirstTime = !member;
   const isActive = member?.status === "active";
   const steps = [
-    { done: true, label: "สร้างบัญชี" },
-    { current: !isActive, done: Boolean(member), label: "กรอกประวัติ" },
-    { current: member?.status === "pending_verification", done: isActive, label: "ตรวจสอบกับฐานสมาคม" },
+    { done: true, label: "บัญชี" },
+    { current: !isActive, done: Boolean(member), label: "ประวัติ" },
+    { current: member?.status === "pending_verification", done: isActive, label: "ยืนยันตัวตน" },
     { done: isActive, label: "พร้อมใช้งาน" },
   ];
   const backHref = access.isBypass ? "/member?bypass=member" : "/member";
@@ -100,14 +100,14 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
       <div className="mx-auto w-full max-w-4xl">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">ระบบสมาชิก PEAGC</p>
+            <p className="text-sm font-semibold text-[#8b5b7a]">PEA Golf Club</p>
             <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
-              {isFirstTime ? "สมัครสมาชิกชมรม" : "ประวัติสมาชิก"}
+              {isFirstTime ? "สมัครสมาชิก" : "ข้อมูลสมาชิก"}
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-[#6b6475]">
               {isFirstTime
-                ? "ใช้เวลาประมาณ 2 นาที ระบบจะตรวจรหัสพนักงานกับฐานสมาชิกสมาคมอัตโนมัติ ถ้าตรงกันบัญชีจะพร้อมใช้ทันที"
-                : "แก้ไขข้อมูลติดต่อและข้อมูลกอล์ฟได้ตลอด ส่วนข้อมูลหน่วยงานดึงจากฐานสมาชิกสมาคม"}
+                ? "กรอกข้อมูลให้ครบ ระบบจะตรวจสอบกับฐานสมาชิกสมาคมให้อัตโนมัติ"
+                : "แก้ไขข้อมูลติดต่อและข้อมูลกอล์ฟได้ตลอดเวลา"}
             </p>
           </div>
           <Link
@@ -146,13 +146,13 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
         {access.isBypass ? (
           <StatusBanner className="mt-5" tone="warning">โหมดทดลองไม่บันทึกข้อมูล กรุณาเข้าสู่ระบบจริงเพื่อบันทึกประวัติ</StatusBanner>
         ) : member?.status === "pending_verification" ? (
-          <StatusBanner className="mt-5" title="รอผู้ดูแลตรวจสอบ" tone="warning">
-            รหัสพนักงานหรือชื่อยังไม่ตรงกับฐานสมาชิกสมาคม ตรวจแก้ข้อมูลด้านล่างแล้วบันทึกอีกครั้ง หรือรอผู้ดูแลยืนยัน
+          <StatusBanner className="mt-5" title="รอการตรวจสอบ" tone="warning">
+            ข้อมูลยังไม่ตรงกับฐานสมาชิกสมาคม ตรวจสอบรหัสพนักงานและชื่อ หรือรอผู้ดูแลยืนยัน
           </StatusBanner>
         ) : null}
 
         <form action={savePersonalProfile} className="mt-6 grid gap-5">
-          <Section description="ชื่อที่จะแสดงในชมรม และช่องทางที่ผู้ดูแลติดต่อกลับได้" icon={UserRound} step={1} title="ข้อมูลส่วนตัวและการติดต่อ">
+          <Section description="ชื่อที่แสดงและช่องทางติดต่อ" icon={UserRound} step={1} title="ข้อมูลติดต่อ">
             <div className="grid gap-4 rounded-lg border border-dashed border-[#d9d3e6] bg-[#fbf9fc] p-4 sm:grid-cols-[96px_1fr] sm:items-center">
               <div className="flex size-24 items-center justify-center overflow-hidden rounded-xl bg-[#f8edf4] text-sm font-semibold text-[#722257] ring-4 ring-white">
                 {member?.avatar_url ? (
@@ -171,7 +171,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                   name="avatar"
                   type="file"
                 />
-                <p className="mt-2 text-xs text-[#6b6475]">ไม่บังคับ · JPG, PNG, WebP ไม่เกิน 5MB · ใช้แสดงบนบัตรสมาชิกและรายชื่อก๊วน</p>
+                <p className="mt-2 text-xs text-[#6b6475]">JPG, PNG หรือ WebP ไม่เกิน 5MB</p>
               </label>
             </div>
 
@@ -182,7 +182,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-[#3f3a48]">ชื่อเล่น</span>
-                <input className={inputClass} defaultValue={member?.nickname ?? ""} disabled={access.isBypass} name="nickname" placeholder="ใช้เรียกในก๊วน" />
+                <input className={inputClass} defaultValue={member?.nickname ?? ""} disabled={access.isBypass} name="nickname" placeholder="" />
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-[#3f3a48]">เบอร์โทรศัพท์มือถือ <span className="text-[#a33a46]">*</span></span>
@@ -190,28 +190,28 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-[#3f3a48]">LINE ID</span>
-                <input autoCapitalize="off" className={inputClass} defaultValue={profile?.line_id ?? ""} disabled={access.isBypass} name="lineId" placeholder="สำหรับแจ้งเตือนกิจกรรม" />
+                <input autoCapitalize="off" className={inputClass} defaultValue={profile?.line_id ?? ""} disabled={access.isBypass} name="lineId" placeholder="" />
               </label>
             </div>
           </Section>
 
-          <Section description="ระบบตรวจรหัสพนักงานและชื่อกับฐานสมาชิกสมาคมที่ผู้ดูแลอัปเดตทุกเดือน" icon={IdCard} step={2} title="ยืนยันตัวตนกับฐานสมาชิกสมาคม">
+          <Section description="ตรวจสอบกับฐานสมาชิกสมาคม" icon={IdCard} step={2} title="ยืนยันตัวตน">
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
                 <span className="text-sm font-semibold text-[#3f3a48]">รหัสพนักงาน <span className="text-[#a33a46]">*</span></span>
                 <EmployeeCodeChecker defaultValue={member?.employee_code} disabled={access.isBypass} inputClassName={inputClass} />
               </label>
               <label className="block">
-                <span className="text-sm font-semibold text-[#3f3a48]">ชื่อ-นามสกุล ตามทะเบียนพนักงาน <span className="text-[#a33a46]">*</span></span>
+                <span className="text-sm font-semibold text-[#3f3a48]">ชื่อ-นามสกุล <span className="text-[#a33a46]">*</span></span>
                 <input autoComplete="name" className={inputClass} defaultValue={member?.full_name ?? ""} disabled={access.isBypass} name="fullName" placeholder="เช่น สมชาย ใจดี" required />
-                <p className="mt-2 text-xs text-[#6b6475]">ไม่ต้องใส่คำนำหน้า ระบบเทียบชื่อ-สกุลกับฐานข้อมูลโดยไม่สนตัวพิมพ์</p>
+                <p className="mt-2 text-xs text-[#6b6475]">ไม่ต้องใส่คำนำหน้า</p>
               </label>
             </div>
 
             {member?.employee_match_status === "matched" ? (
               <div className="rounded-lg border border-[#bfe3cf] bg-[#edf9f3] p-4">
                 <p className="flex items-center gap-2 text-sm font-semibold text-[#16794b]">
-                  <BadgeCheck className="size-4" aria-hidden="true" /> ตรวจสอบตรงกับฐานสมาชิกสมาคมแล้ว
+                  <BadgeCheck className="size-4" aria-hidden="true" /> ยืนยันตัวตนแล้ว
                 </p>
                 <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
                   {[
@@ -235,12 +235,12 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             ) : (
               <div className="flex items-start gap-3 rounded-lg bg-[#f8edf4] px-4 py-3 text-sm text-[#722257]">
                 <ShieldCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                <span>ข้อมูลตำแหน่ง สายงาน และประเภทสมาชิกจะถูกเติมอัตโนมัติจากฐานสมาชิกสมาคมหลังบันทึก ไม่ต้องกรอกเอง</span>
+                <span>ตำแหน่งและสังกัดจะเติมให้อัตโนมัติหลังบันทึก</span>
               </div>
             )}
           </Section>
 
-          <Section description="ช่วยผู้ดูแลจัดก๊วนและเลือกคลาสเรียนที่เหมาะกับคุณ" icon={Flag} step={3} title="ข้อมูลกอล์ฟ (ไม่บังคับ)">
+          <Section description="ไม่บังคับ ใช้สำหรับจัดก๊วนและคลาสเรียน" icon={Flag} step={3} title="ข้อมูลกอล์ฟ">
             <div className="grid gap-4 sm:grid-cols-3">
               <label className="block sm:col-span-1">
                 <span className="text-sm font-semibold text-[#3f3a48]">แต้มต่อ (Handicap)</span>
@@ -257,7 +257,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-[#3f3a48]">หน่วยงาน/บริษัทเพิ่มเติม</span>
-                <input className={inputClass} defaultValue={member?.organization ?? ""} disabled={access.isBypass} name="organization" placeholder="กรณีไม่ใช่พนักงาน กฟภ." />
+                <input className={inputClass} defaultValue={member?.organization ?? ""} disabled={access.isBypass} name="organization" placeholder="" />
               </label>
             </div>
           </Section>
@@ -265,15 +265,15 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
           <div className="sticky bottom-3 z-10 flex flex-col gap-3 rounded-xl border border-[#e6e2ee] bg-white/95 p-4 shadow-[0_12px_34px_rgba(114,34,87,0.14)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
             <p className="flex items-center gap-2 text-sm text-[#6b6475]">
               <Contact className="size-4 shrink-0" aria-hidden="true" />
-              {isFirstTime ? "กดบันทึกแล้วระบบจะตรวจสอบและออกเลขสมาชิกให้ทันทีเมื่อข้อมูลตรง" : "บันทึกแล้วระบบจะตรวจสอบกับฐานสมาชิกสมาคมอีกครั้ง"}
+              {isFirstTime ? "เมื่อข้อมูลตรงกัน ระบบจะออกเลขสมาชิกให้ทันที" : "ระบบจะตรวจสอบข้อมูลอีกครั้งเมื่อบันทึก"}
             </p>
             <SubmitButton
               className="flex h-12 items-center justify-center gap-2 rounded-lg bg-[#722257] px-6 text-sm font-semibold text-white shadow-[0_10px_24px_rgba(114,34,87,0.25)] transition enabled:hover:bg-[#8b2d6b] disabled:cursor-not-allowed disabled:bg-[#9a94a6]"
               disabled={access.isBypass}
-              pendingText="กำลังตรวจสอบข้อมูล..."
+              pendingText="กำลังบันทึก..."
             >
               <Save className="size-4" aria-hidden="true" />
-              {isFirstTime ? "ตรวจสอบและสมัครสมาชิก" : "บันทึกการเปลี่ยนแปลง"}
+              {isFirstTime ? "สมัครสมาชิก" : "บันทึก"}
             </SubmitButton>
           </div>
         </form>

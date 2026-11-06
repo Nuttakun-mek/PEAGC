@@ -33,7 +33,7 @@
   --color-peagc-border: var(--peagc-border);
   --color-peagc-border-strong: var(--peagc-border-strong);
   --color-peagc-muted: var(--peagc-muted);
-  --font-sans: "Sarabun", "Noto Sans Thai", "Prompt", ui-sans-serif,
+  --font-sans: var(--font-sarabun), "Sarabun", "Noto Sans Thai", "Prompt", ui-sans-serif,
     system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Consolas, monospace;
 }
@@ -41,7 +41,7 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: "Sarabun", "Noto Sans Thai", "Prompt", ui-sans-serif,
+  font-family: var(--font-sarabun), "Sarabun", "Noto Sans Thai", "Prompt", ui-sans-serif,
     system-ui, sans-serif;
   text-rendering: optimizeLegibility;
 }

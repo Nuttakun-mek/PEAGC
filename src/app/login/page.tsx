@@ -25,14 +25,14 @@ type LoginPageProps = {
 };
 
 const errorMessages: Record<string, string> = {
-  "invalid-email": "กรุณากรอกอีเมลให้ถูกต้อง",
+  "invalid-email": "รูปแบบอีเมลไม่ถูกต้อง",
   "invalid-credentials": "อีเมลหรือรหัสผ่านไม่ถูกต้อง",
-  "email-in-use": "อีเมลนี้มีบัญชีแล้ว กรุณาเข้าสู่ระบบ",
+  "email-in-use": "อีเมลนี้มีบัญชีแล้ว",
   "password-mismatch": "รหัสผ่านทั้งสองช่องไม่ตรงกัน",
-  "signup-failed": "สมัครสมาชิกไม่สำเร็จ กรุณาลองอีกครั้ง",
+  "signup-failed": "สร้างบัญชีไม่สำเร็จ ลองอีกครั้ง",
   "weak-password": "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
   "confirm-failed": "ยืนยันการเข้าสู่ระบบไม่สำเร็จ หรือลิงก์หมดอายุแล้ว",
-  "google-failed": "เข้าสู่ระบบด้วยกูเกิลไม่สำเร็จ",
+  "google-failed": "เข้าสู่ระบบด้วย Google ไม่สำเร็จ",
   "missing-config": "ระบบยังเชื่อมต่อฐานข้อมูลไม่สมบูรณ์",
 };
 
@@ -55,9 +55,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <span className="flex size-11 items-center justify-center rounded-md bg-[#C69214] font-bold">PEA</span>
             <div><p className="font-bold">PEAGC</p><p className="text-xs text-white/65">ชมรมกอล์ฟการไฟฟ้าส่วนภูมิภาค</p></div>
           </div>
-          <p className="text-sm font-semibold text-[#efd798]">พื้นที่ของคนรักกอล์ฟ</p>
-          <h2 className="mt-3 text-4xl font-semibold leading-tight xl:text-5xl">บริหารชมรม เรียนรู้ และร่วมกิจกรรมได้ในที่เดียว</h2>
-          <p className="mt-5 max-w-lg text-base leading-7 text-white/72">ระบบสมาชิกที่เชื่อมข้อมูลพนักงาน ตารางเรียนแบบ Slot และกิจกรรมของแต่ละหน่วยงานอย่างเป็นระบบ</p>
+          <p className="text-sm font-semibold text-[#efd798]">PEA Golf Club</p>
+          <h2 className="mt-3 text-4xl font-semibold leading-tight xl:text-5xl">สมาชิก กิจกรรม และคลาสเรียน ในที่เดียว</h2>
+          <p className="mt-5 max-w-lg text-base leading-7 text-white/72">ลงทะเบียนกิจกรรม จองคลาสเรียน และติดตามผลการแข่งขันของชมรม</p>
           <div className="mt-10 grid max-w-lg grid-cols-3 gap-3">
             {[['สมาชิก','ข้อมูลครบถ้วน'],['กิจกรรม','สมัครออนไลน์'],['ตารางเรียน','เปลี่ยนเวลาได้']].map(([title, detail]) => (
               <div className="border-l border-white/25 pl-4" key={title}><p className="text-xl font-bold text-[#f1cf79]">{title}</p><p className="mt-1 text-xs text-white/65">{detail}</p></div>
@@ -77,14 +77,14 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
               {isSignup ? "สมัครสมาชิก" : "เข้าสู่ระบบ"}
             </h1>
             <p className="mt-1 text-xs font-medium text-[#6b6475]">
-              {isSignup ? "เริ่มต้นบัญชีสมาชิกด้วยอีเมลของคุณ" : "จัดการสมาชิก กิจกรรม และตารางเรียนกอล์ฟ"}
+              {isSignup ? "ใช้อีเมลของคุณ" : "ชมรมกอล์ฟการไฟฟ้าส่วนภูมิภาค"}
             </p>
           </div>
         </div>
 
         {!isSignup && showDemoAccounts ? (
           <div className="mt-5 rounded-lg border border-[#d9d3e6] bg-[#f8edf4] p-4">
-            <p className="text-sm font-semibold text-[#722257]">บัญชีทดสอบพร้อมใช้</p>
+            <p className="text-sm font-semibold text-[#722257]">บัญชีทดสอบ</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               <form action={signInWithPassword}>
                 <input name="email" type="hidden" value="admin@peagc.local" />
@@ -145,7 +145,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           <>
             <div className="mt-6 flex items-start gap-3 rounded-lg border border-[#e6e2ee] bg-white/70 p-4">
               <ShieldCheck className="mt-0.5 size-5 shrink-0 text-[#722257]" aria-hidden="true" />
-              <p className="text-sm leading-6 text-[#3f3a48]">สร้างบัญชีแล้วกรอกประวัติและรหัสพนักงานต่อได้ทันที ระบบจะเทียบข้อมูลกับฐานพนักงานของชมรม</p>
+              <p className="text-sm leading-6 text-[#3f3a48]">หลังสร้างบัญชี กรอกรหัสพนักงานเพื่อยืนยันตัวตนกับฐานสมาชิกสมาคม</p>
             </div>
             <form action={signUpWithPassword} className="mt-5 space-y-4">
               <label className="block">
@@ -185,7 +185,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
         {googleEnabled ? (
           <form action={signInWithGoogle} className="mt-3">
             <input name="next" type="hidden" value={next} />
-            <button className="h-11 w-full rounded-md border border-[#d9d3e6] bg-white text-sm font-semibold text-[#722257]" type="submit">เข้าสู่ระบบด้วยกูเกิล</button>
+            <button className="h-11 w-full rounded-md border border-[#d9d3e6] bg-white text-sm font-semibold text-[#722257]" type="submit">เข้าสู่ระบบด้วย Google</button>
           </form>
         ) : null}
       </section>

@@ -167,13 +167,13 @@ const statusMessages: Record<string, string> = {
   "program-update-failed": "บันทึกการแก้ไขคอร์สเรียนไม่สำเร็จ",
   "slot-created": "สร้างรอบเรียนเรียบร้อยแล้ว",
   "slot-create-failed": "สร้างรอบเรียนไม่สำเร็จ",
-  "slot-capacity-too-low": "ที่นั่งรวมคิวสำรองต้องไม่น้อยกว่าจำนวนสมาชิกที่จองรอบนี้อยู่",
-  "booking-removed": "นำผู้เรียนออกจากรอบแล้ว คิวถัดไปขยับขึ้นอัตโนมัติ",
-  "generate-nothing-new": "ทุกรอบที่เลือกมีอยู่ในตารางแล้ว ไม่มีรอบใหม่ให้สร้าง",
-  "generate-times-invalid": "ช่วงเวลาต้องเป็นรูปแบบ HH:MM-HH:MM คั่นด้วยจุลภาค และเวลาเลิกต้องหลังเวลาเริ่ม",
-  "settings-save-failed": "บันทึกการตั้งค่ารอบลงทะเบียนไม่สำเร็จ",
-  "settings-saved": "บันทึกรอบลงทะเบียนและประกาศแล้ว",
-  "settings-window-invalid": "เวลาปิดลงทะเบียนต้องหลังเวลาเปิด",
+  "slot-capacity-too-low": "ที่นั่งรวมคิวสำรองน้อยกว่าจำนวนที่จองอยู่",
+  "booking-removed": "นำออกแล้ว คิวถัดไปเลื่อนขึ้นอัตโนมัติ",
+  "generate-nothing-new": "รอบทั้งหมดมีอยู่แล้ว",
+  "generate-times-invalid": "รูปแบบเวลาไม่ถูกต้อง ใช้ HH:MM-HH:MM คั่นด้วยจุลภาค",
+  "settings-save-failed": "บันทึกไม่สำเร็จ",
+  "settings-saved": "บันทึกแล้ว",
+  "settings-window-invalid": "เวลาปิดต้องอยู่หลังเวลาเปิด",
   "slot-archive-failed": "ลบรอบเรียนไม่สำเร็จ",
   "slot-archive-has-bookings": "ไม่สามารถลบรอบที่ยังมีสมาชิกจองอยู่ กรุณาย้ายหรือยกเลิกการจองก่อน",
   "slot-archived": "ลบรอบเรียนออกจากตารางแล้ว",
@@ -439,12 +439,12 @@ function BookingSettingsForm({ disabled, settings }: { disabled?: boolean; setti
       </label>
       <label className="block">
         <span className="text-sm font-semibold text-[#3f3a48]">เนื้อหาประกาศ</span>
-        <span className="block text-xs text-[#6b6475]">สมาชิกต้องอ่านและกดรับทราบก่อนเลือกเวลาเรียน</span>
+        <span className="block text-xs text-[#6b6475]">สมาชิกต้องกดรับทราบก่อนจอง</span>
         <textarea className={`${inputClass} min-h-36 py-3 leading-7`} defaultValue={settings.announcement_body} disabled={disabled} name="announcementBody" placeholder="กติกา การแต่งกาย อุปกรณ์ จุดนัดพบ การมาสาย การงดสิทธิ์" />
       </label>
       <label className="flex items-center gap-3 rounded-md border border-[#e6e2ee] bg-white/70 px-3 py-3 text-sm font-semibold text-[#3f3a48]">
         <input defaultChecked={settings.announcement_version === 0} disabled={disabled} name="announcementNewVersion" type="checkbox" />
-        นับเป็นประกาศฉบับใหม่ สมาชิกทุกคนต้องกดรับทราบอีกครั้ง
+        ออกเป็นฉบับใหม่ (สมาชิกต้องกดรับทราบอีกครั้ง)
         {settings.announcement_version ? <span className="text-xs font-normal text-[#6b6475]">(ฉบับปัจจุบัน {settings.announcement_version})</span> : null}
       </label>
       <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] md:w-fit" disabled={disabled} type="submit">
@@ -460,9 +460,9 @@ function SlotGeneratorForm({ disabled, programs }: { disabled?: boolean; program
     <form action={generateLessonSlots} className="grid gap-4">
       <div className="flex items-center gap-2">
         <CalendarClock className="size-4 text-[#722257]" aria-hidden="true" />
-        <h2 className="text-lg font-semibold text-[#722257]">สร้างหลายรอบเรียนพร้อมกัน</h2>
+        <h2 className="text-lg font-semibold text-[#722257]">สร้างรอบเรียนหลายรอบ</h2>
       </div>
-      <p className="text-sm text-[#6b6475]">เลือกช่วงวันที่ วันในสัปดาห์ และใส่ได้หลายช่วงเวลา ระบบสร้างทุกคู่วัน-เวลาให้ และข้ามรอบที่มีอยู่แล้ว (สูงสุด 300 รอบต่อครั้ง)</p>
+      <p className="text-sm text-[#6b6475]">เลือกช่วงวันที่ วันในสัปดาห์ และช่วงเวลา ระบบจะสร้างรอบให้ทั้งหมดและข้ามรอบที่มีอยู่แล้ว (สูงสุด 300 รอบ)</p>
       <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">คอร์ส</span>
@@ -551,7 +551,7 @@ function SlotGeneratorForm({ disabled, programs }: { disabled?: boolean; program
       </div>
       <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] md:w-fit" disabled={disabled || !programs.length} type="submit">
         <Plus className="size-4" aria-hidden="true" />
-        สร้างรอบเรียนตามแผน
+        สร้างรอบเรียน
       </button>
     </form>
   );
@@ -572,7 +572,7 @@ function SlotRoster({ bookings, disabled, slot }: { bookings: BookingRow[]; disa
     <div className="mt-4 border-t border-[#e6e2ee] pt-4">
       <div className="flex items-center gap-2">
         <ListOrdered className="size-4 text-[#722257]" aria-hidden="true" />
-        <h4 className="font-semibold text-[#722257]">รายชื่อตามลำดับการจอง ({active.length}/{slot.capacity + (slot.waitlist_capacity ?? 0)})</h4>
+        <h4 className="font-semibold text-[#722257]">รายชื่อ ({active.length}/{slot.capacity + (slot.waitlist_capacity ?? 0)})</h4>
       </div>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[960px] text-sm">
@@ -622,7 +622,7 @@ function SlotRoster({ bookings, disabled, slot }: { bookings: BookingRow[]; disa
                     {booking.status !== "cancelled" && !disabled ? (
                       <form action={removeLessonBooking}>
                         <input name="bookingId" type="hidden" value={booking.id} />
-                        <ConfirmSubmitButton className="flex h-9 items-center gap-1 rounded-md border border-[#efcbd0] bg-white px-2 text-xs font-semibold text-[#a33a46]" message={`นำ ${member?.full_name ?? "ผู้เรียน"} ออกจากรอบนี้? คิวถัดไปจะขยับขึ้นอัตโนมัติ`}>
+                        <ConfirmSubmitButton className="flex h-9 items-center gap-1 rounded-md border border-[#efcbd0] bg-white px-2 text-xs font-semibold text-[#a33a46]" message={`นำ ${member?.full_name ?? "ผู้เรียน"} ออกจากรอบนี้?`}>
                           <Trash2 className="size-3.5" aria-hidden="true" /> นำออก
                         </ConfirmSubmitButton>
                       </form>
@@ -850,7 +850,7 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#e6e2ee] p-5">
             <div>
               <h2 className="text-xl font-semibold text-[#722257]">ตารางรอบเรียนแบบ Slot</h2>
-              <p className="mt-1 text-sm text-[#6b6475]">มองรอบเรียนตามวันและเวลา กดแก้ไขเพื่อจัดการรายละเอียดและดูรายชื่อตามลำดับคิว</p>
+              <p className="mt-1 text-sm text-[#6b6475]">ดูรอบตามวันและเวลา กดแก้ไขเพื่อจัดการและดูรายชื่อ</p>
             </div>
             {!access.isBypass ? (
               <a className="flex h-10 items-center gap-2 rounded-md border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257]" href="/admin/lessons/export">

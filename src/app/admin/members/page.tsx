@@ -597,9 +597,9 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
             <div className="flex items-start gap-3">
               <ShieldAlert className="mt-0.5 size-5 shrink-0 text-[#a33a46]" aria-hidden="true" />
               <div className="min-w-0 flex-1">
-                <h2 className="text-lg font-semibold text-[#a33a46]">สมาชิกที่ไม่อยู่ในฐานสมาคมเดือนล่าสุด ({leftDirectoryMembers.length})</h2>
+                <h2 className="text-lg font-semibold text-[#a33a46]">ไม่อยู่ในฐานสมาคมเดือนล่าสุด ({leftDirectoryMembers.length})</h2>
                 <p className="mt-1 text-sm text-[#6b6475]">
-                  ไฟล์รายชื่อสมาคมล่าสุดไม่มีรหัสพนักงานเหล่านี้ หรือสถานะไม่ใช่สมาชิกปัจจุบัน บัญชียังใช้งานได้จนกว่าผู้ดูแลจะตรวจและเปลี่ยนสถานะเอง
+                  บัญชียังใช้งานได้จนกว่าจะเปลี่ยนสถานะ กดชื่อเพื่อตรวจสอบ
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   {leftDirectoryMembers.map((member) => (

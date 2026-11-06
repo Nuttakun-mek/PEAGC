@@ -114,7 +114,7 @@ export function InteractiveSlotBoard({
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-[#667085]">
           <span className={`size-2 rounded-full ${live ? "bg-[#16a36a]" : "bg-[#f0a11a]"}`} />
-          {live ? "อัปเดตที่นั่งแบบเรียลไทม์" : "กำลังเชื่อมต่อข้อมูลสด"}
+          {live ? "อัปเดตที่นั่งอัตโนมัติ" : "กำลังเชื่อมต่อ"}
         </div>
         <button className="flex h-9 items-center gap-2 rounded-md border border-[#dce3ea] bg-white px-3 text-xs font-semibold text-[#475467]" onClick={() => router.refresh()} type="button">
           <RefreshCw className="size-3.5" /> รีเฟรช
@@ -123,14 +123,14 @@ export function InteractiveSlotBoard({
 
       {phase === "before" && openAt ? (
         <div className="mb-4 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
-          ดูตารางล่วงหน้าได้ ปุ่มจองจะเปิดพร้อมกันทุกคน {formatBangkokDateTime(openAt)} · อีก <LessonBookingCountdown openAt={openAt} />
+          เปิดจอง {formatBangkokDateTime(openAt)} · อีก <LessonBookingCountdown openAt={openAt} />
         </div>
       ) : null}
       {phase === "after" ? (
-        <div className="mb-4 rounded-md bg-[#f4f6fa] px-4 py-3 text-sm text-[#6b6475]">ปิดลงทะเบียนรอบนี้แล้ว ยังยกเลิกรอบที่จองไว้ได้ตามกำหนด</div>
+        <div className="mb-4 rounded-md bg-[#f4f6fa] px-4 py-3 text-sm text-[#6b6475]">ปิดลงทะเบียนแล้ว</div>
       ) : null}
       {phase === "unset" ? (
-        <div className="mb-4 rounded-md bg-[#f4f6fa] px-4 py-3 text-sm text-[#6b6475]">ผู้ดูแลยังไม่ได้กำหนดเวลาเปิดลงทะเบียน</div>
+        <div className="mb-4 rounded-md bg-[#f4f6fa] px-4 py-3 text-sm text-[#6b6475]">ยังไม่กำหนดรอบลงทะเบียน</div>
       ) : null}
 
       <div className="mb-3 flex flex-wrap gap-4 text-xs text-[#667085]">
@@ -209,11 +209,11 @@ export function InteractiveSlotBoard({
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                       {mine ? (
                         cancelLocked ? (
-                          <span className="text-xs text-[#98a2b3]">เลยกำหนดยกเลิก ({formatBangkokDateTime(deadline.toISOString())})</span>
+                          <span className="text-xs text-[#98a2b3]">เลยกำหนดยกเลิกแล้ว</span>
                         ) : (
                           <form action={cancelAction}>
                             <input name="bookingId" type="hidden" value={slot.myBookingId!} />
-                            <ConfirmSubmitButton className="h-8 rounded-md border border-[#efcbd0] bg-white px-3 text-xs font-semibold text-[#a33a46]" message="ยืนยันยกเลิกการจองรอบนี้หรือไม่">
+                            <ConfirmSubmitButton className="h-8 rounded-md border border-[#efcbd0] bg-white px-3 text-xs font-semibold text-[#a33a46]" message="ยกเลิกการจองรอบนี้?">
                               ยกเลิกการจอง
                             </ConfirmSubmitButton>
                           </form>
@@ -239,25 +239,25 @@ export function InteractiveSlotBoard({
         <div className="sticky bottom-3 z-10 mt-3 flex flex-col gap-3 rounded-lg border border-[#cce2e8] bg-white/95 p-4 shadow-[0_12px_34px_rgba(30,61,76,.16)] backdrop-blur sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-[#243244]">
-              {selectedOffer === "waitlist" ? "เข้าคิวสำรอง" : "ยืนยันรอบ"} {selected.startTime.slice(0, 5)} น.
+              {selectedOffer === "waitlist" ? "เข้าคิวสำรองรอบ" : "จองรอบ"} {selected.startTime.slice(0, 5)} น.
             </p>
             <p className="mt-1 text-xs text-[#667085]">{formatDay(selected.date)} · {selected.title}</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="h-10 rounded-md px-4 text-sm font-semibold text-[#667085]" onClick={() => setSelectedId(null)} type="button">ยกเลิก</button>
+            <button className="h-10 rounded-md px-4 text-sm font-semibold text-[#667085]" onClick={() => setSelectedId(null)} type="button">ปิด</button>
             {currentBookingId && currentSlot ? (
               <form action={changeAction}>
                 <input name="slotId" type="hidden" value={selected.id} />
                 <input name="bookingId" type="hidden" value={currentBookingId} />
                 <button className="flex h-10 items-center gap-2 rounded-md border border-[#168aad] bg-white px-4 text-sm font-semibold text-[#168aad]" type="submit">
-                  <ArrowLeftRight className="size-4" />ย้ายจากรอบ {currentSlot.startTime.slice(0, 5)} ({formatDay(currentSlot.date)})
+                  <ArrowLeftRight className="size-4" />ย้ายจากรอบ {formatDay(currentSlot.date)} {currentSlot.startTime.slice(0, 5)}
                 </button>
               </form>
             ) : null}
             <form action={bookAction}>
               <input name="slotId" type="hidden" value={selected.id} />
               <button className={`flex h-10 items-center gap-2 rounded-md px-4 text-sm font-semibold text-white ${selectedOffer === "waitlist" ? "bg-[#b17b0a]" : "bg-[#168aad]"}`} type="submit">
-                <Clock3 className="size-4" />{selectedOffer === "waitlist" ? "ยืนยันเข้าคิวสำรอง" : "ยืนยันการจอง"}
+                <Clock3 className="size-4" />{selectedOffer === "waitlist" ? "เข้าคิวสำรอง" : "ยืนยันการจอง"}
               </button>
             </form>
           </div>

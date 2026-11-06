@@ -51,48 +51,48 @@ type MemberPageProps = {
 };
 
 const statusMessages: Record<string, string> = {
-  "admin-required": "บัญชีนี้ยังไม่มีสิทธิ์ผู้ดูแลระบบ",
-  "already-registered": "คุณสมัครกิจกรรมนี้ไว้แล้ว",
-  "lesson-already-booked": "คุณจองรอบเรียนนี้ไว้แล้ว",
-  "lesson-announcement-acked": "รับทราบประกาศแล้ว เลือกเวลาเรียนได้เลย",
-  "lesson-announcement-failed": "บันทึกการรับทราบประกาศไม่สำเร็จ กรุณาลองใหม่",
-  "lesson-announcement-required": "กรุณาอ่านและกดรับทราบประกาศก่อนเลือกเวลาเรียน",
-  "lesson-cancel-locked": "เลยกำหนดยกเลิกแล้ว กรุณาติดต่อผู้ดูแล",
-  "lesson-changed-waitlisted": "ย้ายรอบเรียนแล้ว คุณอยู่ในคิวสำรองของรอบใหม่",
-  "lesson-limit": "คุณจองครบจำนวนสูงสุดต่อคนแล้ว ยกเลิกรอบอื่นก่อนหากต้องการเปลี่ยน",
-  "lesson-not-open": "ยังไม่ถึงเวลาเปิดลงทะเบียน",
-  "lesson-overlap": "เวลาเรียนชนกับรอบที่คุณจองไว้แล้ว",
-  "lesson-started": "รอบเรียนนี้เริ่มเรียนไปแล้ว",
-  "lesson-waitlisted": "รอบนี้เต็มแล้ว ระบบจัดคุณเข้าคิวสำรอง เมื่อมีคนยกเลิกคิวจะขยับขึ้นอัตโนมัติ",
-  "lesson-window-closed": "ปิดลงทะเบียนรอบนี้แล้ว",
-  "lesson-booked": "จองเรียนเรียบร้อยแล้ว",
-  "lesson-booking-failed": "จองเรียนไม่สำเร็จ กรุณาลองใหม่",
-  "lesson-cancel-closed": "ไม่พบรายการจอง หรือสถานะรายการเปลี่ยนไปแล้ว",
-  "lesson-cancel-failed": "ยกเลิกการจองเรียนไม่สำเร็จ กรุณาลองใหม่",
-  "lesson-cancelled": "ยกเลิกการจองเรียนเรียบร้อยแล้ว",
-  "lesson-change-closed": "ไม่สามารถเปลี่ยนเวลาเรียนได้ เนื่องจากปิดรับเปลี่ยนรอบหรือเลยเวลา cutoff แล้ว",
-  "lesson-change-failed": "เปลี่ยนเวลาเรียนไม่สำเร็จ กรุณาลองใหม่อีกครั้ง",
-  "lesson-changed": "เปลี่ยนเวลาเรียนเรียบร้อยแล้ว",
-  "lesson-closed": "รอบเรียนนี้ปิดรับจองแล้ว",
-  "lesson-full": "รอบเรียนนี้เต็มแล้ว",
-  "lesson-use-change": "คุณมีรอบเรียนของคอร์สนี้ในวันเดียวกันแล้ว กรุณาใช้ปุ่มเปลี่ยนเวลา",
-  "member-not-approved": "ต้องรอผู้ดูแลอนุมัติสมาชิกก่อน จึงจะสมัครกิจกรรมได้",
-  "pending-review": "ส่งข้อมูลสมัครแล้ว กรุณารอผู้ดูแลตรวจสอบกับฐานข้อมูลพนักงาน",
-  "profile-approved": "ตรวจสอบข้อมูลพนักงานตรงกันแล้ว บัญชีสมาชิกพร้อมใช้งานทันที",
-  "profile-saved": "บันทึกประวัติส่วนตัวเรียบร้อยแล้ว",
-  registered: "สมัครกิจกรรมเรียบร้อยแล้ว",
-  "registered-payment-required": "สมัครกิจกรรมเรียบร้อยแล้ว กรุณาแนบหลักฐานการชำระเงินในรายการของฉัน",
-  "payment-proof-closed": "รายการนี้ไม่อยู่ในสถานะที่แนบหลักฐานการชำระเงินได้",
-  "payment-proof-invalid": "กรุณาแนบไฟล์ JPG, PNG, WebP หรือ PDF ขนาดไม่เกิน 8 MB",
-  "payment-proof-save-failed": "บันทึกหลักฐานการชำระเงินไม่สำเร็จ กรุณาลองใหม่",
-  "payment-proof-submitted": "ส่งหลักฐานการชำระเงินแล้ว กรุณารอผู้ดูแลตรวจสอบ",
-  "payment-proof-upload-failed": "อัปโหลดหลักฐานการชำระเงินไม่สำเร็จ กรุณาลองใหม่",
-  "registration-cancel-closed": "ไม่สามารถยกเลิกการสมัครนี้ได้ เนื่องจากชำระเงินแล้วหรือสถานะรายการเปลี่ยนไป",
-  "registration-cancel-failed": "ยกเลิกการสมัครกิจกรรมไม่สำเร็จ กรุณาลองใหม่",
-  "registration-cancelled": "ยกเลิกการสมัครกิจกรรมเรียบร้อยแล้ว",
+  "admin-required": "บัญชีนี้ไม่มีสิทธิ์ผู้ดูแล",
+  "already-registered": "สมัครกิจกรรมนี้ไว้แล้ว",
+  "lesson-already-booked": "จองรอบนี้ไว้แล้ว",
+  "lesson-announcement-acked": "รับทราบประกาศแล้ว",
+  "lesson-announcement-failed": "บันทึกไม่สำเร็จ ลองอีกครั้ง",
+  "lesson-announcement-required": "กดรับทราบประกาศก่อนจอง",
+  "lesson-cancel-locked": "เลยกำหนดยกเลิกแล้ว ติดต่อผู้ดูแล",
+  "lesson-changed-waitlisted": "เปลี่ยนรอบแล้ว อยู่ในคิวสำรอง",
+  "lesson-limit": "จองครบจำนวนสูงสุดแล้ว",
+  "lesson-not-open": "ยังไม่เปิดลงทะเบียน",
+  "lesson-overlap": "เวลาชนกับรอบที่จองไว้",
+  "lesson-started": "รอบนี้เริ่มเรียนแล้ว",
+  "lesson-waitlisted": "รอบนี้เต็ม คุณอยู่ในคิวสำรอง",
+  "lesson-window-closed": "ปิดลงทะเบียนแล้ว",
+  "lesson-booked": "จองสำเร็จ",
+  "lesson-booking-failed": "จองไม่สำเร็จ ลองอีกครั้ง",
+  "lesson-cancel-closed": "ไม่พบรายการจอง",
+  "lesson-cancel-failed": "ยกเลิกไม่สำเร็จ ลองอีกครั้ง",
+  "lesson-cancelled": "ยกเลิกการจองแล้ว",
+  "lesson-change-closed": "เปลี่ยนรอบไม่ได้แล้ว",
+  "lesson-change-failed": "เปลี่ยนรอบไม่สำเร็จ ลองอีกครั้ง",
+  "lesson-changed": "เปลี่ยนรอบแล้ว",
+  "lesson-closed": "รอบนี้ปิดรับแล้ว",
+  "lesson-full": "รอบนี้เต็มแล้ว",
+  "lesson-use-change": "มีรอบของคอร์สนี้ในวันเดียวกันแล้ว",
+  "member-not-approved": "รอผู้ดูแลอนุมัติก่อนใช้งาน",
+  "pending-review": "ส่งข้อมูลแล้ว รอผู้ดูแลตรวจสอบ",
+  "profile-approved": "ยืนยันตัวตนสำเร็จ ใช้งานได้ทันที",
+  "profile-saved": "บันทึกข้อมูลแล้ว",
+  registered: "สมัครกิจกรรมแล้ว",
+  "registered-payment-required": "สมัครแล้ว แนบหลักฐานการชำระเงินในรายการของฉัน",
+  "payment-proof-closed": "รายการนี้แนบหลักฐานไม่ได้แล้ว",
+  "payment-proof-invalid": "ไฟล์ต้องเป็น JPG, PNG, WebP หรือ PDF ไม่เกิน 8 MB",
+  "payment-proof-save-failed": "บันทึกหลักฐานไม่สำเร็จ ลองอีกครั้ง",
+  "payment-proof-submitted": "ส่งหลักฐานแล้ว รอผู้ดูแลตรวจสอบ",
+  "payment-proof-upload-failed": "อัปโหลดไม่สำเร็จ ลองอีกครั้ง",
+  "registration-cancel-closed": "ยกเลิกไม่ได้ เนื่องจากชำระเงินแล้ว",
+  "registration-cancel-failed": "ยกเลิกไม่สำเร็จ ลองอีกครั้ง",
+  "registration-cancelled": "ยกเลิกการสมัครแล้ว",
   "registration-closed": "กิจกรรมนี้ปิดรับสมัครแล้ว",
-  "registration-failed": "สมัครกิจกรรมไม่สำเร็จ กรุณาลองใหม่",
-  "registration-full": "กิจกรรมนี้มีผู้สมัครครบจำนวนแล้ว",
+  "registration-failed": "สมัครไม่สำเร็จ ลองอีกครั้ง",
+  "registration-full": "กิจกรรมนี้เต็มแล้ว",
 };
 
 const eventRegistrationStatusLabels: Record<string, string> = {
@@ -490,11 +490,11 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
   const latestScoredRegistration = scoreHistory?.find((score) => score.score_status !== "not_entered");
   const latestHoleScores = holeScores?.filter((score) => score.event_registration_id === latestScoredRegistration?.id) ?? [];
   const memberPipeline = [
-    { done: true, label: "สร้างบัญชี" },
-    { done: Boolean(currentMember), label: "กรอกประวัติ" },
+    { done: true, label: "บัญชี" },
+    { done: Boolean(currentMember), label: "ประวัติ" },
     {
-      done: currentMember?.status === "active" || currentMember?.status === "pending_verification",
-      label: currentMember?.status === "pending_verification" ? "กำลังตรวจพนักงาน" : "ตรวจพนักงานแล้ว",
+      done: currentMember?.status === "active",
+      label: currentMember?.status === "pending_verification" ? "รอตรวจสอบ" : "ยืนยันตัวตน",
     },
     { done: currentMember?.status === "active", label: "พร้อมใช้งาน" },
   ];
@@ -505,8 +505,8 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
         <section className="rounded-lg border border-[#e2e8ef] bg-white/95 p-5 shadow-[0_8px_24px_rgba(30,41,59,0.05)]">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-[#8b5b7a]">ระบบสมาชิก PEAGC</p>
-              <h1 className="mt-1 text-2xl font-semibold text-[#722257]">สวัสดี คุณ{displayName}</h1>
+              <p className="text-sm font-semibold text-[#8b5b7a]">PEA Golf Club</p>
+              <h1 className="mt-1 text-2xl font-semibold text-[#722257]">สวัสดี {displayName}</h1>
             </div>
             <form action={signOut}>
               <button
@@ -600,7 +600,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
             <div className="grid gap-px bg-[#edf0f3] sm:grid-cols-2 xl:grid-cols-4">
               {announcements?.length ? announcements.map((news, index) => (
                 <div className="bg-white p-4" key={news.id}><div className="flex items-center justify-between"><span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${index === 0 ? "bg-[#fff4d7] text-[#8b6508]" : "bg-[#eef7fa] text-[#16738f]"}`}>{news.is_pinned ? "ประกาศสำคัญ" : news.category}</span><span className="text-[11px] text-[#98a2b3]">{new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(new Date(news.published_at))}</span></div><h3 className="mt-3 text-sm font-semibold text-[#344054]">{news.title}</h3><p className="mt-2 line-clamp-2 text-xs leading-5 text-[#667085]">{news.summary ?? "ติดตามรายละเอียดเพิ่มเติมจากชมรม"}</p></div>
-              )) : <div className="col-span-full bg-white p-6 text-center text-sm text-[#667085]">ยังไม่มีประกาศใหม่</div>}
+              )) : <div className="col-span-full bg-white p-6 text-center text-sm text-[#667085]">ยังไม่มีประกาศ</div>}
             </div>
           </article>
           <article className="rounded-lg border border-[#e6e2ee] bg-white/95 p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
@@ -611,7 +611,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
               <div>
                 <h2 className="text-lg font-semibold text-[#722257]">รายการของฉัน</h2>
                 <p className="mt-1 text-sm text-[#6b6475]">
-                  ติดตามกิจกรรมและเวลาเรียนที่สมัครไว้ แม้รายการปิดรับแล้ว
+                  กิจกรรมและคลาสเรียนที่สมัครไว้
                 </p>
               </div>
             </div>
@@ -752,7 +752,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
               </div>
             ) : (
               <div className="mt-4 rounded-md border border-dashed border-[#d9d3e6] bg-white/60 px-4 py-6 text-center text-sm text-[#6b6475]">
-                เมื่อสมัครกิจกรรมหรือจองเวลาเรียน รายการจะปรากฏที่นี่
+                ยังไม่มีรายการ
               </div>
             )}
           </article>
@@ -765,10 +765,10 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-[#722257]">
-                    จองเวลาเรียนกอล์ฟ
+                    จองคลาสเรียน
                   </h2>
                   <p className="mt-1 text-sm text-[#6b6475]">
-                    เลือกรอบเรียนที่เปิดจองและติดตามสถานะเข้าเรียน
+                    เลือกรอบที่สะดวก ระบบจัดที่นั่งตามลำดับการจอง
                   </p>
                 </div>
               </div>
@@ -791,19 +791,19 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                     <input name="version" type="hidden" value={lessonSettings.announcement_version} />
                     <label className="flex items-start gap-3 text-sm text-[#3f3a48]">
                       <input className="mt-1 size-4 accent-[#722257]" name="accepted" required type="checkbox" />
-                      ข้าพเจ้าได้อ่านและยอมรับเงื่อนไขตามประกาศข้างต้น
+                      ฉันได้อ่านและยอมรับเงื่อนไขข้างต้น
                     </label>
                     <button className="h-11 w-fit rounded-md bg-[#722257] px-5 text-sm font-semibold text-white" type="submit">
-                      รับทราบ และไปเลือกเวลาเรียน
+                      รับทราบ
                     </button>
                   </form>
                 </div>
               ) : (
                 <>
                   <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#6b6475]">
-                    <span>จองได้สูงสุด {lessonSettings.max_bookings_per_member ? `${lessonSettings.max_bookings_per_member} รอบต่อคน` : "ไม่จำกัด"}</span>
+                    <span>จองได้สูงสุด {lessonSettings.max_bookings_per_member ? `${lessonSettings.max_bookings_per_member} รอบ` : "ไม่จำกัด"}</span>
                     <span>ยกเลิกได้ก่อนเรียน {lessonSettings.cancel_cutoff_hours} ชม.</span>
-                    <span>เมื่อมีคนยกเลิก คิวสำรองลำดับแรกได้ที่นั่งอัตโนมัติ</span>
+                    <span>คิวสำรองเลื่อนขึ้นอัตโนมัติเมื่อมีที่ว่าง</span>
                     {lessonSettings.booking_close_at && bookingPhase === "open" ? (
                       <span>ปิดลงทะเบียน {formatBangkokDateTime(lessonSettings.booking_close_at)}</span>
                     ) : null}
@@ -811,7 +811,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                   {hasLessonAnnouncement(lessonSettings) ? (
                     <details className="mb-4 rounded-md border border-[#e6e2ee] bg-white/70 px-4 py-3 text-sm">
                       <summary className="cursor-pointer font-semibold text-[#722257]">
-                        อ่านประกาศอีกครั้ง{lessonSettings.announcement_title ? ` · ${lessonSettings.announcement_title}` : ""}
+                        ดูประกาศ{lessonSettings.announcement_title ? ` · ${lessonSettings.announcement_title}` : ""}
                       </summary>
                       <div className="mt-3 whitespace-pre-wrap leading-7 text-[#3f3a48]">{lessonSettings.announcement_body}</div>
                     </details>
@@ -831,7 +831,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                     />
                   ) : (
                     <div className="rounded-md border border-dashed border-[#d9d3e6] bg-white/60 px-4 py-6 text-center text-sm text-[#6b6475]">
-                      ยังไม่มีรอบเรียนที่เปิดจอง
+                      ยังไม่มีรอบที่เปิดจอง
                     </div>
                   )}
                 </>
@@ -850,7 +850,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                     กิจกรรมที่เปิดรับสมัคร
                   </h2>
                   <p className="mt-1 text-sm text-[#6b6475]">
-                    สมาชิกที่ผ่านอนุมัติแล้วสามารถสมัครกิจกรรมที่เปิดรับได้
+                    สมัครได้เมื่อสมาชิกได้รับการอนุมัติแล้ว
                   </p>
                 </div>
               </div>
@@ -952,7 +952,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                     คะแนนและผลการแข่งขัน
                   </h2>
                   <p className="mt-1 text-sm text-[#6b6475]">
-                    ประวัติคะแนนทั้งหมดจากกิจกรรมที่เคยเข้าร่วม
+                    ประวัติคะแนนจากกิจกรรมที่เข้าร่วม
                   </p>
                 </div>
               </div>
