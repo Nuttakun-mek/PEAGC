@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { fromBangkokInputValue, parseTimeRanges, planSlots } from "@/lib/lessons/booking";
 
 const lessonAdminRoles = ["platform_owner", "club_admin", "committee"];
 
@@ -187,6 +188,7 @@ export async function createLessonSlot(formData: FormData) {
     coach_name: getString(formData, "coachName") || null,
     created_by: userId,
     end_time: endTime,
+    waitlist_capacity: Math.max(0, getNumberOrNull(formData, "waitlistCapacity") ?? 0),
     lesson_date: lessonDate,
     note: getString(formData, "note") || null,
     program_id: programId,
@@ -276,13 +278,16 @@ export async function updateLessonSlot(formData: FormData) {
     redirectLessons("slot-not-found");
   }
 
-  if (capacity < (activeBookingCount ?? 0)) {
+  const waitlistCapacity = Math.max(0, getNumberOrNull(formData, "waitlistCapacity") ?? 0);
+
+  if (capacity + waitlistCapacity < (activeBookingCount ?? 0)) {
     redirectLessons("slot-capacity-too-low");
   }
 
   const payload = {
     allow_member_reschedule: getBoolean(formData, "allowMemberReschedule"),
     capacity,
+    waitlist_capacity: waitlistCapacity,
     coach_name: getString(formData, "coachName") || null,
     end_time: endTime,
     lesson_date: lessonDate,
@@ -384,4 +389,180 @@ export async function archiveLessonSlot(formData: FormData) {
   if (error) redirectLessons("slot-archive-failed");
   await supabase.from("audit_logs").insert({ action: "lesson_slot.archived", actor_user_id: userId, before_data: before, club_id: clubId, entity_id: slotId, entity_type: "lesson_slots", metadata: { source: "admin.lessons" } });
   redirectLessons("slot-archived");
+}
+
+export async function saveLessonBookingSettings(formData: FormData) {
+  const { clubId, supabase, userId } = await requireLessonAdminClub();
+  const openAt = fromBangkokInputValue(getString(formData, "bookingOpenAt"));
+  const closeAt = fromBangkokInputValue(getString(formData, "bookingCloseAt"));
+
+  if (openAt && closeAt && closeAt <= openAt) {
+    redirectLessons("settings-window-invalid");
+  }
+
+  const { data: before } = await supabase
+    .from("lesson_booking_settings")
+    .select("*")
+    .eq("club_id", clubId)
+    .maybeSingle();
+  const announcementTitle = getString(formData, "announcementTitle");
+  const announcementBody = getString(formData, "announcementBody");
+  const currentVersion = before?.announcement_version ?? 0;
+  const bumpVersion = getBoolean(formData, "announcementNewVersion") && Boolean(announcementTitle || announcementBody);
+  const payload = {
+    announcement_body: announcementBody,
+    announcement_title: announcementTitle,
+    announcement_version: bumpVersion ? currentVersion + 1 : currentVersion,
+    booking_close_at: closeAt,
+    booking_open_at: openAt,
+    cancel_cutoff_hours: Math.max(0, getNumberOrNull(formData, "cancelCutoffHours") ?? 24),
+    club_id: clubId,
+    max_bookings_per_member: Math.max(0, getNumberOrNull(formData, "maxBookingsPerMember") ?? 0),
+    updated_by: userId,
+  };
+  const { error } = await supabase
+    .from("lesson_booking_settings")
+    .upsert(payload, { onConflict: "club_id" });
+
+  if (error) {
+    redirectLessons("settings-save-failed");
+  }
+
+  await supabase.from("audit_logs").insert({
+    action: "lesson_booking_settings.updated",
+    actor_user_id: userId,
+    after_data: payload,
+    before_data: before,
+    club_id: clubId,
+    entity_id: clubId,
+    entity_type: "lesson_booking_settings",
+    metadata: { source: "admin.lessons" },
+  });
+
+  redirectLessons("settings-saved");
+}
+
+export async function generateLessonSlots(formData: FormData) {
+  const { clubId, supabase, userId } = await requireLessonAdminClub();
+  const programId = getString(formData, "programId");
+  const title = getString(formData, "title");
+  const times = parseTimeRanges(getString(formData, "timeRanges"));
+  const weekdays = formData
+    .getAll("weekdays")
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value >= 0 && value <= 6);
+
+  if (!programId || !title) {
+    redirectLessons("slot-missing");
+  }
+  if (!times) {
+    redirectLessons("generate-times-invalid");
+  }
+
+  const plan = planSlots({
+    from: getString(formData, "dateFrom"),
+    times: times!,
+    to: getString(formData, "dateTo"),
+    weekdays,
+  });
+
+  if ("error" in plan) {
+    redirectLessons(`generate-invalid:${plan.error}`);
+  }
+
+  const { data: program } = await supabase
+    .from("lesson_programs")
+    .select("id")
+    .eq("club_id", clubId)
+    .eq("id", programId)
+    .maybeSingle();
+
+  if (!program) {
+    redirectLessons("program-not-found");
+  }
+
+  const items = plan.items;
+  const { data: existing } = await supabase
+    .from("lesson_slots")
+    .select("lesson_date, start_time")
+    .eq("club_id", clubId)
+    .eq("program_id", programId)
+    .is("archived_at", null)
+    .gte("lesson_date", items[0].lesson_date)
+    .lte("lesson_date", items[items.length - 1].lesson_date);
+  const taken = new Set((existing ?? []).map((slot) => `${slot.lesson_date} ${String(slot.start_time).slice(0, 5)}`));
+  const common = {
+    allow_member_reschedule: getBoolean(formData, "allowMemberReschedule"),
+    capacity: Math.max(1, getNumberOrNull(formData, "capacity") ?? 1),
+    club_id: clubId,
+    coach_name: getString(formData, "coachName") || null,
+    created_by: userId,
+    note: getString(formData, "note") || null,
+    program_id: programId,
+    reschedule_cutoff_hours: getNumberOrNull(formData, "rescheduleCutoffHours") ?? 12,
+    status: getString(formData, "status") || "open",
+    target_bureaus: getStringList(formData, "targetBureaus"),
+    target_departments: getStringList(formData, "targetDepartments"),
+    target_divisions: getStringList(formData, "targetDivisions"),
+    target_sections: getStringList(formData, "targetSections"),
+    target_work_lines: getStringList(formData, "targetWorkLines"),
+    title,
+    updated_by: userId,
+    venue: getString(formData, "venue") || null,
+    waitlist_capacity: Math.max(0, getNumberOrNull(formData, "waitlistCapacity") ?? 0),
+  };
+  const rows = items
+    .filter((item) => !taken.has(`${item.lesson_date} ${item.start_time}`))
+    .map((item) => ({ ...common, end_time: item.end_time, lesson_date: item.lesson_date, start_time: item.start_time }));
+
+  if (!rows.length) {
+    redirectLessons("generate-nothing-new");
+  }
+
+  const { data: created, error } = await supabase.from("lesson_slots").insert(rows).select("id");
+
+  if (error) {
+    redirectLessons("slot-create-failed");
+  }
+
+  await supabase.from("audit_logs").insert({
+    action: "lesson_slot.bulk_created",
+    actor_user_id: userId,
+    after_data: { count: created?.length ?? rows.length, from: items[0].lesson_date, to: items[items.length - 1].lesson_date, ...common },
+    club_id: clubId,
+    entity_id: programId,
+    entity_type: "lesson_slots",
+    metadata: { skipped: items.length - rows.length, source: "admin.lessons" },
+  });
+
+  redirectLessons(`generated:${created?.length ?? rows.length}:${items.length - rows.length}`);
+}
+
+export async function removeLessonBooking(formData: FormData) {
+  const bookingId = getString(formData, "bookingId");
+  if (!bookingId) redirectLessons("attendance-missing");
+  const { clubId, supabase, userId } = await requireLessonAdminClub();
+  const { data: before } = await supabase
+    .from("lesson_bookings")
+    .select("*")
+    .eq("club_id", clubId)
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (!before) redirectLessons("attendance-missing");
+  const { error } = await supabase
+    .from("lesson_bookings")
+    .update({ attendance_note: getString(formData, "attendanceNote") || "นำออกโดยผู้ดูแล", status: "cancelled", updated_by: userId })
+    .eq("club_id", clubId)
+    .eq("id", bookingId);
+  if (error) redirectLessons("attendance-update-failed");
+  await supabase.from("audit_logs").insert({
+    action: "lesson_booking.removed_by_admin",
+    actor_user_id: userId,
+    before_data: before,
+    club_id: clubId,
+    entity_id: bookingId,
+    entity_type: "lesson_bookings",
+    metadata: { source: "admin.lessons" },
+  });
+  redirectLessons("booking-removed");
 }

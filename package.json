@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
-    ,"seed:e2e": "node scripts/seed-e2e-members.mjs",
-    "verify:e2e": "node scripts/verify-e2e.mjs"
+    "typecheck": "tsc --noEmit",
+    "seed:e2e": "node scripts/seed-e2e-members.mjs",
+    "verify:e2e": "node scripts/verify-e2e.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
@@ -18,7 +19,8 @@
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "server-only": "^0.0.1"
+    "server-only": "^0.0.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -29,6 +31,7 @@
     "eslint-config-next": "16.2.10",
     "supabase": "2.109.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^3.2.7"
   }
 }

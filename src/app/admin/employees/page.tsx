@@ -8,6 +8,7 @@ import {
   Pencil,
   Plus,
   Search,
+  ShieldAlert,
   Upload,
 } from "lucide-react";
 
@@ -16,7 +17,10 @@ import {
   importEmployees,
   updateEmployee,
 } from "@/app/admin/employees/actions";
+import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
+import { isDirectoryStale } from "@/lib/directory/import";
+import { formatBangkokDateTime } from "@/lib/lessons/booking";
 import { createClient } from "@/lib/supabase/server";
 
 type AdminEmployeesPageProps = {
@@ -30,6 +34,7 @@ type AdminEmployeesPageProps = {
 
 type EmployeeRow = {
   affiliation: string | null;
+  association_member_code?: string | null;
   bureau?: string | null;
   department: string | null;
   division?: string | null;
@@ -40,6 +45,8 @@ type EmployeeRow = {
   full_name: string;
   id: string;
   last_name?: string | null;
+  member_type?: string | null;
+  membership_status?: string | null;
   position?: string | null;
   section?: string | null;
   source: string | null;
@@ -52,10 +59,13 @@ const sampleEmployees: EmployeeRow[] = [
     affiliation: "การไฟฟ้าส่วนภูมิภาค",
     department: "กองบริการ",
     email: "member01@example.com",
+    association_member_code: "PEA-GC-0001",
     employee_code: "497901",
     employment_status: "active",
     full_name: "สมาชิก ตัวอย่างหนึ่ง",
     id: "sample-employee-1",
+    member_type: "สามัญ",
+    membership_status: "active",
     source: "manual",
   },
   {
@@ -77,6 +87,20 @@ const statusLabels: Record<string, string> = {
   unknown: "Unknown",
 };
 
+const membershipLabels: Record<string, string> = {
+  active: "สมาชิกปัจจุบัน",
+  inactive: "พ้นสภาพสมาชิก",
+  suspended: "พักสิทธิ์",
+  unknown: "ไม่ระบุ",
+};
+
+function getMembershipClass(status: string | null | undefined) {
+  if (status === "active") return "bg-[#edf9f3] text-[#16794b]";
+  if (status === "inactive") return "bg-[#fdecec] text-[#991b1b]";
+  if (status === "suspended") return "bg-[#fff5d8] text-[#805300]";
+  return "bg-[#f1f3ef] text-[#6b6475]";
+}
+
 const statusMessages: Record<string, string> = {
   "create-failed": "เพิ่มข้อมูลพนักงานไม่สำเร็จ กรุณาตรวจรหัสพนักงานซ้ำ",
   created: "เพิ่มข้อมูลพนักงานเรียบร้อยแล้ว",
@@ -84,18 +108,6 @@ const statusMessages: Record<string, string> = {
   "update-failed": "แก้ไขข้อมูลพนักงานไม่สำเร็จ",
   updated: "แก้ไขข้อมูลพนักงานเรียบร้อยแล้ว",
 };
-
-function getStatusClass(status: string) {
-  if (status === "active") {
-    return "bg-[#f8edf4] text-[#722257]";
-  }
-
-  if (status === "inactive") {
-    return "bg-[#fff5d8] text-[#805300]";
-  }
-
-  return "bg-[#f1f3ef] text-[#6b6475]";
-}
 
 function EmployeeForm({
   action,
@@ -218,6 +230,42 @@ function EmployeeForm({
         </label>
       </div>
 
+      <div className="grid gap-4 rounded-md border border-[#e6e2ee] bg-[#fbf9fc] p-4 md:grid-cols-3">
+        <label className="block">
+          <span className="text-sm font-semibold text-[#3f3a48]">รหัสสมาชิกสมาคม/สโมสร</span>
+          <input
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+            defaultValue={employee?.association_member_code ?? ""}
+            disabled={disabled}
+            name="associationMemberCode"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-semibold text-[#3f3a48]">ประเภทสมาชิก</span>
+          <input
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+            defaultValue={employee?.member_type ?? ""}
+            disabled={disabled}
+            name="memberType"
+            placeholder="เช่น สามัญ, วิสามัญ, สมทบ"
+          />
+        </label>
+        <label className="block">
+          <span className="text-sm font-semibold text-[#3f3a48]">สถานะสมาชิกสมาคม</span>
+          <select
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+            defaultValue={employee?.membership_status ?? "active"}
+            disabled={disabled}
+            name="membershipStatus"
+          >
+            <option value="active">สมาชิกปัจจุบัน</option>
+            <option value="inactive">พ้นสภาพสมาชิก</option>
+            <option value="suspended">พักสิทธิ์</option>
+            <option value="unknown">ไม่ระบุ</option>
+          </select>
+        </label>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-3">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">ตำแหน่ง</span>
@@ -296,25 +344,46 @@ export default async function AdminEmployeesPage({
   const q = params.q?.trim() ?? "";
   const selectedStatus = params.status ?? "all";
   let employees = sampleEmployees;
+  let lastImport: { deactivated_count: number; file_name: string; flagged_member_count: number; imported_at: string; imported_count: number; mode: string } | null = null;
+  let totalActiveMembers = sampleEmployees.filter((employee) => employee.membership_status === "active").length;
 
   if (!access.isBypass && access.clubId) {
     const supabase = await createClient();
-    const { data } = await supabase
-      .from("employee_directory")
-      .select(
-        "id, employee_code, title_prefix, first_name, last_name, full_name, email, position, work_line, bureau, division, department, section, affiliation, employment_status, source",
-      )
-      .eq("club_id", access.clubId)
-      .is("archived_at", null)
-      .order("employee_code", { ascending: true })
-      .limit(100);
+    const [{ data }, { data: importRows }, { count: activeMembershipCount }] = await Promise.all([
+      supabase
+        .from("employee_directory")
+        .select(
+          "id, employee_code, title_prefix, first_name, last_name, full_name, email, position, work_line, bureau, division, department, section, affiliation, employment_status, membership_status, member_type, association_member_code, source",
+        )
+        .eq("club_id", access.clubId)
+        .is("archived_at", null)
+        .order("employee_code", { ascending: true })
+        .limit(300),
+      supabase
+        .from("directory_imports")
+        .select("file_name, mode, imported_count, deactivated_count, flagged_member_count, imported_at")
+        .eq("club_id", access.clubId)
+        .order("imported_at", { ascending: false })
+        .limit(1),
+      supabase
+        .from("employee_directory")
+        .select("id", { count: "exact", head: true })
+        .eq("club_id", access.clubId)
+        .eq("membership_status", "active")
+        .is("archived_at", null),
+    ]);
 
     employees = (data ?? []) as EmployeeRow[];
+    lastImport = importRows?.[0] ?? null;
+    totalActiveMembers = activeMembershipCount ?? 0;
   }
+  const directoryStale = !access.isBypass && isDirectoryStale(lastImport?.imported_at);
 
   employees = employees.filter((employee) => {
     const matchesStatus =
-      selectedStatus === "all" || employee.employment_status === selectedStatus;
+      selectedStatus === "all" ||
+      employee.employment_status === selectedStatus ||
+      (selectedStatus.startsWith("m:") && (employee.membership_status ?? "active") === selectedStatus.slice(2));
     const haystack = [
       employee.employee_code,
       employee.full_name,
@@ -326,6 +395,8 @@ export default async function AdminEmployeesPage({
       employee.department,
       employee.section,
       employee.affiliation,
+      employee.association_member_code,
+      employee.member_type,
     ]
       .filter(Boolean)
       .join(" ")
@@ -345,9 +416,18 @@ export default async function AdminEmployeesPage({
         "import-empty": "ไม่พบข้อมูลพนักงานในไฟล์ที่อัปโหลด",
         "import-failed": "นำเข้าฐานข้อมูลพนักงานไม่สำเร็จ",
         "import-missing-employee-code": "ไฟล์ต้องมีคอลัมน์ รหัสพนักงาน",
-        "import-missing-file": "กรุณาเลือกไฟล์ CSV หรือ TSV",
-        imported: "นำเข้าฐานข้อมูลพนักงานเรียบร้อยแล้ว",
-      }[params.status]
+        "import-finalize-failed": "นำเข้าแล้ว แต่ปรับสถานะคนที่หายจากไฟล์ไม่สำเร็จ กรุณาลองอีกครั้ง",
+        "import-missing-file": "กรุณาเลือกไฟล์ Excel (.xlsx) หรือ CSV",
+        "import-too-large": "ไฟล์ใหญ่เกิน 15 MB",
+        "import-unreadable": "อ่านไฟล์ไม่ได้ กรุณาตรวจว่าเป็น Excel (.xlsx) หรือ CSV ที่ไม่เสียหาย",
+        imported: "นำเข้าฐานข้อมูลเรียบร้อยแล้ว",
+      }[params.status] ??
+      (params.status.startsWith("imported:")
+        ? (() => {
+            const [, imported, skipped, deactivated, flagged] = params.status.split(":");
+            return `นำเข้า ${imported} รายชื่อแล้ว${Number(skipped) ? ` · ข้าม ${skipped} แถวที่ไม่มีรหัส/ชื่อ` : ""}${Number(deactivated) ? ` · ตั้งเป็นพ้นสภาพ ${deactivated} คนที่ไม่อยู่ในไฟล์` : ""}${Number(flagged) ? ` · มีสมาชิกที่ต้องตรวจ ${flagged} คน` : ""}`;
+          })()
+        : null)
     : null;
   const bypassQuery = access.isBypass ? "?bypass=admin" : "";
 
@@ -358,10 +438,10 @@ export default async function AdminEmployeesPage({
           <div>
             <p className="text-sm font-semibold text-[#8b5b7a]">ระบบผู้ดูแล</p>
             <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
-              ฐานข้อมูลพนักงาน
+              ฐานข้อมูลสมาชิกสมาคม
             </h1>
             <p className="mt-2 text-sm text-[#6b6475]">
-              ฐานข้อมูลพนักงานสำหรับตรวจสอบใบสมัครสมาชิกจากการเข้าสู่ระบบ
+              รายชื่อสมาชิกสมาคมใหญ่ที่อัปเดตทุกเดือน ใช้ตรวจสอบรหัสพนักงาน ชื่อ และสถานะตอนสมัครสมาชิกชมรม
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -382,9 +462,9 @@ export default async function AdminEmployeesPage({
         </div>
 
         {statusMessage ? (
-          <div className="mt-5 rounded-md bg-[#f8edf4] px-4 py-3 text-sm font-medium text-[#722257]">
+          <StatusBanner className="mt-5" tone={toneForStatus(params.status)}>
             {statusMessage}
-          </div>
+          </StatusBanner>
         ) : null}
 
         {access.isBypass ? (
@@ -393,11 +473,21 @@ export default async function AdminEmployeesPage({
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        {directoryStale ? (
+          <div className="mt-5 flex items-start gap-3 rounded-md border border-[#d7a52c] bg-[#fff9ed] px-4 py-3 text-sm text-[#805300]">
+            <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+            <span>
+              ฐานข้อมูลสมาชิกสมาคม{lastImport ? ` อัปเดตล่าสุด ${formatBangkokDateTime(lastImport.imported_at)} (เกิน 31 วัน)` : "ยังไม่เคยนำเข้า"} กรุณาอัปโหลดไฟล์รายชื่อประจำเดือนนี้ เพื่อให้การตรวจสอบผู้สมัครถูกต้อง
+            </span>
+          </div>
+        ) : null}
+
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: "พนักงานที่แสดง", value: employees.length },
-            { label: "ปฏิบัติงาน", value: activeCount },
-            { label: "รอตรวจสมาชิก", value: "Match" },
+            { label: "รายชื่อที่แสดง", value: String(employees.length) },
+            { label: "สมาชิกสมาคมปัจจุบัน", value: String(totalActiveMembers) },
+            { label: "ปฏิบัติงาน (ในผลค้นหา)", value: String(activeCount) },
+            { label: "อัปเดตล่าสุด", value: lastImport ? formatBangkokDateTime(lastImport.imported_at) : "ยังไม่เคยนำเข้า" },
           ].map((item) => (
             <article
               className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
@@ -416,15 +506,24 @@ export default async function AdminEmployeesPage({
             <div className="flex items-center gap-2">
               <Upload className="size-4 text-[#722257]" aria-hidden="true" />
               <h2 className="text-lg font-semibold text-[#722257]">
-                อัปโหลดฐานข้อมูลพนักงาน
+                อัปโหลดรายชื่อสมาชิกสมาคมประจำเดือน
               </h2>
             </div>
-            <p className="text-sm text-[#6b6475]">
-              รองรับไฟล์ CSV/TSV ที่ export จาก Excel โดยใช้หัวคอลัมน์: รหัสพนักงาน, คำนำหน้า, ชื่อ, นามสกุล, ตำแหน่ง, สายงาน, สำนัก, ฝ่าย, กอง, แผนก
-            </p>
+            <div className="grid gap-3 rounded-md bg-[#fbf9fc] p-4 text-sm text-[#3f3a48] md:grid-cols-[1fr_auto]">
+              <div>
+                <p className="font-semibold">ไฟล์ Excel (.xlsx) หรือ CSV ใช้แถวแรกเป็นหัวคอลัมน์</p>
+                <p className="mt-1 text-[#6b6475]">คอลัมน์ที่ระบบรู้จัก: <b>รหัสพนักงาน</b> (บังคับ), ชื่อ, สกุล หรือ ชื่อ-นามสกุล, <b>สถานะ</b> (ปกติ/พ้นสภาพ/ระงับ), <b>ประเภท</b>, <b>รหัสสมาชิกสมาคมสโมสร</b> และ อีเมล/ตำแหน่ง/สายงาน/สำนัก/ฝ่าย/กอง/แผนก ถ้ามี</p>
+              </div>
+              {lastImport ? (
+                <div className="text-xs text-[#6b6475] md:text-right">
+                  <p>ครั้งล่าสุด {formatBangkokDateTime(lastImport.imported_at)}</p>
+                  <p className="mt-1">{lastImport.file_name} · {lastImport.imported_count} รายชื่อ{lastImport.mode === "replace" ? ` · พ้นสภาพ ${lastImport.deactivated_count} · ต้องตรวจ ${lastImport.flagged_member_count}` : ""}</p>
+                </div>
+              ) : null}
+            </div>
             <div className="grid gap-3 md:grid-cols-[1fr_160px]">
               <input
-                accept=".csv,.tsv,text/csv,text/tab-separated-values"
+                accept=".xlsx,.xls,.csv,.tsv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,text/tab-separated-values"
                 className="h-11 rounded-md border border-[#d9d3e6] bg-white px-3 py-2 text-sm file:mr-4 file:rounded-md file:border-0 file:bg-[#f8edf4] file:px-3 file:py-1.5 file:text-sm file:font-semibold file:text-[#722257]"
                 disabled={access.isBypass}
                 name="employeeFile"
@@ -440,6 +539,13 @@ export default async function AdminEmployeesPage({
                 นำเข้าข้อมูล
               </button>
             </div>
+            <label className="flex items-start gap-3 rounded-md border border-[#e6e2ee] bg-white/70 px-3 py-3 text-sm text-[#3f3a48]">
+              <input className="mt-0.5 size-4 accent-[#722257]" defaultChecked disabled={access.isBypass} name="replaceMode" type="checkbox" />
+              <span>
+                <span className="font-semibold">ไฟล์นี้คือรายชื่อสมาชิกทั้งหมดของเดือนนี้</span>
+                <span className="block text-xs text-[#6b6475]">รายชื่อที่ไม่อยู่ในไฟล์จะถูกตั้งเป็น &quot;พ้นสภาพสมาชิก&quot; และสมาชิกชมรมที่เคยอนุมัติแล้วแต่หายไปจะถูกแจ้งให้ผู้ดูแลตรวจในหน้าจัดการสมาชิก (ไม่ปิดบัญชีอัตโนมัติ) ยกเลิกติ๊กถ้าต้องการเพิ่ม/แก้บางรายชื่อเท่านั้น</span>
+              </span>
+            </label>
           </form>
         </section>
 
@@ -480,6 +586,9 @@ export default async function AdminEmployeesPage({
                   name="status"
                 >
                   <option value="all">ทุกสถานะ</option>
+                  <option value="m:active">สมาชิกสมาคมปัจจุบัน</option>
+                  <option value="m:inactive">พ้นสภาพสมาชิก</option>
+                  <option value="m:suspended">พักสิทธิ์</option>
                   <option value="active">ปฏิบัติงาน</option>
                   <option value="inactive">ไม่ปฏิบัติงาน</option>
                   <option value="retired">เกษียณ</option>
@@ -513,14 +622,18 @@ export default async function AdminEmployeesPage({
                           {employee.full_name}
                         </p>
                         <span
-                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getStatusClass(employee.employment_status)}`}
+                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getMembershipClass(employee.membership_status)}`}
                         >
-                          {statusLabels[employee.employment_status] ??
-                            employee.employment_status}
+                          {membershipLabels[employee.membership_status ?? "active"] ?? employee.membership_status}
                         </span>
+                        {employee.member_type ? (
+                          <span className="rounded-md bg-[#f8edf4] px-2 py-1 text-xs font-semibold text-[#722257]">{employee.member_type}</span>
+                        ) : null}
                       </div>
                       <p className="mt-1 text-sm text-[#6b6475]">
-                        {employee.employee_code} · {employee.email ?? "ไม่มี email"}
+                        รหัสพนักงาน {employee.employee_code}
+                        {employee.association_member_code ? ` · รหัสสมาชิก ${employee.association_member_code}` : ""}
+                        {employee.email ? ` · ${employee.email}` : ""}
                       </p>
                     </div>
                     <div className="text-sm text-[#3f3a48]">
@@ -532,8 +645,9 @@ export default async function AdminEmployeesPage({
                     <div className="text-sm text-[#3f3a48]">
                       <p className="flex items-center gap-1">
                         <BriefcaseBusiness className="size-4" aria-hidden="true" />
-                        {employee.source ?? "manual"}
+                        {statusLabels[employee.employment_status] ?? employee.employment_status}
                       </p>
+                      <p className="mt-1 text-xs text-[#6b6475]">{employee.source === "association_monthly" ? "จากไฟล์รายเดือน" : employee.source === "employee_import" ? "นำเข้าบางส่วน" : "เพิ่มด้วยมือ"}</p>
                     </div>
                     <span className="w-fit rounded-md border border-[#d9d3e6] px-3 py-2 text-sm font-semibold text-[#722257] group-open:bg-white/70">
                       แก้ไข
@@ -543,6 +657,9 @@ export default async function AdminEmployeesPage({
                   <div className="mt-5 rounded-lg border border-[#e6e2ee] bg-white/70 p-4">
                     <div className="mb-4 grid gap-3 rounded-md bg-white p-4 text-sm text-[#3f3a48] md:grid-cols-4">
                       {[
+                        { label: "รหัสสมาชิกสมาคม", value: employee.association_member_code },
+                        { label: "ประเภทสมาชิก", value: employee.member_type },
+                        { label: "สถานะสมาชิก", value: membershipLabels[employee.membership_status ?? "active"] },
                         { label: "ตำแหน่ง", value: employee.position },
                         { label: "สายงาน", value: employee.work_line },
                         { label: "สำนัก", value: employee.bureau },

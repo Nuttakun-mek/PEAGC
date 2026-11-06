@@ -1,6 +1,7 @@
 import { Award, Flag, Megaphone, Save, Trash2 } from "lucide-react";
 
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
 import { createClient } from "@/lib/supabase/server";
 
@@ -28,7 +29,7 @@ export default async function AdminContentPage({ searchParams }: { searchParams:
   const inputClass = "h-10 rounded-md border border-[#dce3ea] bg-white px-3 text-sm outline-none focus:border-[#168aad]";
   return <main className="min-h-screen px-4 py-6 text-[#243244]"><div className="mx-auto max-w-[1500px]">
     <div><p className="text-sm font-semibold text-[#168aad]">ศูนย์เนื้อหาและผลการแข่งขัน</p><h1 className="mt-1 text-3xl font-semibold">ข่าว คะแนน และรางวัล</h1><p className="mt-2 text-sm text-[#667085]">ข้อมูลที่บันทึกจะแสดงในหน้าสมาชิกโดยอัตโนมัติ</p></div>
-    {params.status && messages[params.status] ? <div className="mt-4 rounded-md bg-[#edf9f6] px-4 py-3 text-sm font-semibold text-[#16794b]">{messages[params.status]}</div> : null}
+    {params.status && messages[params.status] ? <StatusBanner className="mt-4" tone={toneForStatus(params.status)}>{messages[params.status]}</StatusBanner> : null}
 
     <div className="mt-6 grid gap-5 xl:grid-cols-2">
       <section className="rounded-lg border border-[#e2e8ef] bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><Megaphone className="size-5 text-[#168aad]"/><h2 className="text-lg font-semibold">สร้างข่าวประชาสัมพันธ์</h2></div>

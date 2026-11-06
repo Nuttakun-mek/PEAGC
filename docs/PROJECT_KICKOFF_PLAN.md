@@ -214,6 +214,7 @@ Outcome: สมาชิกจองเรียนและ Admin ลงเว�
 - Member lesson booking - started in `/member`
 - Attendance status update - started in `/admin/lessons`
 - RLS and duplicate active booking protection - started in Supabase migration
+- Booking window (open/close), FCFS queue with waitlist, max bookings per member, cancel cutoff, announcement acknowledgement gate, bulk slot generator, roster CSV - done (ported from pea-golf-web prototype, migration `20261106090000`)
 
 ### Sprint 5: Pairing and Check-in
 

@@ -11,6 +11,7 @@ import {
   UserRound,
 } from "lucide-react";
 
+import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
 import { createClient } from "@/lib/supabase/server";
 
@@ -356,9 +357,9 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
         </div>
 
         {statusMessage ? (
-          <div className="mt-5 rounded-md bg-[#f8edf4] px-4 py-3 text-sm font-medium text-[#722257]">
+          <StatusBanner className="mt-5" tone={toneForStatus(params.status)}>
             {statusMessage}
-          </div>
+          </StatusBanner>
         ) : null}
 
         {access.isBypass ? (

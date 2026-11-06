@@ -19,13 +19,25 @@ import {
 
 import { signOut } from "@/app/actions/auth";
 import { MemberAvatar } from "@/components/member-avatar";
+import { MemberCard } from "@/components/member-card";
+import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { InteractiveSlotBoard } from "@/components/interactive-slot-board";
+import {
+  type LessonBookingSettings,
+  defaultLessonBookingSettings,
+  formatBangkokDateTime,
+  getBookingPhase,
+  hasLessonAnnouncement,
+  needsAnnouncementAck,
+  queueStatusLabel,
+} from "@/lib/lessons/booking";
 import { resolveAccess } from "@/lib/auth/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 import {
+  acknowledgeLessonAnnouncement,
   bookLessonSlot,
   cancelEventRegistration,
   cancelLessonBooking,
@@ -35,16 +47,27 @@ import {
 } from "./actions";
 
 type MemberPageProps = {
-  searchParams: Promise<{ bypass?: string; status?: string }>;
+  searchParams: Promise<{ bypass?: string; rank?: string; status?: string }>;
 };
 
 const statusMessages: Record<string, string> = {
   "admin-required": "บัญชีนี้ยังไม่มีสิทธิ์ผู้ดูแลระบบ",
   "already-registered": "คุณสมัครกิจกรรมนี้ไว้แล้ว",
   "lesson-already-booked": "คุณจองรอบเรียนนี้ไว้แล้ว",
+  "lesson-announcement-acked": "รับทราบประกาศแล้ว เลือกเวลาเรียนได้เลย",
+  "lesson-announcement-failed": "บันทึกการรับทราบประกาศไม่สำเร็จ กรุณาลองใหม่",
+  "lesson-announcement-required": "กรุณาอ่านและกดรับทราบประกาศก่อนเลือกเวลาเรียน",
+  "lesson-cancel-locked": "เลยกำหนดยกเลิกแล้ว กรุณาติดต่อผู้ดูแล",
+  "lesson-changed-waitlisted": "ย้ายรอบเรียนแล้ว คุณอยู่ในคิวสำรองของรอบใหม่",
+  "lesson-limit": "คุณจองครบจำนวนสูงสุดต่อคนแล้ว ยกเลิกรอบอื่นก่อนหากต้องการเปลี่ยน",
+  "lesson-not-open": "ยังไม่ถึงเวลาเปิดลงทะเบียน",
+  "lesson-overlap": "เวลาเรียนชนกับรอบที่คุณจองไว้แล้ว",
+  "lesson-started": "รอบเรียนนี้เริ่มเรียนไปแล้ว",
+  "lesson-waitlisted": "รอบนี้เต็มแล้ว ระบบจัดคุณเข้าคิวสำรอง เมื่อมีคนยกเลิกคิวจะขยับขึ้นอัตโนมัติ",
+  "lesson-window-closed": "ปิดลงทะเบียนรอบนี้แล้ว",
   "lesson-booked": "จองเรียนเรียบร้อยแล้ว",
   "lesson-booking-failed": "จองเรียนไม่สำเร็จ กรุณาลองใหม่",
-  "lesson-cancel-closed": "ไม่สามารถยกเลิกรอบเรียนนี้ได้ เนื่องจากเริ่มเรียนแล้วหรือสถานะรายการเปลี่ยนไป",
+  "lesson-cancel-closed": "ไม่พบรายการจอง หรือสถานะรายการเปลี่ยนไปแล้ว",
   "lesson-cancel-failed": "ยกเลิกการจองเรียนไม่สำเร็จ กรุณาลองใหม่",
   "lesson-cancelled": "ยกเลิกการจองเรียนเรียบร้อยแล้ว",
   "lesson-change-closed": "ไม่สามารถเปลี่ยนเวลาเรียนได้ เนื่องจากปิดรับเปลี่ยนรอบหรือเลยเวลา cutoff แล้ว",
@@ -70,14 +93,6 @@ const statusMessages: Record<string, string> = {
   "registration-closed": "กิจกรรมนี้ปิดรับสมัครแล้ว",
   "registration-failed": "สมัครกิจกรรมไม่สำเร็จ กรุณาลองใหม่",
   "registration-full": "กิจกรรมนี้มีผู้สมัครครบจำนวนแล้ว",
-};
-
-const memberStatusLabels: Record<string, string> = {
-  active: "อนุมัติแล้ว",
-  archived: "ถูกเก็บถาวร",
-  guest: "แขก",
-  inactive: "ไม่ใช้งาน",
-  pending_verification: "รอตรวจสอบพนักงาน",
 };
 
 const eventRegistrationStatusLabels: Record<string, string> = {
@@ -120,6 +135,8 @@ const sampleLessonSlots = [
     coach_name: "ผู้ฝึกสอน กฟภ.",
     end_time: "18:30",
     id: "sample-slot-1",
+    status: "open",
+    waitlist_capacity: 2,
     program_id: "sample-program-1",
     lesson_date: "2026-08-20",
     lesson_programs: { name: "พื้นฐานกอล์ฟ", price: 1200 },
@@ -252,7 +269,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
     ? await supabase
         .from("members")
         .select(
-          "id, member_code, avatar_url, title_prefix, first_name, last_name, full_name, nickname, employee_code, position, work_line, bureau, division, department, section, affiliation, handicap, organization, skill_level, status",
+          "id, club_id, member_code, avatar_url, title_prefix, first_name, last_name, full_name, nickname, employee_code, position, work_line, bureau, division, department, section, affiliation, handicap, organization, skill_level, status, joined_at, association_member_code, association_member_type, association_membership_status, lesson_announcement_ack_version",
         )
         .eq("user_id", access.userId)
         .maybeSingle()
@@ -262,7 +279,13 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
       ? {
           avatar_url: null,
           affiliation: "PEA",
+          association_member_code: "PEA-GC-0001",
+          association_member_type: "สามัญ",
+          association_membership_status: "active",
+          club_id: null as string | null,
           department: "กองบริการ",
+          joined_at: "2026-07-01",
+          lesson_announcement_ack_version: 0,
           employee_code: "497901",
           member_code: "PEAGC-0001",
           position: "วิศวกร",
@@ -356,7 +379,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
     ? await supabase
         .from("lesson_slots")
         .select(
-          "id, program_id, title, coach_name, venue, lesson_date, start_time, end_time, capacity, booked_count, allow_member_reschedule, reschedule_cutoff_hours, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections, lesson_programs(name, price)",
+          "id, program_id, title, coach_name, venue, lesson_date, start_time, end_time, capacity, waitlist_capacity, status, booked_count, allow_member_reschedule, reschedule_cutoff_hours, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections, lesson_programs(name, price)",
         )
         .eq("status", "open")
         .is("archived_at", null)
@@ -371,7 +394,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
       ? await supabase
           .from("lesson_bookings")
           .select(
-            "id, slot_id, status, booked_at, lesson_slots(program_id, title, lesson_date, start_time, end_time, venue, status, allow_member_reschedule, lesson_programs(name))",
+            "id, slot_id, status, booked_at, lesson_slots(program_id, title, lesson_date, start_time, end_time, venue, status, capacity, allow_member_reschedule, lesson_programs(name))",
           )
           .eq("member_id", currentMember.id)
           .not("status", "in", "(cancelled)")
@@ -396,6 +419,30 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
       (bookedCountBySlot.get(booking.slot_id) ?? 0) + 1,
     );
   });
+  const { data: lessonSettingsRow } =
+    supabase && currentMember?.club_id
+      ? await supabase
+          .from("lesson_booking_settings")
+          .select("booking_open_at, booking_close_at, max_bookings_per_member, cancel_cutoff_hours, announcement_title, announcement_body, announcement_version")
+          .eq("club_id", currentMember.club_id)
+          .maybeSingle()
+      : { data: null };
+  const lessonSettings: LessonBookingSettings = lessonSettingsRow
+    ? { ...defaultLessonBookingSettings, ...lessonSettingsRow }
+    : access.isBypass
+      ? { ...defaultLessonBookingSettings, booking_open_at: "2026-01-01T00:00:00.000Z" }
+      : { ...defaultLessonBookingSettings, booking_open_at: null };
+  const bookingPhase = getBookingPhase(lessonSettings);
+  type QueueRow = { booking_id: string; capacity: number; queue_position: number; slot_id: string; waitlist_capacity: number };
+  const { data: myQueue } =
+    supabase && currentMember?.id
+      ? await supabase.rpc("my_lesson_bookings")
+      : { data: [] as QueueRow[] };
+  const queueByBooking = new Map<string, number>(
+    ((myQueue ?? []) as QueueRow[]).map((item) => [item.booking_id, item.queue_position]),
+  );
+  const mustAckAnnouncement =
+    !access.isBypass && needsAnnouncementAck(lessonSettings, currentMember?.lesson_announcement_ack_version);
   const { data: scoreHistory } =
     supabase && currentMember?.id
       ? await supabase
@@ -416,14 +463,18 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
     return {
       bookedCount: slot.booked_count ?? bookedCountBySlot.get(slot.id) ?? 0,
       capacity: slot.capacity,
+      coach: slot.coach_name ?? null,
       date: slot.lesson_date,
       endTime: slot.end_time,
       id: slot.id,
-      isCurrent: Boolean(booking),
+      myBookingId: booking?.id ?? null,
+      myPosition: booking ? (queueByBooking.get(booking.id) ?? 1) : null,
       program: program?.name ?? "คอร์สเรียนกอล์ฟ",
       startTime: slot.start_time,
+      status: slot.status ?? "open",
       title: slot.title,
       venue: slot.venue,
+      waitlistCapacity: slot.waitlist_capacity ?? 0,
     };
   });
   const currentLessonBooking = lessonBookings?.find((booking) => booking.status === "booked");
@@ -452,50 +503,44 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
     <main className="min-h-screen bg-transparent px-4 py-6 text-[#2f3137]">
       <div className="mx-auto grid w-full max-w-[1500px] gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
         <section className="rounded-lg border border-[#e2e8ef] bg-white/95 p-5 shadow-[0_8px_24px_rgba(30,41,59,0.05)]">
-          <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold text-[#8b5b7a]">ระบบสมาชิก</p>
-              <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
-                สวัสดี {displayName}
-              </h1>
+              <p className="text-sm font-semibold text-[#8b5b7a]">ระบบสมาชิก PEAGC</p>
+              <h1 className="mt-1 text-2xl font-semibold text-[#722257]">สวัสดี คุณ{displayName}</h1>
             </div>
-            <div className="flex items-center gap-2">
-              <MemberAvatar
-                avatarUrl={currentMember?.avatar_url}
-                displayName={displayName}
-              />
-              <form action={signOut}>
-                <button
-                  aria-label="ออกจากระบบ"
-                  className="flex size-10 items-center justify-center rounded-md border border-[#d9d3e6] bg-white text-[#722257] transition hover:border-[#722257]"
-                  title="ออกจากระบบ"
-                  type="submit"
-                >
-                  <LogOut className="size-4" aria-hidden="true" />
-                </button>
-              </form>
-            </div>
+            <form action={signOut}>
+              <button
+                aria-label="ออกจากระบบ"
+                className="flex size-10 items-center justify-center rounded-lg border border-[#d9d3e6] bg-white text-[#722257] transition hover:border-[#722257]"
+                title="ออกจากระบบ"
+                type="submit"
+              >
+                <LogOut className="size-4" aria-hidden="true" />
+              </button>
+            </form>
+          </div>
+
+          <div className="mt-4">
+            <MemberCard displayName={displayName} member={currentMember} />
           </div>
 
           {params.status && statusMessages[params.status] ? (
-            <div className="mt-5 rounded-md bg-[#f8edf4] px-4 py-3 text-sm font-medium text-[#722257]">
+            <StatusBanner className="mt-4" tone={toneForStatus(params.status)}>
               {statusMessages[params.status]}
-            </div>
+              {params.rank && /^\d+$/.test(params.rank) ? ` (สำรองลำดับ ${params.rank})` : ""}
+            </StatusBanner>
           ) : null}
 
-          <div className="mt-5 rounded-lg border border-[#e6e2ee] bg-white/70 p-4">
-            <p className="text-sm font-semibold text-[#722257]">สถานะการเปิดใช้งานสมาชิก</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-4">
-              {memberPipeline.map((step, index) => (
-                <div className={`rounded-md px-3 py-3 text-sm ${step.done ? "bg-[#f8edf4] text-[#722257]" : "bg-[#f4f6fa] text-[#8b8490]"}`} key={step.label}>
-                  <span className={`mr-2 inline-flex size-6 items-center justify-center rounded-full text-xs font-bold ${step.done ? "bg-[#722257] text-white" : "bg-[#d9d3e6] text-[#6b6475]"}`}>
-                    {step.done ? "✓" : index + 1}
-                  </span>
-                  <span className="font-semibold">{step.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ol aria-label="สถานะการเปิดใช้งานสมาชิก" className="mt-4 grid grid-cols-4 gap-1 rounded-lg border border-[#e6e2ee] bg-white/70 p-3">
+            {memberPipeline.map((step, index) => (
+              <li className="flex flex-col items-center gap-1.5 text-center" key={step.label}>
+                <span className={`flex size-7 items-center justify-center rounded-full text-[11px] font-bold ${step.done ? "bg-[#722257] text-white" : "border-2 border-[#e6e2ee] bg-white text-[#9a94a6]"}`}>
+                  {step.done ? "✓" : index + 1}
+                </span>
+                <span className={`text-[11px] leading-tight ${step.done ? "font-semibold text-[#3f3a48]" : "text-[#8b8490]"}`}>{step.label}</span>
+              </li>
+            ))}
+          </ol>
 
           {isPending ? (
             <div className="mt-5 grid gap-3 rounded-md border border-[#d7a52c] bg-[#fff9ed] px-4 py-3 text-sm text-[#805300]">
@@ -524,73 +569,22 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
             </div>
           ) : null}
 
-          <div className="golf-visual mt-6 rounded-lg bg-[#722257] p-5 text-white shadow-[0_14px_30px_rgba(114,34,87,0.16)]">
-            <div className="flex items-center gap-4 border-b border-white/15 pb-4">
-              <MemberAvatar
-                avatarUrl={currentMember?.avatar_url}
-                displayName={displayName}
-                size="large"
-              />
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-[#efd798]">บัตรสมาชิกดิจิทัล</p>
-                <p className="mt-1 truncate text-lg font-semibold text-white">
-                  {currentMember?.full_name ?? displayName}
-                </p>
-                <p className="mt-1 text-sm text-white/65">
-                  เลขสมาชิก {currentMember?.member_code ?? "รอกำหนด"}
-                </p>
+          <dl className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-[#e6e2ee] bg-white/70 p-4 text-sm">
+            {[
+              ["แต้มต่อ", currentMember?.handicap ?? "-"],
+              ["ระดับฝีมือ", currentMember?.skill_level === "beginner" ? "เริ่มต้น" : currentMember?.skill_level === "intermediate" ? "ปานกลาง" : currentMember?.skill_level === "advanced" ? "ชำนาญ" : "-"],
+              ["หน่วยงาน", currentMember?.department ?? currentMember?.organization ?? "-"],
+              ["ตำแหน่ง", currentMember?.position ?? currentMember?.affiliation ?? "-"],
+            ].map(([label, value]) => (
+              <div key={String(label)}>
+                <dt className="text-xs text-[#6b6475]">{label}</dt>
+                <dd className="mt-0.5 font-semibold text-[#3f3a48]">{value}</dd>
               </div>
-            </div>
-            <div className="mt-4 grid gap-3 text-sm [&_span:first-child]:text-white/60 [&_span:last-child]:text-white">
-              <div className="flex justify-between gap-4">
-                <span className="text-[#6b6475]">เลขสมาชิก</span>
-                <span className="font-semibold text-[#722257]">
-                  {currentMember?.member_code ?? "รอกำหนด"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-[#6b6475]">รหัสพนักงาน</span>
-                <span className="font-semibold text-[#722257]">
-                  {currentMember?.employee_code ?? "-"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-[#6b6475]">แต้มต่อ</span>
-                <span className="font-semibold text-[#722257]">
-                  {currentMember?.handicap ?? "-"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-[#6b6475]">สถานะ</span>
-                <span
-                  className={`font-semibold ${
-                    isPending ? "text-[#805300]" : "text-[#722257]"
-                  }`}
-                >
-                  {currentMember?.status
-                    ? memberStatusLabels[currentMember.status]
-                    : "ทดลอง"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-[#6b6475]">หน่วยงาน</span>
-                <span className="font-semibold text-[#722257]">
-                  {currentMember?.department ?? currentMember?.organization ?? "-"}
-                </span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-[#6b6475]">สังกัด</span>
-                <span className="font-semibold text-[#722257]">
-                  {currentMember?.position
-                    ? `${currentMember.position} · ${currentMember?.work_line ?? "-"}`
-                    : currentMember?.affiliation ?? "-"}
-                </span>
-              </div>
-            </div>
-          </div>
+            ))}
+          </dl>
 
           <Link
-            className="mt-5 flex h-12 items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
+            className="mt-4 flex h-12 items-center justify-center gap-2 rounded-lg border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257] transition hover:border-[#722257]"
             href={profileHref}
           >
             <Pencil className="size-4" aria-hidden="true" />
@@ -730,7 +724,9 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                                 </p>
                               </div>
                               <span className="rounded-md bg-[#f8edf4] px-2 py-1 text-xs font-semibold text-[#722257]">
-                                {lessonBookingStatusLabels[booking.status] ?? booking.status}
+                                {booking.status === "booked" && queueByBooking.has(booking.id) && slot
+                                  ? queueStatusLabel(queueByBooking.get(booking.id)!, slot.capacity)
+                                  : lessonBookingStatusLabels[booking.status] ?? booking.status}
                               </span>
                             </div>
                             <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#6b6475]">
@@ -779,132 +775,66 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
               <ChevronRight className="size-5 text-[#9a94a6]" aria-hidden="true" />
             </div>
 
-            <div className="mt-4">
-              <InteractiveSlotBoard
-                bookAction={bookLessonSlot}
-                canBook={canRegister}
-                changeAction={changeLessonSlot}
-                currentBookingId={currentLessonBooking?.id}
-                key={memberSlotTableItems.map((slot) => `${slot.id}:${slot.bookedCount}:${slot.isCurrent}`).join("|")}
-                slots={memberSlotTableItems}
-              />
-              <div className="mt-5 border-t border-[#e6e2ee] pt-4">
-                <h3 className="text-sm font-semibold text-[#722257]">รายละเอียด เปลี่ยนเวลา และยกเลิก</h3>
-              </div>
-            </div>
-
-            <div className="mt-3 grid gap-3">
-              {visibleLessonSlots?.length ? (
-                visibleLessonSlots.map((slot) => {
-                  const booking = lessonBookingBySlot.get(slot.id);
-                  const program = firstRelated(slot.lesson_programs);
-                  const scheduleBooking = lessonBookings?.find((candidate) => {
-                    const bookedSlot = firstRelated(candidate.lesson_slots);
-
-                    return (
-                      bookedSlot?.program_id === slot.program_id &&
-                      bookedSlot?.lesson_date === slot.lesson_date
-                    );
-                  });
-
-                  return (
-                    <div
-                      className="rounded-md border border-[#e6e2ee] bg-white/70 p-4"
-                      key={slot.id}
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="font-semibold text-[#722257]">{slot.title}</p>
-                          <p className="mt-1 text-sm text-[#6b6475]">
-                            {program?.name ?? "-"} · รับ {slot.capacity} คน
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-3 text-sm text-[#6b6475]">
-                            <span className="flex items-center gap-1">
-                              <Clock className="size-4" aria-hidden="true" />
-                              {slot.lesson_date} · {slot.start_time?.slice(0, 5)}-
-                              {slot.end_time?.slice(0, 5)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <MapPin className="size-4" aria-hidden="true" />
-                              {slot.venue ?? "ยังไม่ระบุสถานที่"}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-2 sm:items-end">
-                          <span className="w-fit rounded-md bg-white px-3 py-1 text-sm font-semibold text-[#722257]">
-                            {(program?.price ?? 0).toLocaleString()} บาท
-                          </span>
-                          {booking ? (
-                            <div className="grid justify-items-end gap-2">
-                            <span className="flex h-10 w-fit items-center gap-2 rounded-md bg-[#f8edf4] px-3 text-sm font-semibold text-[#722257]">
-                              <CheckCircle2 className="size-4" aria-hidden="true" />
-                              จองแล้ว
-                            </span>
-                              {slot.allow_member_reschedule &&
-                              visibleLessonSlots.some((candidate) => candidate.id !== slot.id) ? (
-                                <form action={changeLessonSlot} className="mt-2 grid gap-2 sm:grid-cols-[1fr_auto]">
-                                  <input name="bookingId" type="hidden" value={booking.id} />
-                                  <select
-                                    className="h-10 rounded-md border border-[#d9d3e6] bg-white px-3 text-sm outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
-                                    name="slotId"
-                                  >
-                                    {visibleLessonSlots
-                                      .filter((candidate) => candidate.id !== slot.id)
-                                      .map((candidate) => (
-                                        <option key={candidate.id} value={candidate.id}>
-                                          {candidate.lesson_date} {candidate.start_time?.slice(0, 5)} · {candidate.title}
-                                        </option>
-                                      ))}
-                                  </select>
-                                  <button
-                                    className="h-10 rounded-md border border-[#d9d3e6] bg-white px-3 text-sm font-semibold text-[#722257]"
-                                    type="submit"
-                                  >
-                                    เปลี่ยนเวลา
-                                  </button>
-                                </form>
-                              ) : null}
-                              <form action={cancelLessonBooking}>
-                                <input name="bookingId" type="hidden" value={booking.id} />
-                                <ConfirmSubmitButton
-                                  className="h-9 rounded-md px-3 text-sm font-semibold text-[#8a3442] transition hover:bg-[#fff0f1]"
-                                  message="ยืนยันยกเลิกการจองเรียนรายการนี้หรือไม่"
-                                >
-                                  ยกเลิกการจอง
-                                </ConfirmSubmitButton>
-                              </form>
-                            </div>
-                          ) : scheduleBooking ? (
-                            <span className="w-fit rounded-md bg-[#fff5d8] px-3 py-2 text-sm font-medium text-[#805300]">
-                              ใช้ปุ่มเปลี่ยนเวลาจากรอบที่จอง
-                            </span>
-                          ) : canRegister ? (
-                            <form action={bookLessonSlot}>
-                              <input name="slotId" type="hidden" value={slot.id} />
-                              <button
-                                className="flex h-10 items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
-                                type="submit"
-                              >
-                                <GraduationCap className="size-4" aria-hidden="true" />
-                                จองเรียน
-                              </button>
-                            </form>
-                          ) : (
-                            <span className="w-fit rounded-md bg-[#f4f6fa] px-3 py-2 text-sm font-medium text-[#6b6475]">
-                              {access.isBypass
-                                ? "โหมดทดลอง"
-                                : "รออนุมัติสมาชิก"}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-md border border-[#e6e2ee] bg-white/70 p-4 text-sm text-[#6b6475]">
-                  ยังไม่มีรอบเรียนที่เปิดจอง
+            <div className="mt-4" id="lessons">
+              {mustAckAnnouncement ? (
+                <div className="rounded-lg border border-[#e6d9a8] bg-[#fffaf0] p-5">
+                  <span className="inline-flex rounded-full bg-[#fff5d8] px-3 py-1 text-xs font-semibold text-[#805300]">
+                    ประกาศ{lessonSettings.announcement_version > 1 ? ` · ฉบับที่ ${lessonSettings.announcement_version}` : ""}
+                  </span>
+                  {lessonSettings.announcement_title ? (
+                    <h3 className="mt-3 text-lg font-semibold text-[#3f3a48]">{lessonSettings.announcement_title}</h3>
+                  ) : null}
+                  <div className="mt-3 whitespace-pre-wrap border-l-4 border-[#c69214] bg-white/70 px-4 py-3 text-sm leading-7 text-[#3f3a48]">
+                    {lessonSettings.announcement_body}
+                  </div>
+                  <form action={acknowledgeLessonAnnouncement} className="mt-4 grid gap-3">
+                    <input name="version" type="hidden" value={lessonSettings.announcement_version} />
+                    <label className="flex items-start gap-3 text-sm text-[#3f3a48]">
+                      <input className="mt-1 size-4 accent-[#722257]" name="accepted" required type="checkbox" />
+                      ข้าพเจ้าได้อ่านและยอมรับเงื่อนไขตามประกาศข้างต้น
+                    </label>
+                    <button className="h-11 w-fit rounded-md bg-[#722257] px-5 text-sm font-semibold text-white" type="submit">
+                      รับทราบ และไปเลือกเวลาเรียน
+                    </button>
+                  </form>
                 </div>
+              ) : (
+                <>
+                  <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#6b6475]">
+                    <span>จองได้สูงสุด {lessonSettings.max_bookings_per_member ? `${lessonSettings.max_bookings_per_member} รอบต่อคน` : "ไม่จำกัด"}</span>
+                    <span>ยกเลิกได้ก่อนเรียน {lessonSettings.cancel_cutoff_hours} ชม.</span>
+                    <span>เมื่อมีคนยกเลิก คิวสำรองลำดับแรกได้ที่นั่งอัตโนมัติ</span>
+                    {lessonSettings.booking_close_at && bookingPhase === "open" ? (
+                      <span>ปิดลงทะเบียน {formatBangkokDateTime(lessonSettings.booking_close_at)}</span>
+                    ) : null}
+                  </div>
+                  {hasLessonAnnouncement(lessonSettings) ? (
+                    <details className="mb-4 rounded-md border border-[#e6e2ee] bg-white/70 px-4 py-3 text-sm">
+                      <summary className="cursor-pointer font-semibold text-[#722257]">
+                        อ่านประกาศอีกครั้ง{lessonSettings.announcement_title ? ` · ${lessonSettings.announcement_title}` : ""}
+                      </summary>
+                      <div className="mt-3 whitespace-pre-wrap leading-7 text-[#3f3a48]">{lessonSettings.announcement_body}</div>
+                    </details>
+                  ) : null}
+                  {memberSlotTableItems.length ? (
+                    <InteractiveSlotBoard
+                      bookAction={bookLessonSlot}
+                      canBook={canRegister}
+                      cancelAction={cancelLessonBooking}
+                      cancelCutoffHours={lessonSettings.cancel_cutoff_hours}
+                      changeAction={changeLessonSlot}
+                      currentBookingId={currentLessonBooking?.id}
+                      key={memberSlotTableItems.map((slot) => `${slot.id}:${slot.bookedCount}:${slot.myPosition ?? ""}`).join("|")}
+                      openAt={lessonSettings.booking_open_at}
+                      phase={bookingPhase}
+                      slots={memberSlotTableItems}
+                    />
+                  ) : (
+                    <div className="rounded-md border border-dashed border-[#d9d3e6] bg-white/60 px-4 py-6 text-center text-sm text-[#6b6475]">
+                      ยังไม่มีรอบเรียนที่เปิดจอง
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </article>

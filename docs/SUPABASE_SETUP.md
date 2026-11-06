@@ -185,6 +185,8 @@ Additional migration:
 - Lesson RLS for open slots/programs, own booking insert/select, and admin attendance updates
 - Member score fields on `event_registrations` for gross/net/stableford/rank history shown in the member portal
 - `member_notifications` queue for approval email notifications after Admin approves a pending member
+- Lesson FCFS queue + waitlist (`20261106090000_lesson_fcfs_waitlist.sql`): `lesson_booking_settings` (booking window, max per member, cancel cutoff, versioned announcement), `lesson_slots.waitlist_capacity`, `lesson_bookings.queue_seq`, `members.lesson_announcement_ack_version`, and RPCs `book_lesson_slot`, `change_lesson_booking`, `cancel_lesson_booking`, `ack_lesson_announcement`, `my_lesson_bookings`. Not yet pushed to the remote project.
+- Association member directory (`20261106120000_association_member_directory.sql`): `employee_directory.member_type / association_member_code / membership_status / import_batch_id`, `members.association_*`, `directory_imports` batch log, and RPC `finalize_directory_replace` that marks rows missing from a monthly upload as inactive and flags approved members for review. Not yet pushed to the remote project.
 
 ## Security Notes
 

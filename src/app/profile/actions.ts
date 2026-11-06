@@ -56,11 +56,14 @@ function getEmployeeMatchDetail({
 }: {
   directory: {
     affiliation: string | null;
+    association_member_code?: string | null;
     bureau?: string | null;
     department: string | null;
     division?: string | null;
     email: string | null;
     employment_status: string;
+    member_type?: string | null;
+    membership_status?: string | null;
     first_name?: string | null;
     full_name: string;
     id: string;
@@ -83,6 +86,7 @@ function getEmployeeMatchDetail({
 
   const checks = {
     activeEmployee: directory.employment_status === "active",
+    activeMembership: (directory.membership_status ?? "active") === "active",
     email: !directory.email || normalize(directory.email) === normalize(email),
     fullName:
       normalizePersonName(directory.full_name) === normalizePersonName(fullName),
@@ -95,7 +99,10 @@ function getEmployeeMatchDetail({
       checks,
       directory: {
         affiliation: directory.affiliation,
+        association_member_code: directory.association_member_code,
         bureau: directory.bureau,
+        member_type: directory.member_type,
+        membership_status: directory.membership_status,
         department: directory.department,
         division: directory.division,
         email: directory.email,
@@ -172,7 +179,7 @@ export async function savePersonalProfile(formData: FormData) {
   const admin = createAdminClient();
   const { data: directory } = await admin
     .from("employee_directory")
-    .select("id, title_prefix, first_name, last_name, full_name, email, position, work_line, bureau, division, department, section, affiliation, employment_status")
+    .select("id, title_prefix, first_name, last_name, full_name, email, position, work_line, bureau, division, department, section, affiliation, employment_status, membership_status, member_type, association_member_code")
     .eq("club_id", club.id)
     .eq("employee_code", employeeCode)
     .is("archived_at", null)
@@ -223,6 +230,9 @@ export async function savePersonalProfile(formData: FormData) {
 
   const memberPayload = {
       avatar_url: avatarUrl || undefined,
+      association_member_code: directory?.association_member_code ?? null,
+      association_member_type: directory?.member_type ?? null,
+      association_membership_status: directory?.membership_status ?? null,
       bureau: verifiedDirectory?.bureau ?? null,
       club_id: club.id,
       email: user.email,

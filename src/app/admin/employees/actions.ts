@@ -3,30 +3,12 @@
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { parseDirectoryGrid } from "@/lib/directory/import";
+import * as XLSX from "xlsx";
 
 const employeeAdminRoles = ["platform_owner", "club_admin"];
-const employeeHeaderAliases = {
-  bureau: ["สำนัก", "bureau", "office"],
-  department: ["กอง", "department", "division_group"],
-  division: ["ฝ่าย", "division"],
-  email: ["email", "อีเมล", "อีเมล์"],
-  employeeCode: ["รหัสพนักงาน", "employee_code", "employee code", "code"],
-  employmentStatus: ["สถานะ", "employment_status", "status"],
-  firstName: ["ชื่อ", "first_name", "first name"],
-  fullName: ["ชื่อ-นามสกุล", "ชื่อ นามสกุล", "full_name", "full name"],
-  lastName: ["นามสกุล", "last_name", "last name"],
-  position: ["ตำแหน่ง", "position"],
-  section: ["แผนก", "section"],
-  titlePrefix: ["คำนำหน้า", "title_prefix", "prefix", "title"],
-  workLine: ["สายงาน", "work_line", "work line"],
-} as const;
-
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
-}
-
-function normalizeHeader(value: string) {
-  return value.replace(/^\uFEFF/, "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function parseDelimitedText(text: string) {
@@ -85,28 +67,6 @@ function parseDelimitedText(text: string) {
   return rows;
 }
 
-function getColumnIndex(headers: string[], aliases: readonly string[]) {
-  const normalizedHeaders = headers.map(normalizeHeader);
-
-  return aliases
-    .map((alias) => normalizedHeaders.indexOf(normalizeHeader(alias)))
-    .find((index) => index >= 0);
-}
-
-function getRowValue(
-  row: string[],
-  columnIndexes: Record<keyof typeof employeeHeaderAliases, number | undefined>,
-  key: keyof typeof employeeHeaderAliases,
-) {
-  const index = columnIndexes[key];
-
-  if (index === undefined) {
-    return "";
-  }
-
-  return (row[index] ?? "").trim();
-}
-
 function redirectEmployees(status: string, employeeId?: string): never {
   const params = new URLSearchParams({ status });
 
@@ -159,6 +119,9 @@ function getEmployeePayload(formData: FormData, clubId: string, userId: string) 
     email: getString(formData, "email").toLowerCase() || null,
     employee_code: employeeCode,
     employment_status: getString(formData, "employmentStatus") || "active",
+    association_member_code: getString(formData, "associationMemberCode") || null,
+    member_type: getString(formData, "memberType") || null,
+    membership_status: getString(formData, "membershipStatus") || "active",
     first_name: getString(formData, "firstName") || null,
     full_name: fullName,
     last_name: getString(formData, "lastName") || null,
@@ -249,105 +212,112 @@ export async function updateEmployee(formData: FormData) {
   redirectEmployees("updated", employeeId);
 }
 
+async function readUploadGrid(file: File): Promise<string[][]> {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".xlsx") || name.endsWith(".xls") || name.endsWith(".xlsm")) {
+    const workbook = XLSX.read(new Uint8Array(await file.arrayBuffer()), { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    if (!sheet) return [];
+    const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { blankrows: false, defval: "", header: 1, raw: false });
+    return grid.map((row) => row.map((cell) => String(cell ?? "").trim()));
+  }
+  return parseDelimitedText(await file.text());
+}
+
 export async function importEmployees(formData: FormData) {
   const file = formData.get("employeeFile");
 
   if (!(file instanceof File) || file.size === 0) {
     redirectEmployees("import-missing-file");
   }
+  if (file.size > 15 * 1024 * 1024) {
+    redirectEmployees("import-too-large");
+  }
 
   const { clubId, supabase, userId } = await requireEmployeeAdminClub();
-  const rows = parseDelimitedText(await file.text());
-  const headers = rows[0] ?? [];
-  const dataRows = rows.slice(1);
-
-  if (!headers.length || !dataRows.length) {
-    redirectEmployees("import-empty");
+  const replaceMode = formData.get("replaceMode") === "on";
+  let grid: string[][] = [];
+  try {
+    grid = await readUploadGrid(file);
+  } catch {
+    redirectEmployees("import-unreadable");
   }
 
-  const columnIndexes = Object.fromEntries(
-    Object.entries(employeeHeaderAliases).map(([key, aliases]) => [
-      key,
-      getColumnIndex(headers, aliases),
-    ]),
-  ) as Record<keyof typeof employeeHeaderAliases, number | undefined>;
-
-  if (columnIndexes.employeeCode === undefined) {
+  const parsed = parseDirectoryGrid(grid);
+  if ("error" in parsed) {
     redirectEmployees("import-missing-employee-code");
   }
-
-  const now = new Date().toISOString();
-  const payloads = dataRows
-    .map((row) => {
-      const employeeCode = getRowValue(row, columnIndexes, "employeeCode");
-      const titlePrefix = getRowValue(row, columnIndexes, "titlePrefix");
-      const firstName = getRowValue(row, columnIndexes, "firstName");
-      const lastName = getRowValue(row, columnIndexes, "lastName");
-      const fullName =
-        getRowValue(row, columnIndexes, "fullName") ||
-        [titlePrefix, firstName, lastName].filter(Boolean).join(" ");
-
-      if (!employeeCode || !fullName) {
-        return null;
-      }
-
-      const workLine = getRowValue(row, columnIndexes, "workLine");
-      const bureau = getRowValue(row, columnIndexes, "bureau");
-      const division = getRowValue(row, columnIndexes, "division");
-      const department = getRowValue(row, columnIndexes, "department");
-      const section = getRowValue(row, columnIndexes, "section");
-
-      return {
-        affiliation: [workLine, bureau].filter(Boolean).join(" / ") || null,
-        bureau: bureau || null,
-        club_id: clubId,
-        department: department || null,
-        division: division || null,
-        email: getRowValue(row, columnIndexes, "email").toLowerCase() || null,
-        employee_code: employeeCode,
-        employment_status:
-          getRowValue(row, columnIndexes, "employmentStatus") || "active",
-        first_name: firstName || null,
-        full_name: fullName,
-        last_name: lastName || null,
-        last_synced_at: now,
-        position: getRowValue(row, columnIndexes, "position") || null,
-        section: section || null,
-        source: "employee_import",
-        title_prefix: titlePrefix || null,
-        updated_by: userId,
-        work_line: workLine || null,
-      };
-    })
-    .filter((row): row is NonNullable<typeof row> => Boolean(row));
-
-  if (!payloads.length) {
+  if (!parsed.rows.length) {
     redirectEmployees("import-empty");
   }
 
-  const { error } = await supabase.from("employee_directory").upsert(
-    payloads.map((payload) => ({
-      ...payload,
-      created_by: userId,
-    })),
-    { onConflict: "club_id,employee_code" },
-  );
+  const batchId = crypto.randomUUID();
+  const now = new Date().toISOString();
+  const fileType = file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls") ? "xlsx" : "csv";
+  const payloads = parsed.rows.map((row) => ({
+    ...row,
+    club_id: clubId,
+    created_by: userId,
+    import_batch_id: batchId,
+    last_synced_at: now,
+    source: replaceMode ? "association_monthly" : "employee_import",
+    updated_by: userId,
+    archived_at: null,
+  }));
 
-  if (error) {
-    redirectEmployees("import-failed");
+  // Upsert in chunks so a large monthly file does not hit request limits.
+  for (let index = 0; index < payloads.length; index += 500) {
+    const { error } = await supabase
+      .from("employee_directory")
+      .upsert(payloads.slice(index, index + 500), { onConflict: "club_id,employee_code" });
+    if (error) {
+      redirectEmployees("import-failed");
+    }
   }
+
+  let deactivated = 0;
+  let flagged = 0;
+  if (replaceMode) {
+    const { data, error } = await supabase.rpc("finalize_directory_replace", { p_batch_id: batchId, p_club_id: clubId });
+    if (error) {
+      redirectEmployees("import-finalize-failed");
+    }
+    const result = data as { deactivated: number; flagged: number } | null;
+    deactivated = result?.deactivated ?? 0;
+    flagged = result?.flagged ?? 0;
+  }
+
+  await supabase.from("directory_imports").insert({
+    club_id: clubId,
+    deactivated_count: deactivated,
+    file_name: file.name,
+    file_type: fileType,
+    flagged_member_count: flagged,
+    id: batchId,
+    imported_by: userId,
+    imported_count: payloads.length,
+    mode: replaceMode ? "replace" : "merge",
+    row_count: parsed.totalRows,
+    skipped_count: parsed.skipped,
+  });
 
   await supabase.from("audit_logs").insert({
     action: "employee_directory.imported",
     actor_user_id: userId,
     after_data: {
+      batch_id: batchId,
+      deactivated_count: deactivated,
+      flagged_member_count: flagged,
       imported_count: payloads.length,
+      mode: replaceMode ? "replace" : "merge",
+      skipped_count: parsed.skipped,
       source_file_name: file.name,
     },
     club_id: clubId,
+    entity_id: batchId,
     entity_type: "employee_directory",
     metadata: { source: "admin.employees.import" },
   });
 
-  redirectEmployees("imported");
+  redirectEmployees(`imported:${payloads.length}:${parsed.skipped}:${deactivated}:${flagged}`);
 }

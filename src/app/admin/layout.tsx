@@ -16,7 +16,7 @@ import { signOut } from "@/app/actions/auth";
 const adminNavigation = [
   { href: "/admin", icon: LayoutDashboard, label: "ภาพรวม" },
   { href: "/admin/members", icon: UsersRound, label: "สมาชิก" },
-  { href: "/admin/employees", icon: Database, label: "ฐานข้อมูลพนักงาน" },
+  { href: "/admin/employees", icon: Database, label: "ฐานสมาชิกสมาคม" },
   { href: "/admin/events", icon: CalendarDays, label: "กิจกรรม" },
   { href: "/admin/lessons", icon: GraduationCap, label: "ตารางเรียน" },
   { href: "/admin/payments", icon: CircleDollarSign, label: "ตรวจการชำระเงิน" },

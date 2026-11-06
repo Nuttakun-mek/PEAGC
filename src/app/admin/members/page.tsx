@@ -7,6 +7,7 @@ import {
   Pencil,
   Plus,
   Search,
+  ShieldAlert,
 } from "lucide-react";
 
 import {
@@ -14,6 +15,7 @@ import {
   createMember,
   updateMember,
 } from "@/app/admin/members/actions";
+import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
 import { createClient } from "@/lib/supabase/server";
 
@@ -521,6 +523,9 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
   const pendingCount = members.filter(
     (member) => member.status === "pending_verification",
   ).length;
+  const leftDirectoryMembers = members.filter(
+    (member) => member.status === "active" && member.employee_match_detail?.reason === "left_directory",
+  );
   const highlightedMember = params.member;
   const statusMessage = params.status ? statusMessages[params.status] : null;
   const bypassQuery = access.isBypass ? "?bypass=admin" : "";
@@ -556,9 +561,9 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
         </div>
 
         {statusMessage ? (
-          <div className="mt-5 rounded-md bg-[#f8edf4] px-4 py-3 text-sm font-medium text-[#722257]">
+          <StatusBanner className="mt-5" tone={toneForStatus(params.status)}>
             {statusMessage}
-          </div>
+          </StatusBanner>
         ) : null}
 
         {access.isBypass ? (
@@ -567,12 +572,13 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-5">
           {[
             { label: "สมาชิกที่แสดง", value: members.length },
             { label: "รอตรวจสอบ", value: pendingCount },
             { label: "ใช้งาน", value: activeCount },
             { label: "บุคคลภายนอก", value: guestCount },
+            { label: "หายจากฐานสมาคม", value: leftDirectoryMembers.length },
           ].map((item) => (
             <article
               className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
@@ -585,6 +591,32 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
             </article>
           ))}
         </div>
+
+        {leftDirectoryMembers.length ? (
+          <section className="mt-6 rounded-lg border border-[#efcbd0] bg-[#fff7f7] p-5">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="mt-0.5 size-5 shrink-0 text-[#a33a46]" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <h2 className="text-lg font-semibold text-[#a33a46]">สมาชิกที่ไม่อยู่ในฐานสมาคมเดือนล่าสุด ({leftDirectoryMembers.length})</h2>
+                <p className="mt-1 text-sm text-[#6b6475]">
+                  ไฟล์รายชื่อสมาคมล่าสุดไม่มีรหัสพนักงานเหล่านี้ หรือสถานะไม่ใช่สมาชิกปัจจุบัน บัญชียังใช้งานได้จนกว่าผู้ดูแลจะตรวจและเปลี่ยนสถานะเอง
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {leftDirectoryMembers.map((member) => (
+                    <a
+                      className="flex items-center gap-2 rounded-md border border-[#efcbd0] bg-white px-3 py-2 text-sm text-[#3f3a48] hover:border-[#a33a46]"
+                      href={`?member=${member.id}${access.isBypass ? "&bypass=admin" : ""}#member-${member.id}`}
+                      key={member.id}
+                    >
+                      <span className="font-semibold">{member.full_name}</span>
+                      <span className="text-xs text-[#6b6475]">{member.employee_code ?? "-"}</span>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
           <MemberForm
@@ -657,7 +689,8 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
             {members.length ? (
               members.map((member) => (
                 <details
-                  className="group px-5 py-4"
+                  className="group scroll-mt-4 px-5 py-4"
+                  id={`member-${member.id}`}
                   key={member.id}
                   open={highlightedMember === member.id}
                 >

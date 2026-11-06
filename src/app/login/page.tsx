@@ -6,6 +6,7 @@ import {
   signInWithPassword,
   signUpWithPassword,
 } from "@/app/actions/auth";
+import { StatusBanner } from "@/components/status-banner";
 import { SubmitButton } from "@/components/submit-button";
 import {
   hasSupabasePublicConfig,
@@ -130,9 +131,9 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </Link>
         </div>
 
-        {params.registered ? <div className="mt-5 rounded-md bg-[#f8edf4] px-4 py-3 text-sm font-medium text-[#722257]">สร้างบัญชีแล้ว กรุณาเข้าสู่ระบบ</div> : null}
-        {params.signedOut ? <div className="mt-5 rounded-md bg-[#f8edf4] px-4 py-3 text-sm font-medium text-[#722257]">ออกจากระบบแล้ว</div> : null}
-        {errorMessage ? <div className="mt-5 rounded-md bg-[#fdecec] px-4 py-3 text-sm font-medium text-[#8a1f11]">{errorMessage}</div> : null}
+        {params.registered ? <StatusBanner className="mt-5" tone="success">สร้างบัญชีแล้ว กรุณาเข้าสู่ระบบ</StatusBanner> : null}
+        {params.signedOut ? <StatusBanner className="mt-5" tone="info">ออกจากระบบแล้ว</StatusBanner> : null}
+        {errorMessage ? <StatusBanner className="mt-5" tone="error">{errorMessage}</StatusBanner> : null}
 
         {!hasAuthConfig ? (
           <div className="mt-5 rounded-md border border-[#d7a52c] bg-[#fff9ed] px-4 py-3 text-sm text-[#805300]">

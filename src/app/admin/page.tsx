@@ -50,10 +50,10 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       ]);
   const modules = [
     {
-      detail: "ฐานข้อมูลพนักงานสำหรับเทียบใบสมัครสมาชิก",
+      detail: "รายชื่อสมาชิกสมาคมที่อัปโหลดทุกเดือน ใช้เทียบใบสมัครสมาชิก",
       href: access.isBypass ? "/admin/employees?bypass=admin" : "/admin/employees",
       icon: UsersRound,
-      title: "ฐานข้อมูลพนักงาน",
+      title: "ฐานสมาชิกสมาคม",
       value: employeeCount,
     },
     {

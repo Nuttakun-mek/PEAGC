@@ -48,14 +48,21 @@ Open [http://localhost:3555](http://localhost:3555).
 - `src/app/login` - Supabase magic-link login
 - `src/app/member` - member portal preview
 - `src/app/admin` - admin portal preview
-- `src/app/admin/employees` - employee directory, CSV/TSV employee database import, and member application verification source
+- `src/app/admin/employees` - association member directory: monthly Excel (.xlsx) or CSV upload with replace mode, import history, stale-data warning, and the verification source for sign-ups
+- `src/app/api/directory/check` - live employee-code lookup used by the sign-up form (masked result, signed-in users only)
+- `src/lib/directory/import.ts` - header mapping, status normalisation, and row parsing for the directory upload (Vitest tests)
+- `src/components/member-card.tsx`, `status-banner.tsx`, `employee-code-checker.tsx` - member UX building blocks (digital member card, toned feedback banners, live code check)
 - `src/app/admin/events` - admin event list, search, create, and edit workflow
 - `src/app/admin/payments` - finance/admin payment review queue for event registrations
-- `src/app/admin/lessons` - lesson program, lesson slot, booking, and attendance workflow
+- `src/app/admin/lessons` - lesson program, lesson slot, bulk slot generator, booking window/announcement settings, FCFS roster with waitlist, attendance, and CSV export (`/admin/lessons/export`)
+- `src/lib/lessons/booking.ts` - pure helpers for the lesson booking flow (booking phase, queue position, Bangkok time, slot plan generator) with Vitest tests
 - `src/app/admin/members` - admin member list, search, add, and edit workflow
 - `src/app/member/actions.ts` - member self-registration server action for open events
 - `src/app/profile` - member personal profile form
 - `supabase/migrations/20260709143000_member_profile_targets_slot_changes.sql` - avatar storage, unit-targeted publishing, and lesson booking change history
+- `supabase/migrations/20261106090000_lesson_fcfs_waitlist.sql` - lesson booking window, FCFS queue with waitlist, per-member limit, cancel cutoff, announcement acknowledgement, and booking RPCs
+- `supabase/migrations/20261106120000_association_member_directory.sql` - association member fields, monthly import batches, replace-mode finalizer
+- `docs/superpowers/specs/2026-11-06-lesson-fcfs-waitlist-design.md` - design notes for the lesson FCFS/waitlist port from the pea-golf-web prototype
 - `src/app/setup` - one-time club admin bootstrap
 - `docs/PROJECT_KICKOFF_PLAN.md` - project kickoff plan from the source PRD
 - `docs/SUPABASE_SETUP.md` - Supabase environment and migration workflow
@@ -70,3 +77,5 @@ Open [http://localhost:3555](http://localhost:3555).
 - Critical data such as payments, scores, rules, and published results must be audit logged.
 - Supabase foundation migration has been pushed to the remote project.
 - Lesson/Academy tables and RLS have been pushed to the remote project.
+- The lesson FCFS/waitlist (`20261106090000`) and association directory (`20261106120000`) migrations have been validated locally but not pushed yet; run `npx supabase db push --db-url "$MIGRATION_DATABASE_URL"` before deploying the lesson changes.
+- Unit tests: `npm test` (Vitest).
