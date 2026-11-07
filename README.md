@@ -18,7 +18,7 @@ This repository is starting with Foundation + MVP 1.
 - TypeScript
 - Tailwind CSS 4
 - Supabase PostgreSQL/Auth/Storage planned
-- Vercel deployment planned
+- Deployed on Vercel (team PEA Golf Club, project `peagc`): https://peagc.vercel.app — env vars are set in the Vercel project; deploy with `vercel deploy --prod --scope pea-gc` or connect the GitHub repo for automatic deploys
 
 ## Getting Started
 
