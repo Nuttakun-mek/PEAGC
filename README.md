@@ -77,5 +77,6 @@ Open [http://localhost:3555](http://localhost:3555).
 - Critical data such as payments, scores, rules, and published results must be audit logged.
 - Supabase foundation migration has been pushed to the remote project.
 - Lesson/Academy tables and RLS have been pushed to the remote project.
-- The lesson FCFS/waitlist (`20261106090000`) and association directory (`20261106120000`) migrations have been validated locally but not pushed yet; run `npx supabase db push --db-url "$MIGRATION_DATABASE_URL"` before deploying the lesson changes.
+- Remote project `dlaeluakeqcbizvmosdg` still needs every migration from `20260709143000` onward (8 files, through the lesson FCFS/waitlist and association directory changes). Apply them with `npx supabase db push --db-url "$MIGRATION_DATABASE_URL"` (session pooler URL), or paste the migration files in order into the Supabase SQL Editor and insert their versions into `supabase_migrations.schema_migrations`.
+- Sarabun is bundled from `src/app/fonts/` via `next/font/local` (OFL licence included) so builds do not depend on reaching Google Fonts.
 - Unit tests: `npm test` (Vitest).

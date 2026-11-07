@@ -317,17 +317,17 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
         <section className="golf-visual w-full max-w-xl rounded-lg border border-[#e6e2ee] bg-white/95 p-6 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-[#8b5b7a]">ระบบสมาชิก PEAGC</p>
-              <h1 className="mt-2 text-3xl font-semibold text-[#722257]">เริ่มต้นโปรไฟล์สมาชิก</h1>
+              <p className="text-sm font-semibold text-[#8b5b7a]">PEA Golf Club</p>
+              <h1 className="mt-2 text-3xl font-semibold text-[#722257]">สมัครสมาชิก</h1>
             </div>
             <MemberAvatar displayName={access.displayName} />
           </div>
           <p className="mt-4 text-sm leading-7 text-[#6b6475]">
-            บัญชีนี้ยังไม่มีข้อมูลสมาชิก กรุณากรอกรหัสพนักงาน ชื่อ และเบอร์โทรก่อน ระบบจะเทียบฐานพนักงานและเปิดสิทธิ์สมัครกิจกรรมกับจองเรียนให้อัตโนมัติเมื่อข้อมูลตรงกัน
+            บัญชีนี้ยังไม่ได้สมัครสมาชิก กรอกรหัสพนักงานและข้อมูลติดต่อเพื่อเริ่มใช้งาน
           </p>
           <Link className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white" href="/profile">
             <Pencil className="size-4" aria-hidden="true" />
-            สร้างโปรไฟล์สมาชิก
+            สมัครสมาชิก
           </Link>
           <form action={signOut} className="mt-3">
             <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-[#d9d3e6] bg-white text-sm font-semibold text-[#722257]" type="submit">

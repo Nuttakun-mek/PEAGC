@@ -54,9 +54,13 @@ async function getAuthenticatedContext(requiredRole: AppRole | undefined) {
   const supabase = await createClient();
   const {
     data: { user },
+    error: userError,
   } = await supabase.auth.getUser();
 
   if (!user) {
+    if (userError) {
+      console.error("[access] getUser failed:", userError.status, userError.message);
+    }
     return null;
   }
 

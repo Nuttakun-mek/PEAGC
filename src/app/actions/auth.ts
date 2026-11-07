@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 
+import { resolvePostLoginPath } from "@/lib/auth/post-login";
+
 import { hasSupabasePublicConfig, isGoogleAuthEnabled } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -75,10 +77,18 @@ export async function signInWithPassword(formData: FormData) {
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-  if (error) {
+  if (error || !data.user) {
+    console.error("[auth] sign-in failed:", error?.status, error?.code, error?.message);
     redirect(`/login?error=invalid-credentials&next=${encodeURIComponent(next)}`);
+  }
+
+  // Resolve the landing page here instead of bouncing through /auth/complete:
+  // Next follows action redirects server-side and a second hop would not carry
+  // the session cookies that were just set.
+  if (next === "/auth/complete") {
+    redirect(await resolvePostLoginPath(supabase, data.user.id));
   }
 
   redirect(next);

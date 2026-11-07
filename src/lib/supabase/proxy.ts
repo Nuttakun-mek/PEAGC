@@ -35,7 +35,11 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  await supabase.auth.getClaims();
+  const started = Date.now();
+  const { error } = await supabase.auth.getClaims();
+  if (error) {
+    console.error("[proxy] getClaims failed:", request.nextUrl.pathname, error.message, `${Date.now() - started}ms`);
+  }
 
   return supabaseResponse;
 }
