@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 
+import { fromBangkokInputValue } from "@/lib/lessons/booking";
 import { createClient } from "@/lib/supabase/server";
 
 const paymentAdminRoles = ["platform_owner", "club_admin", "finance_officer"];
@@ -88,7 +89,8 @@ export async function updatePaymentReview(formData: FormData) {
     reviewed_at: paymentStatus === "approved" || paymentStatus === "rejected" ? new Date().toISOString() : null,
     reviewed_by: paymentStatus === "approved" || paymentStatus === "rejected" ? userId : null,
     status: paymentStatus,
-    transferred_at: transferredAt || null,
+    // datetime-local carries no zone; the reviewer types Bangkok time
+    transferred_at: fromBangkokInputValue(transferredAt),
     updated_by: userId,
   };
 
@@ -122,8 +124,12 @@ export async function updatePaymentReview(formData: FormData) {
     redirectPayments("payment-update-failed", registrationId);
   }
 
+  // A waitlisted registration keeps its place in the queue; approving money must not
+  // hand it a seat past capacity (the DB promotes it when a seat frees up).
   const registrationStatus =
-    paymentStatus === "approved"
+    registration.status === "waitlist"
+      ? "waitlist"
+      : paymentStatus === "approved"
       ? "paid"
       : paymentStatus === "rejected"
         ? "pending_payment"
@@ -131,16 +137,18 @@ export async function updatePaymentReview(formData: FormData) {
           ? "payment_review"
           : registration.status;
 
-  const { error: registrationError } = await supabase
+  // .select() so an RLS-filtered update (0 rows, no error) is reported instead of ignored.
+  const { data: updatedRegistrations, error: registrationError } = await supabase
     .from("event_registrations")
     .update({
       status: registrationStatus,
       updated_by: userId,
     })
     .eq("club_id", clubId)
-    .eq("id", registrationId);
+    .eq("id", registrationId)
+    .select("id");
 
-  if (registrationError) {
+  if (registrationError || !updatedRegistrations?.length) {
     redirectPayments("registration-update-failed", registrationId);
   }
 

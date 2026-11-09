@@ -5,7 +5,7 @@ import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
 import { createClient } from "@/lib/supabase/server";
 
-import { archiveAnnouncement, createAward, deleteAward, saveAnnouncement, saveScorecard } from "./actions";
+import { archiveAnnouncement, createAward, deleteAward, saveAnnouncement } from "./actions";
 
 const messages: Record<string, string> = {
   "announcement-archived": "เก็บประกาศแล้ว", "announcement-failed": "บันทึกประกาศไม่สำเร็จ", "announcement-missing": "กรุณากรอกหัวข้อประกาศ", "announcement-saved": "บันทึกประกาศแล้ว",
@@ -13,17 +13,17 @@ const messages: Record<string, string> = {
   "score-failed": "บันทึกคะแนนไม่สำเร็จ", "score-invalid": "กรุณากรอกพาร์ 3-6 และสกอร์ 1-20 ให้ครบ 18 หลุม", "score-registration-missing": "กรุณาเลือกผู้สมัคร", "score-saved": "บันทึก Scorecard 18 หลุมแล้ว",
 };
 
+
 function first<T>(value: T | T[] | null) { return Array.isArray(value) ? value[0] ?? null : value; }
 
 export default async function AdminContentPage({ searchParams }: { searchParams: Promise<{ bypass?: string; status?: string }> }) {
   const params = await searchParams;
   const access = await resolveAccess({ nextPath: "/admin/content", requiredRole: "admin", searchParams: params });
   const supabase = await createClient();
-  const [{ data: announcements }, { data: members }, { data: events }, { data: registrations }, { data: awards }] = await Promise.all([
+  const [{ data: announcements }, { data: members }, { data: events }, { data: awards }] = await Promise.all([
     supabase.from("club_announcements").select("id,title,summary,category,is_pinned,status,published_at").eq("club_id", access.clubId!).neq("status", "archived").order("published_at", { ascending: false }),
     supabase.from("members").select("id,full_name,member_code").eq("club_id", access.clubId!).eq("status", "active").order("full_name"),
     supabase.from("events").select("id,name,event_date").eq("club_id", access.clubId!).order("event_date", { ascending: false }).limit(50),
-    supabase.from("event_registrations").select("id,member_id,event_id,members(full_name,member_code),events(name,event_date)").eq("club_id", access.clubId!).not("status", "in", "(cancelled,no_show)").order("created_at", { ascending: false }).limit(100),
     supabase.from("member_awards").select("id,title,award_type,awarded_at,members(full_name),events(name)").eq("club_id", access.clubId!).order("awarded_at", { ascending: false }).limit(50),
   ]);
   const inputClass = "h-10 rounded-md border border-[#dce3ea] bg-white px-3 text-sm outline-none focus:border-[#168aad]";
@@ -43,11 +43,9 @@ export default async function AdminContentPage({ searchParams }: { searchParams:
       </section>
     </div>
 
-    <section className="mt-5 rounded-lg border border-[#e2e8ef] bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><Flag className="size-5 text-[#722257]"/><h2 className="text-lg font-semibold">บันทึก Scorecard 18 หลุม</h2></div>
-      <form action={saveScorecard} className="mt-4"><select className={`${inputClass} w-full max-w-xl`} name="registrationId" required><option value="">เลือกกิจกรรมและสมาชิก</option>{registrations?.map((r) => <option key={r.id} value={r.id}>{first(r.events)?.name ?? "กิจกรรม"} · {first(r.members)?.member_code ?? "-"} {first(r.members)?.full_name ?? "-"}</option>)}</select>
-        <div className="mt-4 overflow-x-auto"><div className="grid min-w-[940px] grid-cols-9 gap-2 lg:grid-cols-18">{Array.from({length:18},(_,i)=>i+1).map((hole)=><div className="rounded-md border border-[#e2e8ef] bg-[#f8fafb] p-2" key={hole}><p className="text-center text-xs font-bold text-[#475467]">หลุม {hole}</p><input className="mt-2 h-8 w-full rounded border border-[#dce3ea] px-1 text-center text-xs" defaultValue={4} max={6} min={3} name={`par${hole}`} required type="number"/><input className="mt-1 h-8 w-full rounded border border-[#dce3ea] px-1 text-center text-xs" max={20} min={1} name={`strokes${hole}`} placeholder="สกอร์" required type="number"/></div>)}</div></div>
-        <button className="mt-4 flex h-10 items-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"><Save className="size-4"/>บันทึกครบ 18 หลุม</button>
-      </form>
+    <section className="mt-5 rounded-lg border border-[#e2e8ef] bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><Flag className="size-5 text-[#722257]"/><h2 className="text-lg font-semibold">คะแนนการแข่งขัน</h2></div>
+      <p className="mt-2 text-sm text-[#667085]">กรอกคะแนน สแกนการ์ด ยืนยัน และประกาศผล ทำในหน้าคะแนนของแต่ละกิจกรรม (เก็บทุกการ์ดเป็นประวัติ ไม่แก้ทับ)</p>
+      <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{events?.slice(0, 12).map((event) => <li key={event.id}><a className="flex items-center justify-between rounded-md border border-[#e2e8ef] px-3 py-2 text-sm hover:border-[#722257]" href={`/admin/events/${event.id}/scoring`}><span className="font-semibold">{event.name}</span><span className="text-xs text-[#98a2b3]">{event.event_date}</span></a></li>)}</ul>
     </section>
   </div></main>;
 }

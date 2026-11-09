@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 
 import { resolveAccess } from "@/lib/auth/access";
+import { defaultModuleState, moduleCatalog } from "@/lib/modules";
+import { getClubModules } from "@/lib/modules-server";
 import { createClient } from "@/lib/supabase/server";
 
 type AdminPageProps = {
@@ -48,6 +50,9 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
         getCount("employee_directory"),
         getCount("lesson_bookings"),
       ]);
+  const moduleState = access.isBypass
+    ? defaultModuleState
+    : await getClubModules(await createClient(), access.clubId);
   const modules = [
     {
       detail: "รายชื่อสมาชิกสมาคมที่อัปโหลดทุกเดือน ใช้เทียบใบสมัครสมาชิก",
@@ -121,6 +126,25 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
             <span>โหมดผู้ดูแลทดลอง ใช้ตรวจหน้าจอก่อนเปิดระบบเข้าสู่ระบบจริง และต้องปิดก่อนเปิดใช้งาน</span>
           </div>
         ) : null}
+
+        <Link
+          className="mt-4 flex flex-col gap-3 rounded-lg border border-[#e2e8ef] bg-white/95 p-4 shadow-sm transition hover:border-[#c9b3c2] sm:flex-row sm:items-center sm:justify-between"
+          href={access.isBypass ? "/admin/settings?bypass=admin" : "/admin/settings"}
+        >
+          <p className="text-sm font-semibold text-[#344054]">ระบบที่เปิดให้สมาชิกใช้งาน</p>
+          <div className="flex flex-wrap gap-2">
+            {moduleCatalog.map((item) => (
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${moduleState[item.key] ? "bg-[#edf9f3] text-[#16794b]" : "bg-[#f1f3ef] text-[#98a2b3]"}`}
+                key={item.key}
+              >
+                {moduleState[item.key] ? "● " : "○ "}
+                {item.label}
+              </span>
+            ))}
+            <span className="rounded-full border border-[#d9d3e6] px-3 py-1 text-xs font-semibold text-[#722257]">ตั้งค่า →</span>
+          </div>
+        </Link>
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {modules.slice(0, 4).map((item) => (

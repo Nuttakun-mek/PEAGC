@@ -40,26 +40,8 @@ export async function archiveAnnouncement(formData: FormData) {
   go("announcement-archived");
 }
 
-export async function saveScorecard(formData: FormData) {
-  const { admin, clubId, userId } = await requireAdmin();
-  const registrationId = value(formData, "registrationId");
-  const { data: registration } = await admin.from("event_registrations").select("id, member_id").eq("id", registrationId).eq("club_id", clubId).maybeSingle();
-  if (!registration?.member_id) go("score-registration-missing");
-  const validRegistration = registration!;
-  const holes = Array.from({ length: 18 }, (_, index) => {
-    const hole = index + 1;
-    const par = Number(value(formData, `par${hole}`));
-    const strokes = Number(value(formData, `strokes${hole}`));
-    return { club_id: clubId, created_by: userId, event_registration_id: validRegistration.id, hole_number: hole, member_id: validRegistration.member_id, par, strokes, updated_by: userId };
-  });
-  if (holes.some((hole) => hole.par < 3 || hole.par > 6 || hole.strokes < 1 || hole.strokes > 20)) go("score-invalid");
-  const { error } = await admin.from("golf_hole_scores").upsert(holes, { onConflict: "event_registration_id,hole_number" });
-  if (error) go("score-failed");
-  const gross = holes.reduce((sum, hole) => sum + hole.strokes, 0);
-  const { error: registrationError } = await admin.from("event_registrations").update({ gross_score: gross, score_status: "published", scored_at: new Date().toISOString(), scored_by: userId, updated_by: userId }).eq("id", validRegistration.id);
-  if (registrationError) go("score-failed");
-  go("score-saved");
-}
+// Scorecards are no longer written here: entering scores overwrote golf_hole_scores in place.
+// Scoring now lives in /admin/events/[eventId]/scoring (append-only entries -> verify -> publish).
 
 export async function createAward(formData: FormData) {
   const { admin, clubId, userId } = await requireAdmin();

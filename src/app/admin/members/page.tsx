@@ -17,6 +17,7 @@ import {
 } from "@/app/admin/members/actions";
 import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
+import { pickFilter } from "@/lib/filters";
 import { createClient } from "@/lib/supabase/server";
 
 type AdminMembersPageProps = {
@@ -439,7 +440,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
     searchParams: params,
   });
   const q = params.q?.trim() ?? "";
-  const selectedStatus = params.status ?? "all";
+  const selectedStatus = pickFilter(params.status, ["pending_verification", "active", "inactive", "guest", "archived"]);
   const selectedType = params.type ?? "all";
 
   let memberTypes = sampleTypes;

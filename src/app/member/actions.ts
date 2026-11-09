@@ -4,52 +4,12 @@ import { redirect } from "next/navigation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { eventErrorToStatus } from "@/lib/events/pairing";
+import { requireModuleOpen } from "@/lib/modules-server";
 import { rpcErrorToStatus } from "@/lib/lessons/booking";
 
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
-}
-
-function normalizeTarget(value: string | null | undefined) {
-  return (value ?? "").trim().toLowerCase();
-}
-
-function matchesTargetList(
-  targets: string[] | null | undefined,
-  memberValue: string | null | undefined,
-) {
-  if (!targets?.length) {
-    return true;
-  }
-
-  const normalizedMemberValue = normalizeTarget(memberValue);
-
-  return targets.some((target) => normalizeTarget(target) === normalizedMemberValue);
-}
-
-function isVisibleForMember(
-  item: {
-    target_bureaus?: string[] | null;
-    target_departments?: string[] | null;
-    target_divisions?: string[] | null;
-    target_sections?: string[] | null;
-    target_work_lines?: string[] | null;
-  },
-  member: {
-    bureau?: string | null;
-    department?: string | null;
-    division?: string | null;
-    section?: string | null;
-    work_line?: string | null;
-  },
-) {
-  return (
-    matchesTargetList(item.target_work_lines, member.work_line) &&
-    matchesTargetList(item.target_bureaus, member.bureau) &&
-    matchesTargetList(item.target_divisions, member.division) &&
-    matchesTargetList(item.target_departments, member.department) &&
-    matchesTargetList(item.target_sections, member.section)
-  );
 }
 
 export async function registerForEvent(formData: FormData) {
@@ -68,78 +28,24 @@ export async function registerForEvent(formData: FormData) {
     redirect("/login?next=/member");
   }
 
-  const { data: member } = await supabase
-    .from("members")
-    .select("id, club_id, status, work_line, bureau, division, department, section")
-    .eq("user_id", user.id)
-    .is("archived_at", null)
-    .maybeSingle();
-
-  if (!member || member.status !== "active") {
-    redirect("/member?status=member-not-approved");
-  }
-
-  const { data: event } = await supabase
-    .from("events")
-    .select("id, club_id, capacity, member_price, status, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections")
-    .eq("id", eventId)
-    .eq("club_id", member.club_id)
-    .is("archived_at", null)
-    .maybeSingle();
-
-  if (!event || event.status !== "open") {
-    redirect("/member?status=registration-closed");
-  }
-
-  if (!isVisibleForMember(event, member)) {
-    redirect("/member?status=registration-closed");
-  }
-
-  const { data: existing } = await supabase
-    .from("event_registrations")
-    .select("id")
-    .eq("event_id", event.id)
-    .eq("member_id", member.id)
-    .not("status", "in", "(cancelled,no_show)")
-    .maybeSingle();
-
-  if (existing) {
-    redirect("/member?status=already-registered");
-  }
-
-  const admin = createAdminClient();
-
-  if (event.capacity && event.capacity > 0) {
-    const { count } = await admin
-      .from("event_registrations")
-      .select("id", { count: "exact", head: true })
-      .eq("event_id", event.id)
-      .not("status", "in", "(cancelled,no_show,waitlist)");
-
-    if ((count ?? 0) >= event.capacity) {
-      redirect("/member?status=registration-full");
-    }
-  }
-
-  const { error } = await supabase.from("event_registrations").insert({
-    club_id: member.club_id,
-    created_by: user.id,
-    event_id: event.id,
-    member_id: member.id,
-    registration_type: "single",
-    status: event.member_price > 0 ? "pending_payment" : "registered",
-    updated_by: user.id,
-  });
+  // Eligibility, unit targeting, duplicate check and capacity are enforced atomically in
+  // SQL (event row lock), so concurrent sign-ups can never oversell; a full event waitlists.
+  const { data, error } = await supabase.rpc("register_for_event", { p_event_id: eventId });
 
   if (error) {
     if (error.code === "23505") {
       redirect("/member?status=already-registered");
     }
-
-    redirect("/member?status=registration-failed");
+    redirect(`/member?status=${eventErrorToStatus(error.message, "registration-failed")}`);
   }
 
-  redirect(`/member?status=${event.member_price > 0 ? "registered-payment-required" : "registered"}`);
+  const result = data as { status: string; waitlist_position: number | null } | null;
+
+  if (result?.status === "waitlist") {
+    redirect(`/member?status=registration-waitlisted&rank=${result.waitlist_position ?? ""}`);
+  }
+
+  redirect(`/member?status=${result?.status === "pending_payment" ? "registered-payment-required" : "registered"}`);
 }
 
 export async function uploadEventPaymentProof(formData: FormData) {
@@ -176,6 +82,8 @@ export async function uploadEventPaymentProof(formData: FormData) {
   if (!member || member.status !== "active") {
     redirect("/member?status=member-not-approved");
   }
+
+  await requireModuleOpen(supabase, member.club_id, "events");
 
   const { data: registration } = await admin
     .from("event_registrations")
@@ -310,7 +218,7 @@ export async function cancelEventRegistration(formData: FormData) {
 
   if (
     !registration ||
-    !["registered", "pending_payment", "payment_review"].includes(registration.status)
+    !["registered", "pending_payment", "payment_review", "waitlist"].includes(registration.status)
   ) {
     redirect("/member?status=registration-cancel-closed");
   }
@@ -379,6 +287,7 @@ export async function bookLessonSlot(formData: FormData) {
   }
 
   const { member, supabase, userId } = await requireMemberForLessons();
+  await requireModuleOpen(supabase, member.club_id, "lessons");
   const { data, error } = await supabase.rpc("book_lesson_slot", { p_slot_id: slotId });
 
   if (error) {
@@ -412,6 +321,7 @@ export async function changeLessonSlot(formData: FormData) {
   }
 
   const { member, supabase, userId } = await requireMemberForLessons();
+  await requireModuleOpen(supabase, member.club_id, "lessons");
   const { data, error } = await supabase.rpc("change_lesson_booking", {
     p_booking_id: bookingId,
     p_slot_id: slotId,
@@ -485,4 +395,18 @@ export async function acknowledgeLessonAnnouncement(formData: FormData) {
   }
 
   redirect("/member?status=lesson-announcement-acked#lessons");
+}
+
+export async function markNotificationsRead() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login?next=/member");
+  }
+
+  await supabase.rpc("mark_my_notifications_read");
+  redirect("/member?status=notifications-read#inbox");
 }

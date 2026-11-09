@@ -29,6 +29,7 @@ export type InteractiveSlot = {
   /** FCFS position (1-based) when the member holds this slot. */
   myPosition: number | null;
   program: string;
+  programId: string | null;
   startTime: string;
   status: string;
   title: string;
@@ -50,12 +51,29 @@ const offerLabel: Record<ReturnType<typeof slotOffer>, string> = {
   "window-closed": "ปิดลงทะเบียน",
 };
 
+export type CourseOption = {
+  coach: string | null;
+  description: string | null;
+  id: string;
+  level: string;
+  name: string;
+  price: number;
+};
+
+const levelLabel: Record<string, string> = {
+  advanced: "ขั้นสูง",
+  all: "ทุกระดับ",
+  beginner: "เริ่มต้น",
+  intermediate: "ปานกลาง",
+};
+
 export function InteractiveSlotBoard({
   bookAction,
   canBook,
   cancelAction,
   cancelCutoffHours,
   changeAction,
+  courses = [],
   currentBookingId,
   openAt,
   phase,
@@ -66,6 +84,8 @@ export function InteractiveSlotBoard({
   cancelAction: (formData: FormData) => void;
   cancelCutoffHours: number;
   changeAction: (formData: FormData) => void;
+  /** Courses (lesson programs) that have upcoming slots; shown as a filterable catalog. */
+  courses?: CourseOption[];
   /** The member's booking that can be moved to another slot (first active one). */
   currentBookingId?: string;
   openAt: string | null;
@@ -77,6 +97,8 @@ export function InteractiveSlotBoard({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [course, setCourse] = useState<string>("all");
+  const [onlyAvailable, setOnlyAvailable] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -104,7 +126,17 @@ export function InteractiveSlotBoard({
     };
   }, []);
 
-  const dates = useMemo(() => [...new Set(slots.map((slot) => slot.date))].sort(), [slots]);
+  const visibleSlots = useMemo(
+    () =>
+      slots.filter((slot) => {
+        if (course !== "all" && slot.programId !== course) return false;
+        if (!onlyAvailable || slot.myBookingId) return true;
+        const offer = slotOffer({ ...slot, phase, slotStatus: slot.status });
+        return offer === "book" || offer === "waitlist";
+      }),
+    [slots, course, onlyAvailable, phase],
+  );
+  const dates = useMemo(() => [...new Set(visibleSlots.map((slot) => slot.date))].sort(), [visibleSlots]);
   const selected = slots.find((slot) => slot.id === selectedId);
   const selectedOffer = selected ? slotOffer({ ...selected, phase, slotStatus: selected.status }) : null;
   const currentSlot = currentBookingId ? slots.find((slot) => slot.myBookingId === currentBookingId) : undefined;
@@ -133,6 +165,49 @@ export function InteractiveSlotBoard({
         <div className="mb-4 rounded-md bg-[#f4f6fa] px-4 py-3 text-sm text-[#6b6475]">ยังไม่กำหนดรอบลงทะเบียน</div>
       ) : null}
 
+      {courses.length > 1 ? (
+        <div className="mb-4">
+          <p className="mb-2 text-sm font-semibold text-[#344054]">เลือกคอร์ส</p>
+          <div className="flex snap-x gap-3 overflow-x-auto pb-2" role="radiogroup" aria-label="เลือกคอร์สเรียน">
+            {[{ coach: null, description: "แสดงทุกรอบเรียน", id: "all", level: "all", name: "ทุกคอร์ส", price: -1 }, ...courses].map((item) => {
+              const active = course === item.id;
+              const count = item.id === "all" ? slots.length : slots.filter((slot) => slot.programId === item.id).length;
+              return (
+                <button
+                  aria-checked={active}
+                  className={`w-56 shrink-0 snap-start rounded-lg border p-3 text-left transition ${active ? "border-[#722257] bg-[#f8edf4] ring-2 ring-[#722257]/15" : "border-[#e2e8ef] bg-white hover:border-[#c9b3c2]"}`}
+                  key={item.id}
+                  onClick={() => {
+                    setCourse(item.id);
+                    setSelectedId(null);
+                  }}
+                  role="radio"
+                  type="button"
+                >
+                  <p className="font-semibold text-[#243244]">{item.name}</p>
+                  <p className="mt-1 text-xs text-[#667085]">
+                    {item.id === "all"
+                      ? `${count} รอบ`
+                      : `${levelLabel[item.level] ?? item.level} · ${count} รอบ${item.coach ? ` · โปร${item.coach}` : ""}`}
+                  </p>
+                  {item.price >= 0 ? (
+                    <p className="mt-1 text-xs font-semibold text-[#722257]">{item.price > 0 ? `${item.price.toLocaleString()} บาท` : "ไม่มีค่าใช้จ่าย"}</p>
+                  ) : null}
+                  {item.description && item.id !== "all" ? (
+                    <p className="mt-1 line-clamp-2 text-[11px] leading-4 text-[#98a2b3]">{item.description}</p>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      <label className="mb-3 inline-flex items-center gap-2 text-sm text-[#475467]">
+        <input checked={onlyAvailable} className="size-4 accent-[#722257]" onChange={(event) => setOnlyAvailable(event.target.checked)} type="checkbox" />
+        แสดงเฉพาะรอบที่ยังจองได้
+      </label>
+
       <div className="mb-3 flex flex-wrap gap-4 text-xs text-[#667085]">
         <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-full bg-[#722257]" /> มีผู้จอง</span>
         <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-full bg-[#c69214]" /> ที่นั่งของคุณ</span>
@@ -140,15 +215,21 @@ export function InteractiveSlotBoard({
         <span className="flex items-center gap-1"><i className="inline-block size-2.5 rounded-full bg-[#f0a11a]" /> คิวสำรอง</span>
       </div>
 
+      {!dates.length ? (
+        <div className="rounded-md border border-dashed border-[#d9d3e6] bg-white/60 px-4 py-6 text-center text-sm text-[#6b6475]">
+          ไม่มีรอบที่ตรงกับตัวเลือก
+        </div>
+      ) : null}
+
       <div className="flex snap-x gap-4 overflow-x-auto pb-3">
         {dates.map((date) => (
           <section className="w-[280px] shrink-0 snap-start sm:w-[320px]" key={date}>
             <div className="mb-2 flex items-center justify-between px-1">
               <h3 className="font-semibold text-[#344054]">{formatDay(date)}</h3>
-              <span className="text-xs text-[#98a2b3]">{slots.filter((slot) => slot.date === date).length} รอบ</span>
+              <span className="text-xs text-[#98a2b3]">{visibleSlots.filter((slot) => slot.date === date).length} รอบ</span>
             </div>
             <div className="grid gap-2">
-              {slots.filter((slot) => slot.date === date).map((slot) => {
+              {visibleSlots.filter((slot) => slot.date === date).map((slot) => {
                 const seats = seatSummary(slot.bookedCount, slot.capacity, slot.waitlistCapacity);
                 const offer = slotOffer({ ...slot, phase, slotStatus: slot.status });
                 const mine = slot.myBookingId !== null && slot.myPosition !== null;

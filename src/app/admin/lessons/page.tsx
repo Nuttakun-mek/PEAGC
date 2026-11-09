@@ -328,8 +328,11 @@ function SlotForm({
             <option value="draft">ฉบับร่าง</option>
             <option value="closed">ปิดรับ</option>
             <option value="completed">เสร็จสิ้น</option>
-            <option value="cancelled">ยกเลิกรอบ</option>
+            <option value="cancelled">ยกเลิกรอบ (ยกเลิกการจองทั้งหมดและแจ้งผู้จอง)</option>
           </select>
+          <span className="mt-1 block text-xs text-[#6b6475]">
+            เพิ่มจำนวนที่นั่งแล้ว ผู้ที่เลื่อนจากคิวสำรองจะได้รับแจ้งเตือนอัตโนมัติ
+          </span>
         </label>
       </div>
       <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">

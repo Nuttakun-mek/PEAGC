@@ -69,6 +69,27 @@ export function lessonStartAt(date: string, time: string) {
   return new Date(`${date}T${hhmmss}${BANGKOK_OFFSET}`);
 }
 
+/** Google Calendar "add event" link for a lesson (times are Bangkok wall-clock). */
+export function googleCalendarUrl(input: {
+  date: string;
+  details?: string | null;
+  endTime: string;
+  location?: string | null;
+  startTime: string;
+  title: string;
+}) {
+  const stamp = (time: string) =>
+    lessonStartAt(input.date, time).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    dates: `${stamp(input.startTime)}/${stamp(input.endTime)}`,
+    text: input.title,
+  });
+  if (input.details) params.set("details", input.details);
+  if (input.location) params.set("location", input.location);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
 export function cancelDeadline(date: string, time: string, cutoffHours: number) {
   return new Date(lessonStartAt(date, time).getTime() - cutoffHours * 60 * 60 * 1000);
 }
@@ -138,6 +159,7 @@ export const lessonRpcStatus: Record<string, string> = {
   DUPLICATE: "lesson-already-booked",
   FULL: "lesson-full",
   LIMIT: "lesson-limit",
+  MODULE_DISABLED: "module-disabled",
   MEMBER_INACTIVE: "member-not-approved",
   NOT_MEMBER: "member-not-approved",
   NOT_OPEN: "lesson-not-open",

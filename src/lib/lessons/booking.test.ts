@@ -5,6 +5,7 @@ import {
   cancelDeadline,
   formatCountdown,
   fromBangkokInputValue,
+  googleCalendarUrl,
   getBookingPhase,
   lessonStartAt,
   needsAnnouncementAck,
@@ -150,5 +151,16 @@ describe("slot generator", () => {
     expect(planSlots({ from: "2026-11-15", times: [{ end_time: "10:00", start_time: "09:00" }], to: "2026-11-09", weekdays: [1] })).toEqual({ error: "ช่วงวันที่ไม่ถูกต้อง" });
     expect(planSlots({ from: "2026-11-09", times: [{ end_time: "10:00", start_time: "09:00" }], to: "2026-11-09", weekdays: [0] })).toEqual({ error: "ไม่มีวันที่ตรงกับวันในสัปดาห์ที่เลือก" });
     expect(planSlots({ from: "2026-01-01", times: [{ end_time: "10:00", start_time: "09:00" }], to: "2027-12-31", weekdays: [0, 1, 2, 3, 4, 5, 6] })).toEqual({ error: "สร้างได้ครั้งละไม่เกิน 300 รอบ" });
+  });
+});
+
+describe("googleCalendarUrl", () => {
+  it("converts Bangkok wall-clock times to UTC", () => {
+    const url = new URL(
+      googleCalendarUrl({ date: "2026-12-01", endTime: "10:30:00", location: "สนามฝึก", startTime: "09:00", title: "Swing" }),
+    );
+    expect(url.searchParams.get("dates")).toBe("20261201T020000Z/20261201T033000Z");
+    expect(url.searchParams.get("text")).toBe("Swing");
+    expect(url.searchParams.get("location")).toBe("สนามฝึก");
   });
 });

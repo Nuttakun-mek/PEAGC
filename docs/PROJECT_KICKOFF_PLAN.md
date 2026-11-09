@@ -201,8 +201,8 @@ Outcome: Admin ตรวจสถานะผู้สมัครและ slip
 - Slip upload
 - Payment review queue
 - Payment status update
-- Participant list
-- Export paid/unpaid participants
+- Participant list - done in `/admin/events/[eventId]`
+- Export paid/unpaid participants - done (`?type=participants`, `?type=unpaid`)
 - Audit log for payment changes
 
 ### Sprint 4A: Lesson and Academy Booking
@@ -220,24 +220,28 @@ Outcome: สมาชิกจองเรียนและ Admin ลงเว�
 
 Outcome: ลดงาน Excel หน้างานได้
 
-- Pairing board foundation
-- Assign players to groups
-- Tee time fields
-- Group capacity validation
-- Check-in status
-- Pairing sheet export
+- Pairing board foundation - done in `/admin/events/[eventId]`
+- Assign players to groups - done (manual move + auto-assign by registration order, handicap, or balanced snake draft)
+- Tee time fields - done (tee-time interval, split tee 1/10, shotgun start hole)
+- Group capacity validation - done (DB trigger with group row lock)
+- Check-in status - done (`checked_in_at`, no-show, undo, admin cancel)
+- Pairing sheet export - done (`/admin/events/[eventId]/export?type=pairing`)
+- Atomic registration + waitlist auto-promotion - done (`register_for_event` RPC, migration `20261107090000`)
 
 ### Sprint 6: Basic Competition Foundation
 
 Outcome: เริ่มคำนวณคะแนนพื้นฐานได้
 
-- Competition setup from event
-- Score entry 1-18 holes
-- Gross / Net calculation
-- System 36 foundation
-- Flight assignment
-- Leaderboard snapshot
-- Score verification status
+- Competition setup from event - done (`/admin/events/[eventId]/scoring`, rules as versioned JSON)
+- Score entry 1-18 holes - done (append-only `score_entries`, pickups)
+- Gross / Net calculation - done, plus Stableford
+- System 36 foundation - done
+- Flight assignment - done (handicap ranges)
+- Leaderboard snapshot - done (`leaderboard_snapshots`, countback tie-breaks)
+- Score verification status - done (`verified_scores`)
+- Prize results - done (top N overall and per flight → member awards)
+- Smart Score OCR - done (Claude vision + deterministic notation interpreter + review board + photo history)
+- Finance / usage reports - done (`/admin/reports`)
 
 ## 7. Decisions Needed Before Coding
 

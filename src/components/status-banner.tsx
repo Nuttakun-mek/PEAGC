@@ -12,9 +12,9 @@ const toneStyles: Record<BannerTone, { icon: typeof Info; wrap: string }> = {
 /** Picks a tone from a `?status=` key by its wording so every page colours feedback consistently. */
 export function toneForStatus(status: string | undefined): BannerTone {
   if (!status) return "info";
-  if (/(failed|invalid|closed|full|locked|denied|required|not-approved|too-large|unreadable|mismatch|limit|overlap|started)/.test(status)) return "error";
-  if (/(pending|review|waitlist|stale|not-open)/.test(status)) return "warning";
-  if (/(saved|created|updated|approved|booked|changed|cancelled|submitted|imported|acked|registered|deleted|archived|removed|generated|sent)/.test(status)) return "success";
+  if (/(failed|invalid|closed|full|locked|denied|required|not-approved|too-large|unreadable|mismatch|limit|overlap|started|not-pairable|no-groups|no-players|too-many)/.test(status)) return "error";
+  if (/(pending|review|waitlist|stale|not-open|partial)/.test(status)) return "warning";
+  if (/(saved|created|updated|approved|booked|changed|cancelled|submitted|imported|acked|registered|deleted|archived|removed|generated|sent|checked-in|assigned|moved|cleared|marked|undone|promoted)/.test(status)) return "success";
   return "info";
 }
 

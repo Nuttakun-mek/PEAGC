@@ -15,6 +15,8 @@ import {
 import { createEvent, updateEvent } from "@/app/admin/events/actions";
 import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
+import { holdsSeat } from "@/lib/events/pairing";
+import { pickFilter } from "@/lib/filters";
 import { createClient } from "@/lib/supabase/server";
 
 type AdminEventsPageProps = {
@@ -337,7 +339,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
     searchParams: params,
   });
   const q = params.q?.trim() ?? "";
-  const selectedStatus = params.status ?? "all";
+  const selectedStatus = pickFilter(params.status, ["draft", "open", "closed", "completed", "cancelled", "archived"]);
   let events = sampleEvents;
   let registrations: EventRegistrationRow[] = [];
 
@@ -533,7 +535,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                     </div>
                     <div className="text-sm text-[#3f3a48]">
                       <p>
-                        สมัครแล้ว {registrationsByEvent.get(event.id)?.length ?? 0}
+                        สมัครแล้ว {registrationsByEvent.get(event.id)?.filter((item) => holdsSeat(item.status)).length ?? 0}
                         {event.capacity ? ` / ${event.capacity} คน` : " คน"}
                       </p>
                       <p className="mt-1 text-[#6b6475]">
@@ -549,9 +551,20 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                     <section className="mb-4 rounded-md border border-[#e6e2ee] bg-white p-4">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="font-semibold text-[#722257]">รายชื่อผู้สมัคร</h3>
-                        <span className="rounded-md bg-[#f8edf4] px-2 py-1 text-xs font-semibold text-[#722257]">
-                          {registrationsByEvent.get(event.id)?.length ?? 0} คน
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="rounded-md bg-[#f8edf4] px-2 py-1 text-xs font-semibold text-[#722257]">
+                            {registrationsByEvent.get(event.id)?.length ?? 0} คน
+                          </span>
+                          {access.isBypass ? null : (
+                            <Link
+                              className="flex h-9 items-center gap-1.5 rounded-md bg-[#722257] px-3 text-xs font-semibold text-white hover:bg-[#8b2d6b]"
+                              href={`/admin/events/${event.id}`}
+                            >
+                              <UsersRound className="size-3.5" aria-hidden="true" />
+                              ผู้สมัคร · จัดก๊วน · เช็กอิน
+                            </Link>
+                          )}
+                        </div>
                       </div>
                       {registrationsByEvent.get(event.id)?.length ? (
                         <div className="mt-3 grid gap-2 md:grid-cols-2">

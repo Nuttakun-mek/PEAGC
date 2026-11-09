@@ -13,6 +13,8 @@ import {
 
 import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
+import { pickFilter } from "@/lib/filters";
+import { formatBangkokDateTime, toBangkokInputValue } from "@/lib/lessons/booking";
 import { createClient } from "@/lib/supabase/server";
 
 import { updatePaymentReview } from "./actions";
@@ -29,6 +31,7 @@ type AdminPaymentsPageProps = {
 
 type PaymentRecord = {
   amount: number;
+  created_at?: string;
   id: string;
   note: string | null;
   status: string;
@@ -146,7 +149,12 @@ const statusMessages: Record<string, string> = {
 };
 
 function getLatestPayment(registration: RegistrationRow) {
-  return registration.payment_records?.[0] ?? null;
+  // PostgREST does not order embedded rows, so pick the newest explicitly.
+  return (
+    [...(registration.payment_records ?? [])].sort((a, b) =>
+      (b.created_at ?? "").localeCompare(a.created_at ?? ""),
+    )[0] ?? null
+  );
 }
 
 function getPaymentStatus(registration: RegistrationRow) {
@@ -170,14 +178,8 @@ function getStatusClass(status: string) {
 }
 
 function formatDateTime(value: string | null) {
-  if (!value) {
-    return "-";
-  }
-
-  return new Intl.DateTimeFormat("th-TH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  // Server renders in UTC on Vercel; always show club (Bangkok) time.
+  return formatBangkokDateTime(value);
 }
 
 function PaymentReviewForm({
@@ -212,7 +214,7 @@ function PaymentReviewForm({
           <span className="text-sm font-semibold text-[#3f3a48]">วันเวลาที่โอน</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
-            defaultValue={payment?.transferred_at?.slice(0, 16) ?? ""}
+            defaultValue={toBangkokInputValue(payment?.transferred_at)}
             disabled={disabled}
             name="transferredAt"
             type="datetime-local"
@@ -268,7 +270,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
     searchParams: params,
   });
   const q = params.q?.trim() ?? "";
-  const selectedStatus = params.status ?? "all";
+  const selectedStatus = pickFilter(params.status, ["pending_payment", "pending", "review", "approved", "paid", "rejected", "refunded"]);
   const selectedEvent = params.event ?? "all";
   let registrations = sampleRegistrations;
   let events: EventOption[] = [{ id: "sample-event-1", name: "ออกรอบประจำเดือน PEAGC" }];
@@ -279,7 +281,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
       supabase
         .from("event_registrations")
         .select(
-          "id, event_id, guest_name, registration_type, status, created_at, members(full_name, member_code, phone, email), events(name, venue, event_date, tee_off_time, member_price), payment_records(id, amount, status, transferred_at, note, slip_file_id)",
+          "id, event_id, guest_name, registration_type, status, created_at, members(full_name, member_code, phone, email), events(name, venue, event_date, tee_off_time, member_price), payment_records(id, amount, status, transferred_at, note, slip_file_id, created_at)",
         )
         .eq("club_id", access.clubId)
         .not("status", "in", "(cancelled,no_show)")
@@ -494,7 +496,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
                           <CircleDollarSign className="mt-0.5 size-4 text-[#722257]" aria-hidden="true" />
                           <div>
                             <p className="font-semibold text-[#6b6475]">ยอดที่ต้องชำระ</p>
-                            <p className="mt-1 text-[#722257]">{(registration.events?.member_price ?? 0).toLocaleString()} baht</p>
+                            <p className="mt-1 text-[#722257]">{(registration.events?.member_price ?? 0).toLocaleString()} บาท</p>
                           </div>
                         </div>
                         <div className="flex items-start gap-2">
@@ -513,7 +515,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
               })
             ) : (
               <div className="px-5 py-10 text-center text-sm text-[#6b6475]">
-                No payment registrations match the current filters.
+                ไม่พบรายการสมัครที่ตรงกับตัวกรอง
               </div>
             )}
           </div>

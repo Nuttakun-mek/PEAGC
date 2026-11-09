@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  BarChart3,
   CalendarDays,
   CircleDollarSign,
   Database,
@@ -8,10 +9,15 @@ import {
   Megaphone,
   LogOut,
   Search,
+  Settings2,
   UsersRound,
 } from "lucide-react";
 
 import { signOut } from "@/app/actions/auth";
+import { getStaffClub } from "@/lib/auth/staff";
+import { type ModuleState, defaultModuleState, modulesForPath } from "@/lib/modules";
+import { getClubModules } from "@/lib/modules-server";
+import { hasSupabasePublicConfig } from "@/lib/supabase/env";
 
 const adminNavigation = [
   { href: "/admin", icon: LayoutDashboard, label: "ภาพรวม" },
@@ -21,9 +27,38 @@ const adminNavigation = [
   { href: "/admin/lessons", icon: GraduationCap, label: "ตารางเรียน" },
   { href: "/admin/payments", icon: CircleDollarSign, label: "ตรวจการชำระเงิน" },
   { href: "/admin/content", icon: Megaphone, label: "ข่าว คะแนน และรางวัล" },
+  { href: "/admin/reports", icon: BarChart3, label: "รายงาน" },
+  { href: "/admin/settings", icon: Settings2, label: "เปิด/ปิดระบบ" },
 ];
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+const staffRoles = [
+  "platform_owner",
+  "club_admin",
+  "committee",
+  "finance_officer",
+  "tournament_director",
+  "scoring_officer",
+];
+
+async function loadModules(): Promise<ModuleState> {
+  if (!hasSupabasePublicConfig()) return defaultModuleState;
+  try {
+    const staff = await getStaffClub(staffRoles);
+    return staff.status === "ok" ? await getClubModules(staff.supabase, staff.clubId) : defaultModuleState;
+  } catch {
+    return defaultModuleState;
+  }
+}
+
+/** A nav item is "closed" when every module behind that page is closed to members. */
+function isClosed(href: string, modules: ModuleState) {
+  const keys = modulesForPath(href);
+  return keys.length > 0 && keys.every((key) => !modules[key]);
+}
+
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  const modules = await loadModules();
+
   return (
     <div className="min-h-screen bg-[#f2f5f8] lg:flex">
       <aside className="border-b border-[#e2e8ef] bg-white text-[#344054] lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col lg:border-b-0 lg:border-r">
@@ -51,6 +86,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             >
               <item.icon className="size-4" aria-hidden="true" />
               {item.label}
+              {isClosed(item.href, modules) ? (
+                <span className="ml-auto rounded-full bg-[#f1f3ef] px-2 py-0.5 text-[10px] font-semibold text-[#98a2b3]" title="ปิดสำหรับสมาชิก">
+                  ปิด
+                </span>
+              ) : null}
             </Link>
           ))}
         </nav>

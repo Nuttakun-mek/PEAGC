@@ -19,6 +19,7 @@ import {
 } from "@/app/admin/employees/actions";
 import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
+import { pickFilter } from "@/lib/filters";
 import { isDirectoryStale } from "@/lib/directory/import";
 import { formatBangkokDateTime } from "@/lib/lessons/booking";
 import { createClient } from "@/lib/supabase/server";
@@ -342,7 +343,7 @@ export default async function AdminEmployeesPage({
     searchParams: params,
   });
   const q = params.q?.trim() ?? "";
-  const selectedStatus = params.status ?? "all";
+  const selectedStatus = pickFilter(params.status, ["active", "inactive", "retired", "suspended", "unknown", "m:active", "m:inactive", "m:suspended"]);
   let employees = sampleEmployees;
   let lastImport: { deactivated_count: number; file_name: string; flagged_member_count: number; imported_at: string; imported_count: number; mode: string } | null = null;
   let totalActiveMembers = sampleEmployees.filter((employee) => employee.membership_status === "active").length;

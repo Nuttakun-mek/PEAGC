@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { csvCell } from "@/lib/csv";
 import { queueStatusLabel } from "@/lib/lessons/booking";
 import { createClient } from "@/lib/supabase/server";
 
@@ -37,11 +38,6 @@ type RosterRow = {
 
 function first<T>(value: T | T[] | null) {
   return Array.isArray(value) ? (value[0] ?? null) : value;
-}
-
-function csvCell(value: unknown) {
-  const text = value === null || value === undefined ? "" : String(value);
-  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 const statusLabels: Record<string, string> = {
