@@ -1,0 +1,10 @@
+# Keep CLI deploys to the source the build needs.
+.env*
+!.env.example
+core
+core.*
+*.log
+.next
+node_modules
+tsconfig.tsbuildinfo
+supabase/.temp
