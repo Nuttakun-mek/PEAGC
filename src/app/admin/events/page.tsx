@@ -131,6 +131,7 @@ const quickStatusActions: Record<string, Array<{ confirm?: string; label: string
     { label: "เปิดรับสมัครอีกครั้ง", status: "open" },
     { label: "ทำเครื่องหมายว่าเสร็จสิ้น", status: "completed" },
     { confirm: "ยืนยันยกเลิกกิจกรรมนี้? สมาชิกจะเห็นว่ากิจกรรมถูกยกเลิก", label: "ยกเลิกกิจกรรม", status: "cancelled" },
+    { confirm: "เก็บกิจกรรมนี้ถาวร? จะซ่อนจากรายการและหน้าสมาชิก (นำกลับได้ภายหลัง)", label: "เก็บถาวร", status: "archived" },
   ],
   completed: [
     { confirm: "เก็บกิจกรรมนี้ถาวร? จะซ่อนจากรายการและหน้าสมาชิก (นำกลับได้ภายหลัง)", label: "เก็บถาวร", status: "archived" },
