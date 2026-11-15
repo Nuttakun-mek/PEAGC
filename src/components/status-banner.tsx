@@ -1,5 +1,7 @@
 import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
 
+import { StatusBannerShell } from "@/components/status-banner-shell";
+
 export type BannerTone = "success" | "info" | "warning" | "error";
 
 const toneStyles: Record<BannerTone, { icon: typeof Info; wrap: string }> = {
@@ -12,31 +14,55 @@ const toneStyles: Record<BannerTone, { icon: typeof Info; wrap: string }> = {
 /** Picks a tone from a `?status=` key by its wording so every page colours feedback consistently. */
 export function toneForStatus(status: string | undefined): BannerTone {
   if (!status) return "info";
-  if (/(failed|invalid|closed|full|locked|denied|required|not-approved|too-large|unreadable|mismatch|limit|overlap|started|not-pairable|no-groups|no-players|too-many)/.test(status)) return "error";
+  if (/(failed|invalid|closed|full|locked|denied|required|not-approved|too-large|unreadable|mismatch|limit|overlap|started|not-pairable|no-groups|no-players|too-many|outdated|not-found|taken|blocked|corrupt|duplicate|not-saved)/.test(status)) return "error";
   if (/(pending|review|waitlist|stale|not-open|partial)/.test(status)) return "warning";
-  if (/(saved|created|updated|approved|booked|changed|cancelled|submitted|imported|acked|registered|deleted|archived|removed|generated|sent|checked-in|assigned|moved|cleared|marked|undone|promoted)/.test(status)) return "success";
+  if (/(saved|created|updated|approved|booked|changed|cancelled|submitted|imported|acked|registered|deleted|archived|removed|generated|sent|checked-in|assigned|moved|cleared|marked|undone|promoted|restored)/.test(status)) return "success";
   return "info";
 }
 
 export function StatusBanner({
   children,
   className = "",
+  floating = false,
   title,
   tone = "info",
 }: {
   children: React.ReactNode;
   className?: string;
+  /** Result of a just-submitted action: stays visible at the top of the viewport until dismissed. */
+  floating?: boolean;
   title?: string;
   tone?: BannerTone;
 }) {
   const { icon: Icon, wrap } = toneStyles[tone];
   return (
-    <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${wrap} ${className}`} role="status">
+    <StatusBannerShell
+      className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${wrap} ${className}`}
+      floating={floating}
+    >
       <Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <div className="min-w-0 flex-1 leading-6">
         {title ? <p className="font-semibold">{title}</p> : null}
         <div className={title ? "mt-0.5" : "font-medium"}>{children}</div>
       </div>
-    </div>
+    </StatusBannerShell>
+  );
+}
+
+/** Page-level warning when one or more queries failed, instead of silently showing empty lists. */
+export function LoadErrorBanner({
+  className = "mt-5",
+  error,
+}: {
+  className?: string;
+  error: { labels: string[]; outdated: boolean } | null;
+}) {
+  if (!error) return null;
+  return (
+    <StatusBanner className={className} title="โหลดข้อมูลบางส่วนไม่สำเร็จ" tone="error">
+      {error.outdated
+        ? `ฐานข้อมูลยังไม่ได้อัปเดตให้ตรงกับระบบ (migration ค้างอยู่) ส่วนที่ได้รับผลกระทบ: ${error.labels.join(", ")} ข้อมูลที่แสดงอาจไม่ครบ กรุณาแจ้งผู้ดูแลระบบ`
+        : `ส่วนที่โหลดไม่สำเร็จ: ${error.labels.join(", ")} กรุณาลองโหลดหน้าใหม่ หากยังไม่หายให้แจ้งผู้ดูแลระบบ`}
+    </StatusBanner>
   );
 }

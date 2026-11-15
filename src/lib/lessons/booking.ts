@@ -274,26 +274,53 @@ export type TimeRange = { end_time: string; start_time: string };
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+/** "9.00", "09:00", "9:00 น." -> "09:00"; anything else is returned trimmed for the error message. */
+function normalizeClock(value: string) {
+  const cleaned = value.trim().replace(/\s*น\.?$/, "").replace(".", ":");
+  return cleaned.replace(/^(\d):/, "0$1:");
+}
+
+/**
+ * Parses "16:30-17:30, 17:30-18:30" into ordered ranges, explaining the first bad entry in Thai.
+ * Accepts "." as the hour separator, en/em dashes or "ถึง" between times, and "," / ";" / new
+ * lines between ranges, because that is how staff type times.
+ */
+export function parseTimeRangesDetailed(input: string): { ranges: TimeRange[] } | { error: string } {
+  const items = input
+    .split(/[,;\n]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (!items.length) {
+    return { error: "กรุณาใส่ช่วงเวลา เช่น 09:00-10:00" };
+  }
+
+  const ranges: TimeRange[] = [];
+  for (const item of items) {
+    const parts = item.split(/\s*(?:-|–|—|ถึง)\s*/).filter(Boolean);
+    if (parts.length !== 2) {
+      return {
+        error: parts.length === 1
+          ? `ช่วงเวลา "${item}" ไม่มีเวลาสิ้นสุด กรุณาใส่แบบ 09:00-10:00`
+          : `อ่านช่วงเวลา "${item}" ไม่ได้ กรุณาใส่แบบ 09:00-10:00 คั่นแต่ละช่วงด้วยจุลภาค`,
+      };
+    }
+    const [start, end] = parts.map(normalizeClock);
+    if (!HHMM.test(start) || !HHMM.test(end)) {
+      return { error: `เวลาใน "${item}" ไม่ถูกต้อง ใช้รูปแบบ 24 ชั่วโมง เช่น 09:00-10:00` };
+    }
+    if (start >= end) {
+      return { error: `ช่วงเวลา "${item}" เวลาเริ่มต้องก่อนเวลาสิ้นสุด` };
+    }
+    ranges.push({ end_time: end, start_time: start });
+  }
+  return { ranges };
+}
+
 /** Parses "16:30-17:30, 17:30-18:30" into ordered ranges. Returns null when any range is invalid. */
 export function parseTimeRanges(input: string): TimeRange[] | null {
-  const ranges = input
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .map((item) => {
-      const [start = "", end = ""] = item.split("-").map((part) => part.trim().replace(/^(\d):/, "0$1:"));
-      return { end_time: end, start_time: start };
-    });
-
-  if (!ranges.length) {
-    return null;
-  }
-  for (const range of ranges) {
-    if (!HHMM.test(range.start_time) || !HHMM.test(range.end_time) || range.start_time >= range.end_time) {
-      return null;
-    }
-  }
-  return ranges;
+  const result = parseTimeRangesDetailed(input);
+  return "ranges" in result ? result.ranges : null;
 }
 
 export type SlotPlanInput = {

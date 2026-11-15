@@ -1,10 +1,12 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
-import { createClient } from "@/lib/supabase/server";
-import { parseDirectoryGrid } from "@/lib/directory/import";
 import * as XLSX from "xlsx";
+
+import { parseDirectoryGrid } from "@/lib/directory/import";
+import { redirectAfterAction as redirect } from "@/lib/navigation";
+import { failureStatus, logDbError } from "@/lib/supabase/errors";
+import { createClient } from "@/lib/supabase/server";
+import { anyCorruptedText, decodeTextFile, hasCorruptedText } from "@/lib/text-integrity";
 
 const employeeAdminRoles = ["platform_owner", "club_admin"];
 function getString(formData: FormData, key: string) {
@@ -141,6 +143,9 @@ export async function createEmployee(formData: FormData) {
   if (!payload) {
     redirectEmployees("missing-required");
   }
+  if (anyCorruptedText([payload.full_name, payload.first_name, payload.last_name, payload.department, payload.affiliation])) {
+    redirectEmployees("text-corrupted");
+  }
 
   const { data: employee, error } = await supabase
     .from("employee_directory")
@@ -152,7 +157,8 @@ export async function createEmployee(formData: FormData) {
     .single();
 
   if (error || !employee) {
-    redirectEmployees("create-failed");
+    logDbError("employee_directory.create", error);
+    redirectEmployees(failureStatus("create-failed", error));
   }
 
   await supabase.from("audit_logs").insert({
@@ -181,6 +187,9 @@ export async function updateEmployee(formData: FormData) {
   if (!payload) {
     redirectEmployees("missing-required", employeeId);
   }
+  if (anyCorruptedText([payload.full_name, payload.first_name, payload.last_name, payload.department, payload.affiliation])) {
+    redirectEmployees("text-corrupted", employeeId);
+  }
 
   const { data: before } = await supabase
     .from("employee_directory")
@@ -195,7 +204,8 @@ export async function updateEmployee(formData: FormData) {
     .eq("id", employeeId);
 
   if (error) {
-    redirectEmployees("update-failed", employeeId);
+    logDbError("employee_directory.update", error);
+    redirectEmployees(failureStatus("update-failed", error), employeeId);
   }
 
   await supabase.from("audit_logs").insert({
@@ -221,7 +231,8 @@ async function readUploadGrid(file: File): Promise<string[][]> {
     const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, { blankrows: false, defval: "", header: 1, raw: false });
     return grid.map((row) => row.map((cell) => String(cell ?? "").trim()));
   }
-  return parseDelimitedText(await file.text());
+  // Thai Excel saves "CSV" as Windows-874; File.text() would read it as UTF-8 garbage.
+  return parseDelimitedText(decodeTextFile(await file.arrayBuffer()).text);
 }
 
 export async function importEmployees(formData: FormData) {
@@ -250,6 +261,11 @@ export async function importEmployees(formData: FormData) {
   if (!parsed.rows.length) {
     redirectEmployees("import-empty");
   }
+  // Text that is already "???" in the file cannot be repaired after import; stop before it
+  // overwrites good names in the directory.
+  if (parsed.rows.some((row) => hasCorruptedText(row.full_name) || hasCorruptedText(row.first_name) || hasCorruptedText(row.last_name))) {
+    redirectEmployees("import-text-corrupted");
+  }
 
   const batchId = crypto.randomUUID();
   const now = new Date().toISOString();
@@ -271,7 +287,8 @@ export async function importEmployees(formData: FormData) {
       .from("employee_directory")
       .upsert(payloads.slice(index, index + 500), { onConflict: "club_id,employee_code" });
     if (error) {
-      redirectEmployees("import-failed");
+      logDbError("employee_directory.import", error);
+      redirectEmployees(failureStatus("import-failed", error));
     }
   }
 
@@ -280,7 +297,8 @@ export async function importEmployees(formData: FormData) {
   if (replaceMode) {
     const { data, error } = await supabase.rpc("finalize_directory_replace", { p_batch_id: batchId, p_club_id: clubId });
     if (error) {
-      redirectEmployees("import-finalize-failed");
+      logDbError("employee_directory.finalize_replace", error);
+      redirectEmployees(failureStatus("import-finalize-failed", error));
     }
     const result = data as { deactivated: number; flagged: number } | null;
     deactivated = result?.deactivated ?? 0;

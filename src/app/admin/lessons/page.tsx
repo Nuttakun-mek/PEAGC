@@ -35,8 +35,9 @@ import {
 } from "@/lib/lessons/booking";
 import { LessonSlotTable } from "@/components/lesson-slot-table";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
-import { StatusBanner, toneForStatus } from "@/components/status-banner";
+import { LoadErrorBanner, StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
+import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
 type AdminLessonsPageProps = {
@@ -156,6 +157,8 @@ const sampleBookings: BookingRow[] = [
 ];
 
 const statusMessages: Record<string, string> = {
+  ...dbFailureMessages,
+  "text-corrupted": "ข้อความภาษาไทยเสียหาย (แสดงเป็น ???) กรุณาพิมพ์ใหม่ก่อนบันทึก",
   "attendance-missing": "กรุณาเลือกสถานะเข้าเรียน",
   "attendance-updated": "ลงเวลาเรียนเรียบร้อยแล้ว",
   "attendance-update-failed": "ลงเวลาเรียนไม่สำเร็จ",
@@ -170,7 +173,7 @@ const statusMessages: Record<string, string> = {
   "slot-capacity-too-low": "ที่นั่งรวมคิวสำรองน้อยกว่าจำนวนที่จองอยู่",
   "booking-removed": "นำออกแล้ว คิวถัดไปเลื่อนขึ้นอัตโนมัติ",
   "generate-nothing-new": "รอบทั้งหมดมีอยู่แล้ว",
-  "generate-times-invalid": "รูปแบบเวลาไม่ถูกต้อง ใช้ HH:MM-HH:MM คั่นด้วยจุลภาค",
+  "generate-times-invalid": "รูปแบบเวลาไม่ถูกต้อง ใช้ 09:00-10:00 คั่นแต่ละช่วงด้วยจุลภาค",
   "settings-save-failed": "บันทึกไม่สำเร็จ",
   "settings-saved": "บันทึกแล้ว",
   "settings-window-invalid": "เวลาปิดต้องอยู่หลังเวลาเปิด",
@@ -489,7 +492,18 @@ function SlotGeneratorForm({ disabled, programs }: { disabled?: boolean; program
         </label>
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">ช่วงเวลา (คั่นด้วยจุลภาค)</span>
-          <input className={inputClass} defaultValue="16:30-17:30, 17:30-18:30" disabled={disabled} name="timeRanges" required />
+          <input
+            aria-describedby="time-ranges-hint"
+            className={inputClass}
+            defaultValue="16:30-17:30, 17:30-18:30"
+            disabled={disabled}
+            name="timeRanges"
+            placeholder="09:00-10:00, 10:00-11:00"
+            required
+          />
+          <span className="mt-1 block text-xs text-[#6b6475]" id="time-ranges-hint">
+            ใส่เวลาเริ่ม-เวลาจบทุกช่วง เช่น 09:00-10:00 (ใช้ 9.00-10.00 ได้)
+          </span>
         </label>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -552,10 +566,15 @@ function SlotGeneratorForm({ disabled, programs }: { disabled?: boolean; program
           <input className={inputClass} defaultValue={12} disabled={disabled} min="0" name="rescheduleCutoffHours" type="number" />
         </label>
       </div>
-      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] md:w-fit" disabled={disabled || !programs.length} type="submit">
-        <Plus className="size-4" aria-hidden="true" />
-        สร้างรอบเรียน
-      </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] md:w-fit" disabled={disabled || !programs.length} type="submit">
+          <Plus className="size-4" aria-hidden="true" />
+          สร้างรอบเรียน
+        </button>
+        {!programs.length ? (
+          <span className="text-sm text-[#805300]">ต้องมีคอร์สที่สถานะ &quot;ใช้งาน&quot; อย่างน้อย 1 คอร์สก่อนจึงจะสร้างรอบเรียนได้</span>
+        ) : null}
+      </div>
     </form>
   );
 }
@@ -653,6 +672,7 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
   let slots = sampleSlots;
   let bookings = sampleBookings;
   let lessonSettings: LessonBookingSettings = { ...defaultLessonBookingSettings };
+  let loadError: ReturnType<typeof collectLoadErrors> = null;
 
   if (!access.isBypass && access.clubId) {
     const supabase = await createClient();
@@ -685,6 +705,12 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
         .maybeSingle(),
     ]);
 
+    loadError = collectLoadErrors("admin.lessons", [
+      { error: programResult.error, label: "คอร์สเรียน" },
+      { error: slotResult.error, label: "รอบเรียน" },
+      { error: bookingResult.error, label: "การจอง" },
+      { error: settingsResult.error, label: "ตั้งค่าการจอง" },
+    ]);
     programs = (programResult.data ?? []) as ProgramRow[];
     slots = (slotResult.data ?? []) as unknown as SlotRow[];
     bookings = (bookingResult.data ?? []) as unknown as BookingRow[];
@@ -747,10 +773,12 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
         </div>
 
         {statusMessage ? (
-          <StatusBanner className="mt-5" tone={toneForStatus(params.status)}>
+          <StatusBanner className="mt-5" floating tone={toneForStatus(params.status)}>
             {statusMessage}
           </StatusBanner>
         ) : null}
+
+        <LoadErrorBanner error={loadError} />
 
         {access.isBypass ? (
           <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">

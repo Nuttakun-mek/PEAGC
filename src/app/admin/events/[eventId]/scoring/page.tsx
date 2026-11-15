@@ -131,7 +131,7 @@ export default async function ScoringPage({ params, searchParams }: PageProps) {
         </div>
 
         {statusMessage ? (
-          <StatusBanner className="mt-5" tone={toneForStatus(query.status)}>{statusMessage}</StatusBanner>
+          <StatusBanner className="mt-5" floating tone={toneForStatus(query.status)}>{statusMessage}</StatusBanner>
         ) : null}
 
         {/* ---------- setup ---------- */}

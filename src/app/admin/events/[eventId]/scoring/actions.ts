@@ -2,7 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 
-import { redirect } from "next/navigation";
+import { redirectAfterAction as redirect } from "@/lib/navigation";
 
 import { requireStaffClub } from "@/lib/auth/staff";
 import { isOcrConfigured, readScorecard } from "@/lib/ocr/claude";

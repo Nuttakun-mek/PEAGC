@@ -12,23 +12,28 @@ import {
   UsersRound,
 } from "lucide-react";
 
-import { createEvent, updateEvent } from "@/app/admin/events/actions";
-import { StatusBanner, toneForStatus } from "@/components/status-banner";
+import { createEvent, setEventStatus, updateEvent } from "@/app/admin/events/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { LoadErrorBanner, StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
 import { holdsSeat } from "@/lib/events/pairing";
 import { pickFilter } from "@/lib/filters";
+import { eventStatusLabels, eventStatusOptions, eventTypeLabels } from "@/lib/labels";
+import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
 type AdminEventsPageProps = {
   searchParams: Promise<{
     bypass?: string;
     event?: string;
+    filter?: string;
     q?: string;
     status?: string;
   }>;
 };
 
 type EventRow = {
+  archived_at?: string | null;
   capacity: number | null;
   description: string | null;
   event_date: string;
@@ -45,6 +50,7 @@ type EventRow = {
   target_sections?: string[] | null;
   target_work_lines?: string[] | null;
   tee_off_time: string | null;
+  updated_at?: string | null;
   venue: string | null;
 };
 
@@ -99,28 +105,45 @@ const sampleEvents: EventRow[] = [
   },
 ];
 
-const eventTypeLabels: Record<string, string> = {
-  charity: "Charity",
-  golf_round: "ออกรอบ",
-  tournament: "แข่งขัน",
-  training: "ฝึกอบรมกอล์ฟ",
-};
-
-const statusLabels: Record<string, string> = {
-  archived: "Archived",
-  cancelled: "ยกเลิก",
-  closed: "Closed",
-  completed: "Completed",
-  draft: "Draft",
-  open: "Open",
-};
-
 const statusMessages: Record<string, string> = {
+  ...dbFailureMessages,
   "create-failed": "สร้างกิจกรรมไม่สำเร็จ",
   created: "สร้างกิจกรรมเรียบร้อยแล้ว",
+  "event-archived": "เก็บกิจกรรมถาวรแล้ว (ซ่อนจากรายการและหน้าสมาชิก) ดูหรือนำกลับได้ที่ตัวกรอง \"เก็บถาวร\"",
+  "event-restored": "นำกิจกรรมกลับมาแล้ว",
+  "event-status-changed": "เปลี่ยนสถานะกิจกรรมเรียบร้อยแล้ว",
   "missing-required": "กรุณากรอกชื่อกิจกรรมและวันที่",
+  "text-corrupted": "ข้อความภาษาไทยเสียหาย (แสดงเป็น ???) กรุณาพิมพ์ใหม่ก่อนบันทึก",
   "update-failed": "แก้ไขกิจกรรมไม่สำเร็จ",
+  "update-not-found": "ไม่พบกิจกรรมนี้ หรือบัญชีนี้ไม่มีสิทธิ์แก้ไข",
+  "update-not-saved": "ระบบไม่ได้บันทึกการเปลี่ยนแปลง กรุณาลองใหม่อีกครั้ง หากยังไม่ได้ให้แจ้งผู้ดูแลระบบ",
   updated: "แก้ไขกิจกรรมเรียบร้อยแล้ว",
+};
+
+/** Quick status buttons offered for each current status. */
+const quickStatusActions: Record<string, Array<{ confirm?: string; label: string; status: string }>> = {
+  archived: [{ label: "นำกลับมาเป็นฉบับร่าง", status: "draft" }],
+  cancelled: [
+    { label: "เปิดรับสมัครอีกครั้ง", status: "open" },
+    { confirm: "เก็บกิจกรรมนี้ถาวร? จะซ่อนจากรายการและหน้าสมาชิก (นำกลับได้ภายหลัง)", label: "เก็บถาวร", status: "archived" },
+  ],
+  closed: [
+    { label: "เปิดรับสมัครอีกครั้ง", status: "open" },
+    { label: "ทำเครื่องหมายว่าเสร็จสิ้น", status: "completed" },
+    { confirm: "ยืนยันยกเลิกกิจกรรมนี้? สมาชิกจะเห็นว่ากิจกรรมถูกยกเลิก", label: "ยกเลิกกิจกรรม", status: "cancelled" },
+  ],
+  completed: [
+    { confirm: "เก็บกิจกรรมนี้ถาวร? จะซ่อนจากรายการและหน้าสมาชิก (นำกลับได้ภายหลัง)", label: "เก็บถาวร", status: "archived" },
+  ],
+  draft: [
+    { label: "เปิดรับสมัคร", status: "open" },
+    { confirm: "เก็บกิจกรรมนี้ถาวร? จะซ่อนจากรายการ (นำกลับได้ภายหลัง)", label: "เก็บถาวร", status: "archived" },
+  ],
+  open: [
+    { label: "ปิดรับสมัคร", status: "closed" },
+    { confirm: "ยืนยันยกเลิกกิจกรรมนี้? สมาชิกจะเห็นว่ากิจกรรมถูกยกเลิก", label: "ยกเลิกกิจกรรม", status: "cancelled" },
+    { confirm: "เก็บกิจกรรมนี้ถาวร? จะซ่อนจากรายการและหน้าสมาชิก (นำกลับได้ภายหลัง)", label: "เก็บถาวร", status: "archived" },
+  ],
 };
 
 function getStatusClass(status: string) {
@@ -195,12 +218,9 @@ function EventForm({
             disabled={disabled}
             name="status"
           >
-            <option value="draft">ฉบับร่าง</option>
-            <option value="open">เปิดรับสมัคร</option>
-            <option value="closed">ปิดรับสมัคร</option>
-            <option value="completed">เสร็จสิ้น</option>
-            <option value="cancelled">ยกเลิก</option>
-            <option value="archived">เก็บถาวร</option>
+            {eventStatusOptions.map((value) => (
+              <option key={value} value={value}>{eventStatusLabels[value]}</option>
+            ))}
           </select>
         </label>
       </div>
@@ -339,20 +359,24 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
     searchParams: params,
   });
   const q = params.q?.trim() ?? "";
-  const selectedStatus = pickFilter(params.status, ["draft", "open", "closed", "completed", "cancelled", "archived"]);
+  // `filter` is the list filter; `status` carries the result of the last save. Older links put
+  // the filter in `status`, so accept it there too when it is a real filter value.
+  const selectedStatus = pickFilter(params.filter ?? params.status, eventStatusOptions);
+  const showArchived = selectedStatus === "archived";
   let events = sampleEvents;
   let registrations: EventRegistrationRow[] = [];
+  let loadError: ReturnType<typeof collectLoadErrors> = null;
 
   if (!access.isBypass && access.clubId) {
     const supabase = await createClient();
-    const [{ data }, { data: registrationData }] = await Promise.all([
-      supabase
-        .from("events")
-        .select(
-          "id, name, event_type, venue, event_date, tee_off_time, capacity, member_price, guest_price, includes, description, status, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections",
-        )
-        .eq("club_id", access.clubId)
-        .is("archived_at", null)
+    const eventQuery = supabase
+      .from("events")
+      .select(
+        "id, name, event_type, venue, event_date, tee_off_time, capacity, member_price, guest_price, includes, description, status, archived_at, updated_at, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections",
+      )
+      .eq("club_id", access.clubId);
+    const [{ data, error: eventsError }, { data: registrationData, error: registrationsError }] = await Promise.all([
+      (showArchived ? eventQuery.not("archived_at", "is", null) : eventQuery.is("archived_at", null))
         .order("event_date", { ascending: true })
         .limit(80),
       supabase
@@ -366,10 +390,15 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
 
     events = (data ?? []) as EventRow[];
     registrations = (registrationData ?? []) as unknown as EventRegistrationRow[];
+    loadError = collectLoadErrors("admin.events", [
+      { error: eventsError, label: "รายการกิจกรรม" },
+      { error: registrationsError, label: "รายชื่อผู้สมัคร" },
+    ]);
   }
 
   events = events.filter((event) => {
-    const matchesStatus = selectedStatus === "all" || event.status === selectedStatus;
+    // The archived view lists rows with archived_at set, whatever their last status was.
+    const matchesStatus = selectedStatus === "all" || showArchived || event.status === selectedStatus;
     const haystack = [event.name, event.venue, event.event_type, event.description]
       .filter(Boolean)
       .join(" ")
@@ -422,10 +451,12 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
         </div>
 
         {statusMessage ? (
-          <StatusBanner className="mt-5" tone={toneForStatus(params.status)}>
+          <StatusBanner className="mt-5" floating tone={toneForStatus(params.status)}>
             {statusMessage}
           </StatusBanner>
         ) : null}
+
+        <LoadErrorBanner error={loadError} />
 
         {access.isBypass ? (
           <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
@@ -479,17 +510,15 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                   aria-hidden="true"
                 />
                 <select
+                  aria-label="กรองตามสถานะ"
                   className="h-11 w-full rounded-md border border-[#d9d3e6] bg-white pl-10 pr-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
                   defaultValue={selectedStatus}
-                  name="status"
+                  name="filter"
                 >
-                  <option value="all">ทุกสถานะ</option>
-                  <option value="draft">ฉบับร่าง</option>
-                  <option value="open">เปิดรับสมัคร</option>
-                  <option value="closed">ปิดรับสมัคร</option>
-                  <option value="completed">เสร็จสิ้น</option>
-                  <option value="cancelled">ยกเลิก</option>
-                  <option value="archived">เก็บถาวร</option>
+                  <option value="all">ทุกสถานะ (ไม่รวมที่เก็บถาวร)</option>
+                  {eventStatusOptions.map((value) => (
+                    <option key={value} value={value}>{eventStatusLabels[value]}</option>
+                  ))}
                 </select>
               </label>
               <button
@@ -505,7 +534,8 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
             {events.length ? (
               events.map((event) => (
                 <details
-                  className="group px-5 py-4"
+                  className="group scroll-mt-24 px-5 py-4"
+                  id={`event-${event.id}`}
                   key={event.id}
                   open={highlightedEvent === event.id}
                 >
@@ -519,7 +549,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                         <span
                           className={`rounded-md px-2 py-1 text-xs font-semibold ${getStatusClass(event.status)}`}
                         >
-                          {statusLabels[event.status] ?? event.status}
+                          {event.archived_at ? eventStatusLabels.archived : eventStatusLabels[event.status] ?? event.status}
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-[#6b6475]">
@@ -548,6 +578,34 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                   </summary>
 
                   <div className="mt-5 rounded-lg border border-[#e6e2ee] bg-white/70 p-4">
+                    {access.isBypass ? null : (
+                      <section className="mb-4 flex flex-wrap items-center gap-2 rounded-md border border-[#e6e2ee] bg-white p-4">
+                        <p className="mr-2 text-sm font-semibold text-[#3f3a48]">
+                          สถานะปัจจุบัน: {event.archived_at ? eventStatusLabels.archived : eventStatusLabels[event.status] ?? event.status}
+                        </p>
+                        {(quickStatusActions[event.archived_at ? "archived" : event.status] ?? []).map((item) => (
+                          <form action={setEventStatus} key={item.status}>
+                            <input name="eventId" type="hidden" value={event.id} />
+                            <input name="status" type="hidden" value={item.status} />
+                            {item.confirm ? (
+                              <ConfirmSubmitButton
+                                className="h-9 rounded-md border border-[#efcbd0] bg-white px-3 text-xs font-semibold text-[#a33a46] hover:bg-[#fff7f7]"
+                                message={item.confirm}
+                              >
+                                {item.label}
+                              </ConfirmSubmitButton>
+                            ) : (
+                              <button
+                                className="h-9 rounded-md border border-[#d9d3e6] bg-white px-3 text-xs font-semibold text-[#722257] hover:bg-[#f8edf4]"
+                                type="submit"
+                              >
+                                {item.label}
+                              </button>
+                            )}
+                          </form>
+                        ))}
+                      </section>
+                    )}
                     <section className="mb-4 rounded-md border border-[#e6e2ee] bg-white p-4">
                       <div className="flex items-center justify-between gap-3">
                         <h3 className="font-semibold text-[#722257]">รายชื่อผู้สมัคร</h3>
@@ -615,10 +673,13 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                       </div>
                     </div>
 
+                    {/* Keyed on updated_at: after a save the form remounts with the stored values
+                        instead of keeping (or resetting to) the values from before the save. */}
                     <EventForm
                       action={updateEvent}
                       disabled={access.isBypass}
                       event={event}
+                      key={`${event.id}:${event.updated_at ?? ""}`}
                       title={`แก้ไข ${event.name}`}
                     />
                   </div>

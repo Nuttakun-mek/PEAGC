@@ -359,7 +359,7 @@ export default async function AdminPaymentsPage({ searchParams }: AdminPaymentsP
         </div>
 
         {statusMessage ? (
-          <StatusBanner className="mt-5" tone={toneForStatus(params.status)}>
+          <StatusBanner className="mt-5" floating tone={toneForStatus(params.status)}>
             {statusMessage}
           </StatusBanner>
         ) : null}

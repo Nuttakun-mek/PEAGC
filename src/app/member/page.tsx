@@ -588,7 +588,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
           </div>
 
           {params.status && statusMessages[params.status] ? (
-            <StatusBanner className="mt-4" tone={toneForStatus(params.status)}>
+            <StatusBanner className="mt-4" floating tone={toneForStatus(params.status)}>
               {statusMessages[params.status]}
               {params.rank && /^\d+$/.test(params.rank) ? ` (สำรองลำดับ ${params.rank})` : ""}
             </StatusBanner>

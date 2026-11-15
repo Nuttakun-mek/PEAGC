@@ -69,7 +69,7 @@ export default async function AdminSettingsPage({ searchParams }: PageProps) {
         </div>
 
         {statusMessage ? (
-          <StatusBanner className="mt-5" tone={params.status === "module-closed" ? "warning" : toneForStatus(params.status)}>
+          <StatusBanner className="mt-5" floating tone={params.status === "module-closed" ? "warning" : toneForStatus(params.status)}>
             {statusMessage}
           </StatusBanner>
         ) : null}

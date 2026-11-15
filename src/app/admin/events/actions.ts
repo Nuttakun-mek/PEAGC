@@ -1,8 +1,10 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
+import { eventStatusOptions } from "@/lib/labels";
+import { redirectAfterAction as redirect } from "@/lib/navigation";
+import { failureStatus, logDbError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
+import { anyCorruptedText } from "@/lib/text-integrity";
 
 const eventAdminRoles = ["platform_owner", "club_admin", "committee"];
 
@@ -29,14 +31,17 @@ function getStringList(formData: FormData, key: string) {
     .filter(Boolean);
 }
 
-function redirectEvents(status: string, eventId?: string): never {
+function redirectEvents(status: string, eventId?: string, filter?: string): never {
   const params = new URLSearchParams({ status });
 
   if (eventId) {
     params.set("event", eventId);
   }
+  if (filter) {
+    params.set("filter", filter);
+  }
 
-  redirect(`/admin/events?${params.toString()}`);
+  redirect(`/admin/events?${params.toString()}${eventId ? `#event-${eventId}` : ""}`);
 }
 
 async function requireEventAdminClub() {
@@ -64,6 +69,18 @@ async function requireEventAdminClub() {
   return { clubId: role.club_id as string, supabase, userId: user.id };
 }
 
+function normalizeStatus(value: string) {
+  return (eventStatusOptions as readonly string[]).includes(value) ? value : "draft";
+}
+
+/** `archived_at` is what hides an event from every list; keep it in step with the status. */
+function archiveFields(status: string, previousArchivedAt: string | null | undefined) {
+  if (status === "archived") {
+    return { archived_at: previousArchivedAt ?? new Date().toISOString() };
+  }
+  return { archived_at: null };
+}
+
 function getEventPayload(formData: FormData, clubId: string, userId: string) {
   const name = getString(formData, "name");
   const eventDate = getString(formData, "eventDate");
@@ -83,7 +100,7 @@ function getEventPayload(formData: FormData, clubId: string, userId: string) {
     member_price: getNumberOrNull(formData, "memberPrice") ?? 0,
     name,
     owner_user_id: userId,
-    status: getString(formData, "status") || "draft",
+    status: normalizeStatus(getString(formData, "status")),
     target_bureaus: getStringList(formData, "targetBureaus"),
     target_departments: getStringList(formData, "targetDepartments"),
     target_divisions: getStringList(formData, "targetDivisions"),
@@ -95,6 +112,10 @@ function getEventPayload(formData: FormData, clubId: string, userId: string) {
   };
 }
 
+function hasCorruptedEventText(payload: NonNullable<ReturnType<typeof getEventPayload>>) {
+  return anyCorruptedText([payload.name, payload.venue, payload.description, payload.includes]);
+}
+
 export async function createEvent(formData: FormData) {
   const { clubId, supabase, userId } = await requireEventAdminClub();
   const payload = getEventPayload(formData, clubId, userId);
@@ -102,18 +123,23 @@ export async function createEvent(formData: FormData) {
   if (!payload) {
     redirectEvents("missing-required");
   }
+  if (hasCorruptedEventText(payload)) {
+    redirectEvents("text-corrupted");
+  }
 
   const { data: event, error } = await supabase
     .from("events")
     .insert({
       ...payload,
+      ...archiveFields(payload.status, null),
       created_by: userId,
     })
     .select("id")
     .single();
 
   if (error || !event) {
-    redirectEvents("create-failed");
+    logDbError("events.create", error);
+    redirectEvents(failureStatus("create-failed", error));
   }
 
   await supabase.from("audit_logs").insert({
@@ -142,6 +168,9 @@ export async function updateEvent(formData: FormData) {
   if (!payload) {
     redirectEvents("missing-required", eventId);
   }
+  if (hasCorruptedEventText(payload)) {
+    redirectEvents("text-corrupted", eventId);
+  }
 
   const { data: before } = await supabase
     .from("events")
@@ -149,14 +178,28 @@ export async function updateEvent(formData: FormData) {
     .eq("club_id", clubId)
     .eq("id", eventId)
     .maybeSingle();
-  const { error } = await supabase
+
+  if (!before) {
+    redirectEvents("update-not-found", eventId);
+  }
+
+  // Read the row back: an update that matches nothing (or is filtered out by RLS) returns no
+  // error, so "saved" used to be reported for changes that never reached the database.
+  const { data: saved, error } = await supabase
     .from("events")
-    .update(payload)
+    .update({ ...payload, ...archiveFields(payload.status, before.archived_at) })
     .eq("club_id", clubId)
-    .eq("id", eventId);
+    .eq("id", eventId)
+    .select("id, status")
+    .maybeSingle();
 
   if (error) {
-    redirectEvents("update-failed", eventId);
+    logDbError("events.update", error);
+    redirectEvents(failureStatus("update-failed", error), eventId);
+  }
+  if (!saved || saved.status !== payload.status) {
+    console.error("[events.update] row not updated", eventId, saved?.status, payload.status);
+    redirectEvents("update-not-saved", eventId);
   }
 
   await supabase.from("audit_logs").insert({
@@ -170,5 +213,60 @@ export async function updateEvent(formData: FormData) {
     metadata: { source: "admin.events" },
   });
 
-  redirectEvents("updated", eventId);
+  redirectEvents("updated", eventId, payload.status === "archived" ? "archived" : undefined);
+}
+
+/** One-click status change from the event row: close sign-ups, cancel, archive or restore. */
+export async function setEventStatus(formData: FormData) {
+  const eventId = getString(formData, "eventId");
+  const status = getString(formData, "status");
+
+  if (!eventId || !(eventStatusOptions as readonly string[]).includes(status)) {
+    redirectEvents("missing-required", eventId || undefined);
+  }
+
+  const { clubId, supabase, userId } = await requireEventAdminClub();
+  const { data: before } = await supabase
+    .from("events")
+    .select("id, status, archived_at")
+    .eq("club_id", clubId)
+    .eq("id", eventId)
+    .maybeSingle();
+
+  if (!before) {
+    redirectEvents("update-not-found", eventId);
+  }
+
+  const { data: saved, error } = await supabase
+    .from("events")
+    .update({ status, updated_by: userId, ...archiveFields(status, before.archived_at) })
+    .eq("club_id", clubId)
+    .eq("id", eventId)
+    .select("id, status")
+    .maybeSingle();
+
+  if (error) {
+    logDbError("events.set_status", error);
+    redirectEvents(failureStatus("update-failed", error), eventId);
+  }
+  if (!saved || saved.status !== status) {
+    console.error("[events.set_status] row not updated", eventId, saved?.status, status);
+    redirectEvents("update-not-saved", eventId);
+  }
+
+  await supabase.from("audit_logs").insert({
+    action: "event.status_changed",
+    actor_user_id: userId,
+    after_data: { status },
+    before_data: { archived_at: before.archived_at, status: before.status },
+    club_id: clubId,
+    entity_id: eventId,
+    entity_type: "events",
+    metadata: { source: "admin.events" },
+  });
+
+  if (status === "archived") {
+    redirectEvents("event-archived");
+  }
+  redirectEvents(before.status === "archived" ? "event-restored" : "event-status-changed", eventId);
 }

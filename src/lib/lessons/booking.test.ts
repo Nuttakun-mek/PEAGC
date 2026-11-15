@@ -10,6 +10,7 @@ import {
   lessonStartAt,
   needsAnnouncementAck,
   parseTimeRanges,
+  parseTimeRangesDetailed,
   planSlots,
   queueStatus,
   rpcErrorToStatus,
@@ -128,6 +129,23 @@ describe("slot generator", () => {
     expect(parseTimeRanges("17:30-16:30")).toBeNull();
     expect(parseTimeRanges("")).toBeNull();
     expect(parseTimeRanges("25:00-26:00")).toBeNull();
+  });
+
+  it("accepts the formats staff actually type", () => {
+    expect(parseTimeRanges("9.00-10.00")).toEqual([{ end_time: "10:00", start_time: "09:00" }]);
+    expect(parseTimeRanges("09:00 – 10:00; 10:00 ถึง 11:00")).toEqual([
+      { end_time: "10:00", start_time: "09:00" },
+      { end_time: "11:00", start_time: "10:00" },
+    ]);
+    expect(parseTimeRanges("9:00 น.-10:30 น.")).toEqual([{ end_time: "10:30", start_time: "09:00" }]);
+  });
+
+  it("explains which entry is wrong", () => {
+    expect(parseTimeRangesDetailed("09:00")).toEqual({ error: 'ช่วงเวลา "09:00" ไม่มีเวลาสิ้นสุด กรุณาใส่แบบ 09:00-10:00' });
+    expect(parseTimeRangesDetailed("09:00-10:00, 11:00")).toEqual({ error: 'ช่วงเวลา "11:00" ไม่มีเวลาสิ้นสุด กรุณาใส่แบบ 09:00-10:00' });
+    expect(parseTimeRangesDetailed("10:00-09:00")).toEqual({ error: 'ช่วงเวลา "10:00-09:00" เวลาเริ่มต้องก่อนเวลาสิ้นสุด' });
+    expect(parseTimeRangesDetailed("9-10")).toEqual({ error: 'เวลาใน "9-10" ไม่ถูกต้อง ใช้รูปแบบ 24 ชั่วโมง เช่น 09:00-10:00' });
+    expect(parseTimeRangesDetailed(" ")).toEqual({ error: "กรุณาใส่ช่วงเวลา เช่น 09:00-10:00" });
   });
 
   it("creates every date x time pair on the chosen weekdays", () => {

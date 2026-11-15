@@ -12,17 +12,23 @@ import {
 
 import {
   approveMember,
+  archiveMember,
   createMember,
+  restoreMember,
   updateMember,
 } from "@/app/admin/members/actions";
-import { StatusBanner, toneForStatus } from "@/components/status-banner";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { LoadErrorBanner, StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
 import { pickFilter } from "@/lib/filters";
+import { employeeMatchCheckLabels, employeeMatchReasonLabels, labelFor } from "@/lib/labels";
+import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
 type AdminMembersPageProps = {
   searchParams: Promise<{
     bypass?: string;
+    filter?: string;
     member?: string;
     q?: string;
     status?: string;
@@ -35,8 +41,16 @@ type MemberType = {
   name: string;
 };
 
+type DirectoryLink = {
+  archived_at: string | null;
+  employment_status: string | null;
+  id: string;
+  membership_status?: string | null;
+};
+
 type MemberRow = {
   affiliation: string | null;
+  archived_at?: string | null;
   department: string | null;
   email: string | null;
   employee_code: string | null;
@@ -51,6 +65,8 @@ type MemberRow = {
     };
     reason?: string;
   } | null;
+  employee_directory?: DirectoryLink | null;
+  employee_directory_id?: string | null;
   employee_match_status: string | null;
   full_name: string;
   handicap: number | null;
@@ -66,11 +82,32 @@ type MemberRow = {
   phone: string | null;
   skill_level: string | null;
   status: string;
+  updated_at?: string | null;
 };
 
-type RawMemberRow = Omit<MemberRow, "member_types"> & {
+type RawMemberRow = Omit<MemberRow, "employee_directory" | "member_types"> & {
+  employee_directory?: DirectoryLink | DirectoryLink[] | null;
   member_types: { name: string } | { name: string }[] | null;
 };
+
+/**
+ * The stored match result is a snapshot from sign-up. Re-check it against the directory row as
+ * it is now, so a member never shows "matches the directory" when that row is gone, archived,
+ * or no longer active (the dashboard and the directory page then disagreed with the badge).
+ */
+function effectiveMatchStatus(member: MemberRow) {
+  if (member.employee_match_status !== "matched") {
+    return member.employee_match_status ?? "not_checked";
+  }
+  const directory = member.employee_directory;
+  if (!member.employee_directory_id || !directory || directory.archived_at) {
+    return "directory_missing";
+  }
+  if (directory.employment_status !== "active" || (directory.membership_status ?? "active") !== "active") {
+    return "directory_inactive";
+  }
+  return "matched";
+}
 
 const sampleTypes: MemberType[] = [
   { id: "regular", name: "สมาชิก" },
@@ -97,6 +134,8 @@ const sampleMembers: MemberRow[] = [
         full_name: "สมาชิก ตัวอย่างหนึ่ง",
       },
     },
+    employee_directory: { archived_at: null, employment_status: "active", id: "sample-directory-1", membership_status: "active" },
+    employee_directory_id: "sample-directory-1",
     employee_match_status: "matched",
     department: "กองบริการ",
     affiliation: "การไฟฟ้าส่วนภูมิภาค",
@@ -148,19 +187,29 @@ const statusLabels: Record<string, string> = {
 };
 
 const statusMessages: Record<string, string> = {
+  ...dbFailureMessages,
+  "archive-failed": "ลบ (เก็บถาวร) สมาชิกไม่สำเร็จ",
+  "member-archive-blocked": "ยังลบสมาชิกนี้ไม่ได้ เพราะยังมีการจองเรียนหรือการสมัครกิจกรรมที่ยังไม่ถึงวัน กรุณายกเลิกรายการเหล่านั้นก่อน",
+  "member-archived": "ลบสมาชิกออกจากรายการแล้ว (เก็บถาวร ดูหรือกู้คืนได้ที่ตัวกรอง \"เก็บถาวร\")",
+  "member-restored": "กู้คืนสมาชิกแล้ว สถานะเป็น \"ไม่ใช้งาน\" กรุณาตั้งสถานะที่ต้องการแล้วบันทึก",
+  "restore-failed": "กู้คืนสมาชิกไม่สำเร็จ",
+  "text-corrupted": "ข้อความภาษาไทยเสียหาย (แสดงเป็น ???) กรุณาพิมพ์ใหม่ก่อนบันทึก",
+  "update-not-found": "ไม่พบสมาชิกนี้ หรือบัญชีนี้ไม่มีสิทธิ์แก้ไข",
   "approve-failed": "อนุมัติสมาชิกไม่สำเร็จ",
   approved: "อนุมัติสมาชิกเรียบร้อยแล้ว",
   "create-failed": "เพิ่มสมาชิกไม่สำเร็จ กรุณาตรวจรหัสสมาชิกซ้ำหรือข้อมูลที่กรอก",
   created: "เพิ่มสมาชิกเรียบร้อยแล้ว",
   "missing-required": "กรุณากรอกชื่อ-นามสกุล",
   "member-code-generate-failed": "สร้างเลขสมาชิกอัตโนมัติไม่สำเร็จ",
-  "member-code-invalid": "เลขสมาชิกต้องอยู่ในรูปแบบ PEAGC-0001",
-  "member-code-taken": "เลขสมาชิกนี้ถูกใช้งานแล้ว กรุณาเลือกเลขอื่น",
+  "member-code-invalid": "เลขสมาชิกต้องอยู่ในรูปแบบ PEAGC-0001 หรือเว้นว่างให้ระบบออกเลขให้",
+  "member-code-taken": "เลขสมาชิกนี้ถูกใช้งานแล้ว (รวมสมาชิกที่เก็บถาวร) กรุณาใช้เลขอื่นหรือเว้นว่างให้ระบบออกเลขให้",
   "update-failed": "แก้ไขสมาชิกไม่สำเร็จ",
   updated: "แก้ไขสมาชิกเรียบร้อยแล้ว",
 };
 
 const employeeMatchLabels: Record<string, string> = {
+  directory_inactive: "ไม่ใช้งานในฐานปัจจุบัน",
+  directory_missing: "ไม่พบในฐานปัจจุบัน",
   matched: "ตรงฐานพนักงาน",
   mismatch: "ข้อมูลไม่ตรง",
   not_checked: "ยังไม่ตรวจ",
@@ -174,6 +223,10 @@ function getEmployeeMatchClass(status: string | null) {
 
   if (status === "mismatch" || status === "not_found") {
     return "bg-[#fdecec] text-[#8a1f11]";
+  }
+
+  if (status === "directory_missing" || status === "directory_inactive") {
+    return "bg-[#fff5d8] text-[#805300]";
   }
 
   return "bg-[#f1f3ef] text-[#6b6475]";
@@ -201,17 +254,19 @@ function getStatusClass(status: string) {
 
 function MemberForm({
   action,
+  defaultTypeId,
   disabled,
   member,
-  memberCodeOptions,
   memberTypes,
+  nextMemberCode,
   title,
 }: {
   action: (formData: FormData) => void;
+  defaultTypeId: string;
   disabled?: boolean;
   member?: MemberRow;
-  memberCodeOptions: string[];
   memberTypes: MemberType[];
+  nextMemberCode: string | null;
   title: string;
 }) {
   return (
@@ -229,23 +284,21 @@ function MemberForm({
       <div className="grid gap-4 md:grid-cols-3">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">เลขสมาชิก</span>
-          <select
-            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+          <input
+            autoComplete="off"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 uppercase outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={member?.member_code ?? ""}
             disabled={disabled}
             name="memberCode"
-            required
-          >
-            <option value="">เลือกเลขสมาชิก</option>
-            {member?.member_code ? (
-              <option value={member.member_code}>{member.member_code} (เลขปัจจุบัน)</option>
-            ) : null}
-            {memberCodeOptions
-              .filter((code) => code !== member?.member_code)
-              .map((code) => (
-                <option key={code} value={code}>{code}</option>
-              ))}
-          </select>
+            pattern="[Pp][Ee][Aa][Gg][Cc]-[0-9]{4,}"
+            placeholder={nextMemberCode ? `เว้นว่าง = ${nextMemberCode}` : "เว้นว่างให้ระบบออกเลข"}
+            title="รูปแบบ PEAGC-0001 หรือเว้นว่างให้ระบบออกเลขถัดไปให้"
+          />
+          <span className="mt-1 block text-xs text-[#6b6475]">
+            {member?.member_code
+              ? "เว้นว่างเพื่อใช้เลขเดิม"
+              : `เว้นว่างให้ระบบออกเลขถัดไป${nextMemberCode ? ` (${nextMemberCode})` : ""}`}
+          </span>
         </label>
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">รหัสพนักงาน</span>
@@ -353,11 +406,12 @@ function MemberForm({
           <span className="text-sm font-semibold text-[#3f3a48]">ประเภท</span>
           <select
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
-            defaultValue={member?.member_type_id ?? ""}
+            defaultValue={member?.member_type_id ?? defaultTypeId}
             disabled={disabled}
             name="memberTypeId"
+            required={memberTypes.length > 0}
           >
-            <option value="">ไม่ระบุ</option>
+            {memberTypes.length ? null : <option value="">ยังไม่มีประเภทสมาชิก</option>}
             {memberTypes.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -440,64 +494,62 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
     searchParams: params,
   });
   const q = params.q?.trim() ?? "";
-  const selectedStatus = pickFilter(params.status, ["pending_verification", "active", "inactive", "guest", "archived"]);
+  // `filter` is the list filter; `status` carries the result of the last save (older links put
+  // the filter in `status`, which still works when it is a real filter value).
+  const selectedStatus = pickFilter(params.filter ?? params.status, ["pending_verification", "active", "inactive", "guest", "archived"]);
+  const showArchived = selectedStatus === "archived";
   const selectedType = params.type ?? "all";
 
   let memberTypes = sampleTypes;
   let members = sampleMembers;
+  let nextMemberCode: string | null = "PEAGC-0002";
+  let loadError: ReturnType<typeof collectLoadErrors> = null;
 
   if (!access.isBypass && access.clubId) {
     const supabase = await createClient();
-    const [{ data: typeData }, { data: memberData }] = await Promise.all([
+    const memberQuery = supabase
+      .from("members")
+      .select(
+        "id, member_code, employee_code, employee_match_status, employee_match_detail, employee_directory_id, employee_directory(id, archived_at, employment_status, membership_status), department, affiliation, full_name, nickname, phone, line_id, email, organization, handicap, skill_level, status, joined_at, note, member_type_id, member_types(name), archived_at, updated_at",
+      )
+      .eq("club_id", access.clubId);
+    const [{ data: typeData, error: typeError }, { data: memberData, error: memberError }, { data: nextCode }] = await Promise.all([
       supabase
         .from("member_types")
         .select("id, name")
         .eq("club_id", access.clubId)
         .neq("status", "archived")
         .order("name"),
-      supabase
-        .from("members")
-        .select(
-          "id, member_code, employee_code, employee_match_status, employee_match_detail, department, affiliation, full_name, nickname, phone, line_id, email, organization, handicap, skill_level, status, joined_at, note, member_type_id, member_types(name)",
-        )
-        .eq("club_id", access.clubId)
-        .is("archived_at", null)
+      (showArchived ? memberQuery.not("archived_at", "is", null) : memberQuery.is("archived_at", null))
         .order("created_at", { ascending: false })
-        .limit(80),
+        .limit(200),
+      // Same function the save uses, so the hint matches the number that will be issued and
+      // accounts for every member (not only the rows loaded on this page).
+      supabase.rpc("next_member_code", { target_club_id: access.clubId }),
     ]);
 
+    loadError = collectLoadErrors("admin.members", [
+      { error: typeError, label: "ประเภทสมาชิก" },
+      { error: memberError, label: "รายชื่อสมาชิก" },
+    ]);
     memberTypes = typeData ?? [];
+    nextMemberCode = typeof nextCode === "string" ? nextCode : null;
     members = ((memberData ?? []) as unknown as RawMemberRow[]).map((member) => ({
       ...member,
+      employee_directory: Array.isArray(member.employee_directory)
+        ? (member.employee_directory[0] ?? null)
+        : (member.employee_directory ?? null),
       member_types: Array.isArray(member.member_types)
         ? (member.member_types[0] ?? null)
         : member.member_types,
     }));
   }
 
-  const usedMemberCodes = new Set(
-    members.map((member) => member.member_code).filter((code): code is string => Boolean(code)),
-  );
-  const highestMemberNumber = [...usedMemberCodes].reduce((highest, code) => {
-    const match = /^PEAGC-(\d+)$/.exec(code);
-
-    return match ? Math.max(highest, Number(match[1])) : highest;
-  }, 0);
-  const memberCodeOptions: string[] = [];
-  let candidateNumber = highestMemberNumber + 1;
-
-  while (memberCodeOptions.length < 20) {
-    const candidate = `PEAGC-${String(candidateNumber).padStart(4, "0")}`;
-
-    if (!usedMemberCodes.has(candidate)) {
-      memberCodeOptions.push(candidate);
-    }
-
-    candidateNumber += 1;
-  }
+  const defaultTypeId =
+    memberTypes.find((type) => type.name === "สมาชิก")?.id ?? memberTypes[0]?.id ?? "";
 
   members = members.filter((member) => {
-    const matchesStatus = selectedStatus === "all" || member.status === selectedStatus;
+    const matchesStatus = selectedStatus === "all" || showArchived || member.status === selectedStatus;
     const matchesType =
       selectedType === "all" || member.member_type_id === selectedType;
     const haystack = [
@@ -562,10 +614,12 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
         </div>
 
         {statusMessage ? (
-          <StatusBanner className="mt-5" tone={toneForStatus(params.status)}>
+          <StatusBanner className="mt-5" floating tone={toneForStatus(params.status)}>
             {statusMessage}
           </StatusBanner>
         ) : null}
+
+        <LoadErrorBanner error={loadError} />
 
         {access.isBypass ? (
           <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
@@ -622,9 +676,10 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
         <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
           <MemberForm
             action={createMember}
+            defaultTypeId={defaultTypeId}
             disabled={access.isBypass}
-            memberCodeOptions={memberCodeOptions}
             memberTypes={memberTypes}
+            nextMemberCode={nextMemberCode}
             title="เพิ่มสมาชิกใหม่"
           />
         </section>
@@ -653,16 +708,17 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                   aria-hidden="true"
                 />
                 <select
+                  aria-label="กรองตามสถานะ"
                   className="h-11 w-full rounded-md border border-[#d9d3e6] bg-white pl-10 pr-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
                   defaultValue={selectedStatus}
-                  name="status"
+                  name="filter"
                 >
                   <option value="all">ทุกสถานะ</option>
                   <option value="pending_verification">รอตรวจสอบ</option>
                   <option value="active">ใช้งาน</option>
                   <option value="inactive">ไม่ใช้งาน</option>
                   <option value="guest">บุคคลภายนอก</option>
-                  <option value="archived">เก็บถาวร</option>
+                  <option value="archived">เก็บถาวร (ลบแล้ว)</option>
                 </select>
               </label>
               <select
@@ -710,11 +766,9 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                           {statusLabels[member.status] ?? member.status}
                         </span>
                         <span
-                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getEmployeeMatchClass(member.employee_match_status)}`}
+                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getEmployeeMatchClass(effectiveMatchStatus(member))}`}
                         >
-                          {employeeMatchLabels[
-                            member.employee_match_status ?? "not_checked"
-                          ] ?? member.employee_match_status}
+                          {labelFor(employeeMatchLabels, effectiveMatchStatus(member))}
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-[#6b6475]">
@@ -764,11 +818,9 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                           ผลเทียบฐานพนักงาน
                         </p>
                         <span
-                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getEmployeeMatchClass(member.employee_match_status)}`}
+                          className={`rounded-md px-2 py-1 text-xs font-semibold ${getEmployeeMatchClass(effectiveMatchStatus(member))}`}
                         >
-                          {employeeMatchLabels[
-                            member.employee_match_status ?? "not_checked"
-                          ] ?? member.employee_match_status}
+                          {labelFor(employeeMatchLabels, effectiveMatchStatus(member))}
                         </span>
                       </div>
                       {member.employee_match_detail?.checks ? (
@@ -780,7 +832,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                                 key={key}
                               >
                                 <p className="text-xs font-semibold text-[#6b6475]">
-                                  {key}
+                                  {labelFor(employeeMatchCheckLabels, key)}
                                 </p>
                                 <p
                                   className={`mt-1 font-semibold ${
@@ -795,8 +847,9 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                         </div>
                       ) : (
                         <p className="mt-2 text-[#6b6475]">
-                          {member.employee_match_detail?.reason ??
-                            "ยังไม่มีผลการตรวจฐานพนักงาน"}
+                          {member.employee_match_detail?.reason
+                            ? labelFor(employeeMatchReasonLabels, member.employee_match_detail.reason)
+                            : "ยังไม่มีผลการตรวจฐานพนักงาน"}
                         </p>
                       )}
                     </div>
@@ -809,18 +862,16 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                         <input name="memberId" type="hidden" value={member.id} />
                         <label className="block">
                           <span className="text-sm font-semibold text-[#805300]">เลขสมาชิก</span>
-                          <select
-                            className="mt-2 h-11 w-full rounded-md border border-[#d7a52c] bg-white px-3 outline-none focus:border-[#722257]"
-                            defaultValue={member.member_code ?? memberCodeOptions[0]}
+                          <input
+                            autoComplete="off"
+                            className="mt-2 h-11 w-full rounded-md border border-[#d7a52c] bg-white px-3 uppercase outline-none focus:border-[#722257]"
+                            defaultValue={member.member_code ?? ""}
                             disabled={access.isBypass}
                             name="memberCode"
-                            required
-                          >
-                            {member.member_code ? <option value={member.member_code}>{member.member_code} (เลขปัจจุบัน)</option> : null}
-                            {memberCodeOptions.filter((code) => code !== member.member_code).map((code) => (
-                              <option key={code} value={code}>{code}</option>
-                            ))}
-                          </select>
+                            pattern="[Pp][Ee][Aa][Gg][Cc]-[0-9]{4,}"
+                            placeholder={nextMemberCode ? `เว้นว่าง = ${nextMemberCode}` : "เว้นว่างให้ระบบออกเลข"}
+                            title="รูปแบบ PEAGC-0001 หรือเว้นว่างให้ระบบออกเลขถัดไปให้"
+                          />
                         </label>
                         <label className="block">
                           <span className="text-sm font-semibold text-[#805300]">
@@ -846,12 +897,37 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
 
                     <MemberForm
                       action={updateMember}
+                      defaultTypeId={defaultTypeId}
                       disabled={access.isBypass}
+                      key={`${member.id}:${member.updated_at ?? ""}`}
                       member={member}
-                      memberCodeOptions={memberCodeOptions}
                       memberTypes={memberTypes}
+                      nextMemberCode={nextMemberCode}
                       title={`แก้ไข ${member.full_name}`}
                     />
+
+                    {access.isBypass ? null : member.archived_at ? (
+                      <form action={restoreMember} className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-[#e6e2ee] bg-white p-4">
+                        <input name="memberId" type="hidden" value={member.id} />
+                        <p className="text-sm text-[#6b6475]">สมาชิกนี้ถูกลบ (เก็บถาวร) แล้ว</p>
+                        <button className="h-10 rounded-md border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257] hover:bg-[#f8edf4]" type="submit">
+                          กู้คืนสมาชิก
+                        </button>
+                      </form>
+                    ) : (
+                      <form action={archiveMember} className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-[#efcbd0] bg-[#fff7f7] p-4">
+                        <input name="memberId" type="hidden" value={member.id} />
+                        <p className="min-w-0 flex-1 text-sm text-[#6b6475]">
+                          ลบสมาชิกออกจากรายการ (เก็บถาวร ประวัติและเลขสมาชิกยังอยู่ กู้คืนได้)
+                        </p>
+                        <ConfirmSubmitButton
+                          className="h-10 rounded-md border border-[#efcbd0] bg-white px-4 text-sm font-semibold text-[#a33a46] hover:bg-[#fff1f1]"
+                          message={`ยืนยันลบสมาชิก ${member.full_name}? (เก็บถาวร กู้คืนได้ภายหลัง)`}
+                        >
+                          ลบสมาชิก
+                        </ConfirmSubmitButton>
+                      </form>
+                    )}
                   </div>
                 </details>
               ))

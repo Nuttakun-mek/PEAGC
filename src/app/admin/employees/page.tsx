@@ -17,11 +17,12 @@ import {
   importEmployees,
   updateEmployee,
 } from "@/app/admin/employees/actions";
-import { StatusBanner, toneForStatus } from "@/components/status-banner";
+import { LoadErrorBanner, StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
 import { pickFilter } from "@/lib/filters";
 import { isDirectoryStale } from "@/lib/directory/import";
 import { formatBangkokDateTime } from "@/lib/lessons/booking";
+import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
 type AdminEmployeesPageProps = {
@@ -103,7 +104,11 @@ function getMembershipClass(status: string | null | undefined) {
 }
 
 const statusMessages: Record<string, string> = {
-  "create-failed": "เพิ่มไม่สำเร็จ รหัสพนักงานอาจซ้ำ",
+  ...dbFailureMessages,
+  "create-failed": "เพิ่มไม่สำเร็จ",
+  duplicate: "บันทึกไม่สำเร็จ รหัสพนักงานนี้มีอยู่แล้ว",
+  "import-text-corrupted": "ไม่ได้นำเข้า: พบชื่อในไฟล์ที่เป็น ??? (ภาษาไทยเสียหายตั้งแต่ในไฟล์) กรุณาบันทึกไฟล์จาก Excel เป็น .xlsx หรือ CSV UTF-8 แล้วอัปโหลดใหม่",
+  "text-corrupted": "ข้อความภาษาไทยเสียหาย (แสดงเป็น ???) กรุณาพิมพ์ใหม่ก่อนบันทึก",
   created: "เพิ่มรายชื่อแล้ว",
   "missing-required": "กรอกรหัสพนักงานและชื่อ-นามสกุล",
   "update-failed": "แก้ไขไม่สำเร็จ",
@@ -347,10 +352,15 @@ export default async function AdminEmployeesPage({
   let employees = sampleEmployees;
   let lastImport: { deactivated_count: number; file_name: string; flagged_member_count: number; imported_at: string; imported_count: number; mode: string } | null = null;
   let totalActiveMembers = sampleEmployees.filter((employee) => employee.membership_status === "active").length;
+  let loadError: ReturnType<typeof collectLoadErrors> = null;
 
   if (!access.isBypass && access.clubId) {
     const supabase = await createClient();
-    const [{ data }, { data: importRows }, { count: activeMembershipCount }] = await Promise.all([
+    const [
+      { data, error: directoryError },
+      { data: importRows, error: importsError },
+      { count: activeMembershipCount, error: countError },
+    ] = await Promise.all([
       supabase
         .from("employee_directory")
         .select(
@@ -374,6 +384,11 @@ export default async function AdminEmployeesPage({
         .is("archived_at", null),
     ]);
 
+    loadError = collectLoadErrors("admin.employees", [
+      { error: directoryError, label: "รายชื่อในฐาน" },
+      { error: importsError, label: "ประวัติการนำเข้า" },
+      { error: countError, label: "จำนวนสมาชิกที่ใช้งาน" },
+    ]);
     employees = (data ?? []) as EmployeeRow[];
     lastImport = importRows?.[0] ?? null;
     totalActiveMembers = activeMembershipCount ?? 0;
@@ -463,10 +478,12 @@ export default async function AdminEmployeesPage({
         </div>
 
         {statusMessage ? (
-          <StatusBanner className="mt-5" tone={toneForStatus(params.status)}>
+          <StatusBanner className="mt-5" floating tone={toneForStatus(params.status)}>
             {statusMessage}
           </StatusBanner>
         ) : null}
+
+        <LoadErrorBanner error={loadError} />
 
         {access.isBypass ? (
           <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">

@@ -23,6 +23,7 @@ const statusMessages: Record<string, string> = {
   "no-club": "ยังไม่มีชมรมที่เปิดใช้งาน",
   "pending-review": "ส่งข้อมูลแล้ว รอผู้ดูแลตรวจสอบ",
   "profile-failed": "บันทึกประวัติสมาชิกไม่สำเร็จ",
+  "text-corrupted": "ข้อความภาษาไทยเสียหาย (แสดงเป็น ???) กรุณาพิมพ์ใหม่ก่อนบันทึก",
 };
 
 const inputClass =
@@ -138,7 +139,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
         </ol>
 
         {statusMessage ? (
-          <StatusBanner className="mt-5" tone={params.status === "account-created" ? "success" : toneForStatus(params.status)}>
+          <StatusBanner className="mt-5" floating tone={params.status === "account-created" ? "success" : toneForStatus(params.status)}>
             {statusMessage}
           </StatusBanner>
         ) : null}

@@ -1,6 +1,7 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { redirectAfterAction as redirect } from "@/lib/navigation";
+import { anyCorruptedText } from "@/lib/text-integrity";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -146,6 +147,9 @@ export async function savePersonalProfile(formData: FormData) {
   if (!displayName || !fullName || !phone || !employeeCode) {
     redirect("/profile?status=missing-required");
   }
+  if (anyCorruptedText([displayName, fullName, nickname, department, affiliation, organization])) {
+    redirect("/profile?status=text-corrupted");
+  }
 
   if (avatarInput?.error) {
     redirect(`/profile?status=${avatarInput.error}`);
@@ -193,11 +197,22 @@ export async function savePersonalProfile(formData: FormData) {
     employeeMatch.status === "matched" && directory ? directory : null;
   const { data: existingMember } = await admin
     .from("members")
-    .select("employee_code, member_code, status")
+    .select("employee_code, member_code, member_type_id, status")
     .eq("club_id", club.id)
     .eq("user_id", user.id)
     .is("archived_at", null)
     .maybeSingle();
+  // New sign-ups get the club's regular "สมาชิก" type instead of none ("ไม่ระบุประเภท").
+  let memberTypeId = existingMember?.member_type_id ?? null;
+  if (!memberTypeId) {
+    const { data: types } = await admin
+      .from("member_types")
+      .select("id, name")
+      .eq("club_id", club.id)
+      .eq("status", "active")
+      .order("created_at", { ascending: true });
+    memberTypeId = (types ?? []).find((type) => type.name === "สมาชิก")?.id ?? types?.[0]?.id ?? null;
+  }
   const keepApprovedStatus =
     existingMember?.status === "active" &&
     existingMember.employee_code === employeeCode &&
@@ -250,6 +265,7 @@ export async function savePersonalProfile(formData: FormData) {
       last_name: verifiedDirectory?.last_name ?? null,
       line_id: lineId || null,
       member_code: memberCode,
+      member_type_id: memberTypeId ?? undefined,
       nickname: nickname || null,
       organization: organization || null,
       phone,

@@ -38,6 +38,7 @@ OCR flow: officer photographs a card → the photo is stored first (private `sco
 - Tailwind CSS 4
 - Supabase PostgreSQL/Auth/Storage planned
 - Deployed on Vercel (team PEA Golf Club, project `peagc`): https://peagc.vercel.app — env vars are set in the Vercel project; deploy with `vercel deploy --prod --scope pea-gc` or connect the GitHub repo for automatic deploys
+- Regions: the Supabase project runs in AWS `ap-northeast-1` (Tokyo), so `vercel.json` pins Vercel Functions to `hnd1` (Tokyo). Every page makes several sequential Supabase calls; with functions in the default `iad1` (US East) each call crossed the Pacific (~150 ms). Check the live region with `curl -sI https://peagc.vercel.app/login | grep x-vercel-id` (`sin1::hnd1::…` = edge Singapore, function Tokyo)
 
 ## Getting Started
 
@@ -108,8 +109,7 @@ Open [http://localhost:3555](http://localhost:3555).
 - Do not commit real secrets.
 - OCR and advanced Rule Builder are intentionally out of the first MVP.
 - Critical data such as payments, scores, rules, and published results must be audit logged.
-- Supabase foundation migration has been pushed to the remote project.
-- Lesson/Academy tables and RLS have been pushed to the remote project.
-- Remote project `dlaeluakeqcbizvmosdg` still needs every migration from `20260709143000` onward (11 files, through the lesson FCFS/waitlist, association directory, event pairing/check-in, module switch, and competition/OCR changes). The member event sign-up now calls the `register_for_event` RPC, so `20261107090000` must be applied before deploying this code. Apply them with `npx supabase db push --db-url "$MIGRATION_DATABASE_URL"` (session pooler URL), or paste the migration files in order into the Supabase SQL Editor and insert their versions into `supabase_migrations.schema_migrations`.
+- Remote project `dlaeluakeqcbizvmosdg` (checked 2026-11-15): migrations through `20260711143000` are applied; `20261106090000` onward (lesson FCFS/waitlist, association directory, event pairing/check-in, module switch, competition/OCR, member-code fix) must be applied **before** deploying this code — the app reads their columns and RPCs, and without them lesson slots, the association directory and member sign-up fail. Apply them with `npx supabase db push --db-url "$MIGRATION_DATABASE_URL"` (session pooler URL), or paste the migration files in order into the Supabase SQL Editor and insert their versions into `supabase_migrations.schema_migrations`. Admin pages now show a red "ฐานข้อมูลยังไม่ได้อัปเดต" banner when a query hits a missing column/table instead of rendering an empty list.
+- `scripts/repair-corrupted-thai.mjs` repairs the seeded test accounts whose Thai text was stored as `???` (dry run by default, `--apply` to write). New input is guarded: forms and the directory import reject text that is already `???`/`�`, and CSV uploads saved by Thai Excel (Windows-874) are decoded correctly.
 - Sarabun is bundled from `src/app/fonts/` via `next/font/local` (OFL licence included) so builds do not depend on reaching Google Fonts.
 - Unit tests: `npm test` (Vitest).

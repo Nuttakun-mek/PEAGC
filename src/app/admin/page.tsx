@@ -10,27 +10,38 @@ import {
 import { resolveAccess } from "@/lib/auth/access";
 import { defaultModuleState, moduleCatalog } from "@/lib/modules";
 import { getClubModules } from "@/lib/modules-server";
+import { logDbError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
 type AdminPageProps = {
   searchParams: Promise<{ bypass?: string }>;
 };
 
-async function getCount(
-  table:
-    | "employee_directory"
-    | "members"
-    | "events"
-    | "payment_records"
-    | "lesson_bookings",
-) {
-  const supabase = await createClient();
-  const { count } = await supabase.from(table).select("id", {
-    count: "exact",
-    head: true,
-  });
+/**
+ * Card numbers use the same scope as the pages they link to (this club, rows not archived),
+ * so the dashboard can no longer say "6" while the page behind it lists nothing.
+ */
+async function getClubCounts(clubId: string | null) {
+  if (!clubId) {
+    return [0, 0, 0, 0, 0];
+  }
 
-  return count ?? 0;
+  const supabase = await createClient();
+  const head = { count: "exact", head: true } as const;
+  const results = await Promise.all([
+    supabase.from("members").select("id", head).eq("club_id", clubId).is("archived_at", null),
+    supabase.from("events").select("id", head).eq("club_id", clubId).is("archived_at", null),
+    supabase.from("payment_records").select("id", head).eq("club_id", clubId).in("status", ["pending", "review"]),
+    supabase.from("employee_directory").select("id", head).eq("club_id", clubId).is("archived_at", null),
+    supabase.from("lesson_bookings").select("id", head).eq("club_id", clubId).eq("status", "booked"),
+  ]);
+
+  return results.map(({ count, error }, index) => {
+    if (error) {
+      logDbError(`admin.dashboard count ${index}`, error);
+    }
+    return count ?? 0;
+  });
 }
 
 export default async function AdminPage({ searchParams }: AdminPageProps) {
@@ -43,13 +54,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
   });
   const [memberCount, eventCount, paymentCount, employeeCount, lessonBookingCount] = access.isBypass
     ? [24, 3, 5, 2, 8]
-    : await Promise.all([
-        getCount("members"),
-        getCount("events"),
-        getCount("payment_records"),
-        getCount("employee_directory"),
-        getCount("lesson_bookings"),
-      ]);
+    : await getClubCounts(access.clubId);
   const moduleState = access.isBypass
     ? defaultModuleState
     : await getClubModules(await createClient(), access.clubId);
@@ -59,6 +64,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       href: access.isBypass ? "/admin/employees?bypass=admin" : "/admin/employees",
       icon: UsersRound,
       title: "ฐานสมาชิกสมาคม",
+      unit: "รายชื่อ",
       value: employeeCount,
     },
     {
@@ -66,6 +72,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       href: access.isBypass ? "/admin/members?bypass=admin" : "/admin/members",
       icon: UsersRound,
       title: "จัดการสมาชิก",
+      unit: "คน",
       value: memberCount,
     },
     {
@@ -73,6 +80,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       href: access.isBypass ? "/admin/events?bypass=admin" : "/admin/events",
       icon: CalendarDays,
       title: "จัดการกิจกรรม",
+      unit: "กิจกรรม",
       value: eventCount,
     },
     {
@@ -80,6 +88,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       href: access.isBypass ? "/admin/lessons?bypass=admin" : "/admin/lessons",
       icon: GraduationCap,
       title: "จัดการตารางเรียน",
+      unit: "การจองเรียน",
       value: lessonBookingCount,
     },
     {
@@ -87,6 +96,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
       href: access.isBypass ? "/admin/payments?bypass=admin" : "/admin/payments",
       icon: CircleDollarSign,
       title: "ตรวจสอบการชำระเงิน",
+      unit: "รอตรวจ",
       value: paymentCount,
     },
   ];
@@ -157,6 +167,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <p className="text-sm font-semibold text-[#6b6475]">{item.title}</p>
                   <p className="mt-2 text-3xl font-semibold text-[#1f2937]">
                     {item.value}
+                    <span className="ml-1.5 text-sm font-semibold text-[#6b6475]">{item.unit}</span>
                   </p>
                 </div>
                 <div className="flex size-10 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
@@ -174,7 +185,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
           <div className="divide-y divide-[#e6e2ee]">
             {modules.map((item) => (
               <Link
-                className="grid gap-4 px-5 py-4 sm:grid-cols-[44px_1fr_88px] sm:items-center"
+                className="grid gap-4 px-5 py-4 sm:grid-cols-[44px_1fr_auto] sm:items-center"
                 href={item.href}
                 key={item.title}
               >
@@ -186,7 +197,7 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                   <p className="mt-1 text-sm text-[#6b6475]">{item.detail}</p>
                 </div>
                 <span className="w-fit rounded-md bg-white/70 px-3 py-1 text-sm font-semibold text-[#3f3a48]">
-                  {item.value}
+                  {item.value} {item.unit}
                 </span>
               </Link>
             ))}

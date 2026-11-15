@@ -279,7 +279,7 @@ export default async function EventOperationsPage({ params, searchParams }: Page
         </div>
 
         {statusMessage ? (
-          <StatusBanner className="mt-5" tone={toneForStatus(query.status)}>
+          <StatusBanner className="mt-5" floating tone={toneForStatus(query.status)}>
             {statusMessage}
           </StatusBanner>
         ) : null}

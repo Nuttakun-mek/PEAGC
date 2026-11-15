@@ -1,9 +1,10 @@
 "use server";
 
-import { redirect } from "next/navigation";
-
+import { fromBangkokInputValue, parseTimeRangesDetailed, planSlots } from "@/lib/lessons/booking";
+import { redirectAfterAction as redirect } from "@/lib/navigation";
+import { failureStatus, logDbError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
-import { fromBangkokInputValue, parseTimeRanges, planSlots } from "@/lib/lessons/booking";
+import { anyCorruptedText } from "@/lib/text-integrity";
 
 const lessonAdminRoles = ["platform_owner", "club_admin", "committee"];
 
@@ -70,6 +71,9 @@ export async function createLessonProgram(formData: FormData) {
   if (!name) {
     redirectLessons("program-missing");
   }
+  if (anyCorruptedText([name, getString(formData, "coachName"), getString(formData, "description")])) {
+    redirectLessons("text-corrupted");
+  }
 
   const payload = {
     club_id: clubId,
@@ -89,7 +93,8 @@ export async function createLessonProgram(formData: FormData) {
     .single();
 
   if (error || !program) {
-    redirectLessons("program-create-failed");
+    logDbError("lesson_programs.create", error);
+    redirectLessons(failureStatus("program-create-failed", error));
   }
 
   await supabase.from("audit_logs").insert({
@@ -142,7 +147,8 @@ export async function updateLessonProgram(formData: FormData) {
     .eq("id", programId);
 
   if (error) {
-    redirectLessons("program-update-failed");
+    logDbError("lesson_programs.update", error);
+    redirectLessons(failureStatus("program-update-failed", error));
   }
 
   await supabase.from("audit_logs").insert({
@@ -169,6 +175,9 @@ export async function createLessonSlot(formData: FormData) {
 
   if (!programId || !title || !lessonDate || !startTime || !endTime) {
     redirectLessons("slot-missing");
+  }
+  if (anyCorruptedText([title, getString(formData, "coachName"), getString(formData, "venue"), getString(formData, "note")])) {
+    redirectLessons("text-corrupted");
   }
 
   const { data: program } = await supabase
@@ -212,7 +221,8 @@ export async function createLessonSlot(formData: FormData) {
     .single();
 
   if (error || !slot) {
-    redirectLessons("slot-create-failed");
+    logDbError("lesson_slots.create", error);
+    redirectLessons(failureStatus("slot-create-failed", error));
   }
 
   await supabase.from("audit_logs").insert({
@@ -313,7 +323,8 @@ export async function updateLessonSlot(formData: FormData) {
     .eq("id", slotId);
 
   if (error) {
-    redirectLessons("slot-update-failed");
+    logDbError("lesson_slots.update", error);
+    redirectLessons(failureStatus("slot-update-failed", error));
   }
 
   await supabase.from("audit_logs").insert({
@@ -358,7 +369,8 @@ export async function updateLessonAttendance(formData: FormData) {
     .eq("id", bookingId);
 
   if (error) {
-    redirectLessons("attendance-update-failed");
+    logDbError("lesson_bookings.attendance", error);
+    redirectLessons(failureStatus("attendance-update-failed", error));
   }
 
   await supabase.from("audit_logs").insert({
@@ -386,7 +398,10 @@ export async function archiveLessonSlot(formData: FormData) {
   if (!before) redirectLessons("slot-not-found");
   if ((count ?? 0) > 0) redirectLessons("slot-archive-has-bookings");
   const { error } = await supabase.from("lesson_slots").update({ archived_at: new Date().toISOString(), status: "cancelled", updated_by: userId }).eq("id", slotId).eq("club_id", clubId);
-  if (error) redirectLessons("slot-archive-failed");
+  if (error) {
+    logDbError("lesson_slots.archive", error);
+    redirectLessons(failureStatus("slot-archive-failed", error));
+  }
   await supabase.from("audit_logs").insert({ action: "lesson_slot.archived", actor_user_id: userId, before_data: before, club_id: clubId, entity_id: slotId, entity_type: "lesson_slots", metadata: { source: "admin.lessons" } });
   redirectLessons("slot-archived");
 }
@@ -425,7 +440,8 @@ export async function saveLessonBookingSettings(formData: FormData) {
     .upsert(payload, { onConflict: "club_id" });
 
   if (error) {
-    redirectLessons("settings-save-failed");
+    logDbError("lesson_booking_settings.save", error);
+    redirectLessons(failureStatus("settings-save-failed", error));
   }
 
   await supabase.from("audit_logs").insert({
@@ -446,7 +462,7 @@ export async function generateLessonSlots(formData: FormData) {
   const { clubId, supabase, userId } = await requireLessonAdminClub();
   const programId = getString(formData, "programId");
   const title = getString(formData, "title");
-  const times = parseTimeRanges(getString(formData, "timeRanges"));
+  const parsedTimes = parseTimeRangesDetailed(getString(formData, "timeRanges"));
   const weekdays = formData
     .getAll("weekdays")
     .map((value) => Number(value))
@@ -455,13 +471,16 @@ export async function generateLessonSlots(formData: FormData) {
   if (!programId || !title) {
     redirectLessons("slot-missing");
   }
-  if (!times) {
-    redirectLessons("generate-times-invalid");
+  if ("error" in parsedTimes) {
+    redirectLessons(`generate-invalid:${parsedTimes.error}`);
+  }
+  if (anyCorruptedText([title, getString(formData, "coachName"), getString(formData, "venue"), getString(formData, "note")])) {
+    redirectLessons("text-corrupted");
   }
 
   const plan = planSlots({
     from: getString(formData, "dateFrom"),
-    times: times!,
+    times: parsedTimes.ranges,
     to: getString(formData, "dateTo"),
     weekdays,
   });
@@ -482,7 +501,7 @@ export async function generateLessonSlots(formData: FormData) {
   }
 
   const items = plan.items;
-  const { data: existing } = await supabase
+  const { data: existing, error: existingError } = await supabase
     .from("lesson_slots")
     .select("lesson_date, start_time")
     .eq("club_id", clubId)
@@ -490,6 +509,10 @@ export async function generateLessonSlots(formData: FormData) {
     .is("archived_at", null)
     .gte("lesson_date", items[0].lesson_date)
     .lte("lesson_date", items[items.length - 1].lesson_date);
+  if (existingError) {
+    logDbError("lesson_slots.generate.existing", existingError);
+    redirectLessons(failureStatus("slot-create-failed", existingError));
+  }
   const taken = new Set((existing ?? []).map((slot) => `${slot.lesson_date} ${String(slot.start_time).slice(0, 5)}`));
   const common = {
     allow_member_reschedule: getBoolean(formData, "allowMemberReschedule"),
@@ -522,7 +545,8 @@ export async function generateLessonSlots(formData: FormData) {
   const { data: created, error } = await supabase.from("lesson_slots").insert(rows).select("id");
 
   if (error) {
-    redirectLessons("slot-create-failed");
+    logDbError("lesson_slots.generate", error);
+    redirectLessons(failureStatus("slot-create-failed", error));
   }
 
   await supabase.from("audit_logs").insert({
@@ -554,7 +578,10 @@ export async function removeLessonBooking(formData: FormData) {
     .update({ attendance_note: getString(formData, "attendanceNote") || "นำออกโดยผู้ดูแล", status: "cancelled", updated_by: userId })
     .eq("club_id", clubId)
     .eq("id", bookingId);
-  if (error) redirectLessons("attendance-update-failed");
+  if (error) {
+    logDbError("lesson_bookings.remove", error);
+    redirectLessons(failureStatus("attendance-update-failed", error));
+  }
   await supabase.from("audit_logs").insert({
     action: "lesson_booking.removed_by_admin",
     actor_user_id: userId,
