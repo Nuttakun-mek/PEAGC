@@ -2,6 +2,7 @@
 
 import { redirectAfterAction as redirect } from "@/lib/navigation";
 import { anyCorruptedText } from "@/lib/text-integrity";
+import { isValidHandicap, normalizeEmployeeCode, normalizePhone } from "@/lib/validation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -131,12 +132,11 @@ export async function savePersonalProfile(formData: FormData) {
     redirect("/login?next=/profile");
   }
 
-  const displayName = getString(formData, "displayName");
   const fullName = getString(formData, "fullName");
   const nickname = getString(formData, "nickname");
-  const phone = getString(formData, "phone");
+  const phoneInput = normalizePhone(getString(formData, "phone"));
   const lineId = getString(formData, "lineId");
-  const employeeCode = getString(formData, "employeeCode");
+  const employeeCode = normalizeEmployeeCode(getString(formData, "employeeCode"));
   const department = getString(formData, "department");
   const affiliation = getString(formData, "affiliation");
   const organization = getString(formData, "organization");
@@ -144,27 +144,22 @@ export async function savePersonalProfile(formData: FormData) {
   const skillLevel = getString(formData, "skillLevel");
   const avatarInput = getAvatarFile(formData);
 
-  if (!displayName || !fullName || !phone || !employeeCode) {
+  if (!fullName || !getString(formData, "phone") || !employeeCode) {
     redirect("/profile?status=missing-required");
   }
-  if (anyCorruptedText([displayName, fullName, nickname, department, affiliation, organization])) {
+  if (!phoneInput.ok || !phoneInput.value) {
+    redirect("/profile?status=phone-invalid");
+  }
+  const phone = phoneInput.value;
+  if (!isValidHandicap(handicap) || (getString(formData, "handicap") && handicap === null)) {
+    redirect("/profile?status=handicap-invalid");
+  }
+  if (anyCorruptedText([fullName, nickname, department, affiliation, organization])) {
     redirect("/profile?status=text-corrupted");
   }
 
   if (avatarInput?.error) {
     redirect(`/profile?status=${avatarInput.error}`);
-  }
-
-  const { error: profileError } = await supabase.from("profiles").upsert({
-    display_name: displayName,
-    id: user.id,
-    line_id: lineId || null,
-    phone,
-    updated_at: new Date().toISOString(),
-  });
-
-  if (profileError) {
-    redirect("/profile?status=profile-failed");
   }
 
   const { data: club, error: clubError } = await supabase
@@ -181,6 +176,22 @@ export async function savePersonalProfile(formData: FormData) {
   }
 
   const admin = createAdminClient();
+
+  // One employee code belongs to one member: refuse a code another account already uses.
+  const { data: codeOwner } = await admin
+    .from("members")
+    .select("id")
+    .eq("club_id", club.id)
+    .ilike("employee_code", employeeCode.replace(/[\\%_]/g, (char) => `\\${char}`))
+    .is("archived_at", null)
+    .neq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (codeOwner) {
+    redirect("/profile?status=employee-code-taken");
+  }
+
   const { data: directory } = await admin
     .from("employee_directory")
     .select("id, title_prefix, first_name, last_name, full_name, email, position, work_line, bureau, division, department, section, affiliation, employment_status, membership_status, member_type, association_member_code")
@@ -282,13 +293,26 @@ export async function savePersonalProfile(formData: FormData) {
       verified_at: isAutomaticallyApproved ? new Date().toISOString() : null,
       work_line: verifiedDirectory?.work_line ?? null,
     };
+  // One name everywhere: the profile shows the member's (directory-verified) full name.
+  const { error: profileError } = await supabase.from("profiles").upsert({
+    display_name: memberPayload.full_name,
+    id: user.id,
+    line_id: lineId || null,
+    phone,
+    updated_at: new Date().toISOString(),
+  });
+
+  if (profileError) {
+    redirect("/profile?status=profile-failed");
+  }
+
   const { error: memberError } = await supabase.from("members").upsert(
     memberPayload,
     { onConflict: "club_id,user_id" },
   );
 
   if (memberError) {
-    redirect("/profile?status=member-failed");
+    redirect(memberError.code === "23505" && memberError.message?.includes("employee_code") ? "/profile?status=employee-code-taken" : "/profile?status=member-failed");
   }
 
   if (avatarUrl) {

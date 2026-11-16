@@ -6,10 +6,17 @@ const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_
 const { data: club } = await supabase.from("clubs").select("id").eq("status", "active").limit(1).single();
 if (!club) throw new Error("Active club not found");
 
+// Local test data only. Passwords come from .env.local (E2E_MEMBER_PASSWORD, E2E_MEMBER2_PASSWORD,
+// E2E_MEMBER3_PASSWORD) and are never committed. Do not run this against the production project.
+const passwordFor = (key) => {
+  const value = env[key] ?? process.env[key];
+  if (!value) throw new Error(`Set ${key} in .env.local before seeding test members`);
+  return value;
+};
 const accounts = [
-  { email: "member@peagc.local", password: "Member3555!", code: "PEAGC-0001", employee: "999001", name: "สมาชิกทดสอบ หนึ่ง", nickname: "สมาชิก 1" },
-  { email: "member2@peagc.local", password: "Member23555!", code: "PEAGC-0003", employee: "999002", name: "สมาชิกทดสอบ สอง", nickname: "สมาชิก 2" },
-  { email: "member3@peagc.local", password: "Member33555!", code: "PEAGC-0004", employee: "999003", name: "สมาชิกทดสอบ สาม", nickname: "สมาชิก 3" },
+  { email: "member@peagc.local", password: passwordFor("E2E_MEMBER_PASSWORD"), code: "PEAGC-0001", employee: "999001", name: "สมาชิกทดสอบ หนึ่ง", nickname: "สมาชิก 1" },
+  { email: "member2@peagc.local", password: passwordFor("E2E_MEMBER2_PASSWORD"), code: "PEAGC-0003", employee: "999002", name: "สมาชิกทดสอบ สอง", nickname: "สมาชิก 2" },
+  { email: "member3@peagc.local", password: passwordFor("E2E_MEMBER3_PASSWORD"), code: "PEAGC-0004", employee: "999003", name: "สมาชิกทดสอบ สาม", nickname: "สมาชิก 3" },
 ];
 
 const { data: listed } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });

@@ -8,3 +8,4 @@ core.*
 node_modules
 tsconfig.tsbuildinfo
 supabase/.temp
+test-data-backup-*.json

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { KeyRound, ShieldCheck, UserPlus } from "lucide-react";
 
+import { PasswordInput } from "@/components/password-input";
+
 import {
   signInWithGoogle,
   signInWithPassword,
@@ -21,6 +23,7 @@ type LoginPageProps = {
     sent?: string;
     signedOut?: string;
     registered?: string;
+    reset?: string;
   }>;
 };
 
@@ -34,6 +37,7 @@ const errorMessages: Record<string, string> = {
   "confirm-failed": "ยืนยันการเข้าสู่ระบบไม่สำเร็จ หรือลิงก์หมดอายุแล้ว",
   "google-failed": "เข้าสู่ระบบด้วย Google ไม่สำเร็จ",
   "missing-config": "ระบบยังเชื่อมต่อฐานข้อมูลไม่สมบูรณ์",
+  "reset-link-invalid": "ลิงก์ตั้งรหัสผ่านใหม่ไม่ถูกต้องหรือหมดอายุแล้ว กรุณาขอลิงก์ใหม่",
 };
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
@@ -44,7 +48,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const isSignup = params.mode === "signup";
   const hasAuthConfig = hasSupabasePublicConfig();
   const googleEnabled = isGoogleAuthEnabled();
-  const showDemoAccounts = process.env.NEXT_PUBLIC_SHOW_DEMO_ACCOUNTS === "true";
   const errorMessage = params.error ? errorMessages[params.error] : null;
 
   return (
@@ -82,46 +85,6 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
           </div>
         </div>
 
-        {!isSignup && showDemoAccounts ? (
-          <div className="mt-5 rounded-lg border border-[#d9d3e6] bg-[#f8edf4] p-4">
-            <p className="text-sm font-semibold text-[#722257]">บัญชีทดสอบ</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <form action={signInWithPassword}>
-                <input name="email" type="hidden" value="admin@peagc.local" />
-                <input name="password" type="hidden" value="Peagc3555!" />
-                <input name="next" type="hidden" value="/auth/complete" />
-                <SubmitButton className="h-11 w-full rounded-md bg-[#722257] px-3 text-sm font-semibold text-white disabled:bg-[#9a94a6]" pendingText="กำลังเข้า...">
-                  เข้าฝั่งผู้ดูแล
-                </SubmitButton>
-              </form>
-              <form action={signInWithPassword}>
-                <input name="email" type="hidden" value="member@peagc.local" />
-                <input name="password" type="hidden" value="Member3555!" />
-                <input name="next" type="hidden" value="/auth/complete" />
-                <SubmitButton className="h-11 w-full rounded-md border border-[#722257] bg-white px-3 text-sm font-semibold text-[#722257] disabled:bg-[#f1edf0]" pendingText="กำลังเข้า...">
-                  เข้าฝั่งสมาชิก
-                </SubmitButton>
-              </form>
-              <form action={signInWithPassword}>
-                <input name="email" type="hidden" value="member2@peagc.local" />
-                <input name="password" type="hidden" value="Member23555!" />
-                <input name="next" type="hidden" value="/auth/complete" />
-                <SubmitButton className="h-11 w-full rounded-md border border-[#b9dce5] bg-[#effaff] px-3 text-sm font-semibold text-[#16738f] disabled:bg-[#f1edf0]" pendingText="กำลังเข้า...">
-                  เข้าสมาชิก 2
-                </SubmitButton>
-              </form>
-              <form action={signInWithPassword}>
-                <input name="email" type="hidden" value="member3@peagc.local" />
-                <input name="password" type="hidden" value="Member33555!" />
-                <input name="next" type="hidden" value="/auth/complete" />
-                <SubmitButton className="h-11 w-full rounded-md border border-[#e5d5a8] bg-[#fffbef] px-3 text-sm font-semibold text-[#8b6508] disabled:bg-[#f1edf0]" pendingText="กำลังเข้า...">
-                  เข้าสมาชิก 3
-                </SubmitButton>
-              </form>
-            </div>
-          </div>
-        ) : null}
-
         <div className="mt-6 grid grid-cols-2 rounded-md border border-[#e6e2ee] bg-white p-1 text-sm font-semibold">
           <Link className={`flex h-10 items-center justify-center rounded-md ${!isSignup ? "bg-[#722257] text-white" : "text-[#722257]"}`} href={`/login?mode=signin&next=${encodeURIComponent(next)}`}>
             เข้าสู่ระบบ
@@ -133,6 +96,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
 
         {params.registered ? <StatusBanner className="mt-5" tone="success">สร้างบัญชีแล้ว กรุณาเข้าสู่ระบบ</StatusBanner> : null}
         {params.signedOut ? <StatusBanner className="mt-5" tone="info">ออกจากระบบแล้ว</StatusBanner> : null}
+        {params.reset ? <StatusBanner className="mt-5" tone="success">ตั้งรหัสผ่านใหม่แล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่</StatusBanner> : null}
         {errorMessage ? <StatusBanner className="mt-5" tone="error">{errorMessage}</StatusBanner> : null}
 
         {!hasAuthConfig ? (
@@ -152,14 +116,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
                 <span className="text-sm font-semibold text-[#3f3a48]">อีเมล</span>
                 <input className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" autoComplete="email" name="email" placeholder="name@example.com" required type="email" />
               </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-[#3f3a48]">รหัสผ่าน</span>
-                <input className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" autoComplete="new-password" minLength={8} name="password" required type="password" />
-              </label>
-              <label className="block">
-                <span className="text-sm font-semibold text-[#3f3a48]">ยืนยันรหัสผ่าน</span>
-                <input className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" autoComplete="new-password" minLength={8} name="confirmPassword" required type="password" />
-              </label>
+              <div>
+                <label className="text-sm font-semibold text-[#3f3a48]" htmlFor="signup-password">รหัสผ่าน</label>
+                <PasswordInput autoComplete="new-password" className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" describedBy="signup-password-hint" id="signup-password" name="password" />
+                <span className="mt-1 block text-xs text-[#6b6475]" id="signup-password-hint">อย่างน้อย 8 ตัวอักษร</span>
+              </div>
+              <div>
+                <label className="text-sm font-semibold text-[#3f3a48]" htmlFor="signup-confirm-password">ยืนยันรหัสผ่าน</label>
+                <PasswordInput autoComplete="new-password" className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" id="signup-confirm-password" name="confirmPassword" />
+              </div>
               <SubmitButton className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white transition hover:bg-[#8b2d6b] disabled:cursor-wait disabled:bg-[#9a94a6]" disabled={!hasAuthConfig} pendingText="กำลังสร้างบัญชี...">
                 <UserPlus className="size-4" aria-hidden="true" /> สมัครสมาชิก
               </SubmitButton>
@@ -170,12 +135,15 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             <input name="next" type="hidden" value={next} />
             <label className="block">
               <span className="text-sm font-semibold text-[#3f3a48]">อีเมล</span>
-              <input className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" autoComplete="email" name="email" required type="email" />
+              <input className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" autoComplete="username" data-required-message="กรุณากรอกอีเมลที่ใช้สมัคร" name="email" placeholder="name@example.com" required type="email" />
             </label>
-            <label className="block">
-              <span className="text-sm font-semibold text-[#3f3a48]">รหัสผ่าน</span>
-              <input className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" autoComplete="current-password" minLength={8} name="password" required type="password" />
-            </label>
+            <div>
+              <div className="flex items-center justify-between gap-3">
+                <label className="text-sm font-semibold text-[#3f3a48]" htmlFor="signin-password">รหัสผ่าน</label>
+                <Link className="text-xs font-semibold text-[#722257] hover:underline" href="/forgot-password">ลืมรหัสผ่าน?</Link>
+              </div>
+              <PasswordInput autoComplete="current-password" className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" id="signin-password" name="password" />
+            </div>
             <SubmitButton className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white transition hover:bg-[#8b2d6b] disabled:cursor-wait disabled:bg-[#9a94a6]" disabled={!hasAuthConfig} pendingText="กำลังเข้าสู่ระบบ...">
               <KeyRound className="size-4" aria-hidden="true" /> เข้าสู่ระบบ
             </SubmitButton>

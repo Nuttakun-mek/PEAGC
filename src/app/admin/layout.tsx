@@ -1,34 +1,25 @@
 import Link from "next/link";
-import {
-  BarChart3,
-  CalendarDays,
-  CircleDollarSign,
-  Database,
-  GraduationCap,
-  LayoutDashboard,
-  Megaphone,
-  LogOut,
-  Search,
-  Settings2,
-  UsersRound,
-} from "lucide-react";
+import { ExternalLink, KeyRound, LogOut, Search } from "lucide-react";
 
 import { signOut } from "@/app/actions/auth";
+import { AdminNav } from "@/components/admin-nav";
+import { getSessionIdentity, getSessionRoles, getSessionUser, resolveDisplayName } from "@/lib/auth/session";
 import { getStaffClub } from "@/lib/auth/staff";
+import { roleLabels } from "@/lib/labels";
 import { type ModuleState, defaultModuleState, modulesForPath } from "@/lib/modules";
 import { getClubModules } from "@/lib/modules-server";
 import { hasSupabasePublicConfig } from "@/lib/supabase/env";
 
-const adminNavigation = [
-  { href: "/admin", icon: LayoutDashboard, label: "ภาพรวม" },
-  { href: "/admin/members", icon: UsersRound, label: "สมาชิก" },
-  { href: "/admin/employees", icon: Database, label: "ฐานสมาชิกสมาคม" },
-  { href: "/admin/events", icon: CalendarDays, label: "กิจกรรม" },
-  { href: "/admin/lessons", icon: GraduationCap, label: "ตารางเรียน" },
-  { href: "/admin/payments", icon: CircleDollarSign, label: "ตรวจการชำระเงิน" },
-  { href: "/admin/content", icon: Megaphone, label: "ข่าว คะแนน และรางวัล" },
-  { href: "/admin/reports", icon: BarChart3, label: "รายงาน" },
-  { href: "/admin/settings", icon: Settings2, label: "เปิด/ปิดระบบ" },
+const navHrefs = [
+  "/admin",
+  "/admin/members",
+  "/admin/employees",
+  "/admin/events",
+  "/admin/lessons",
+  "/admin/payments",
+  "/admin/content",
+  "/admin/reports",
+  "/admin/settings",
 ];
 
 const staffRoles = [
@@ -50,6 +41,19 @@ async function loadModules(): Promise<ModuleState> {
   }
 }
 
+async function loadUser() {
+  if (!hasSupabasePublicConfig()) return null;
+  try {
+    const user = await getSessionUser();
+    if (!user) return null;
+    const [identity, roles] = await Promise.all([getSessionIdentity(user.id), getSessionRoles(user.id)]);
+    const role = roles.find((item) => staffRoles.includes(item.role_key))?.role_key ?? roles[0]?.role_key;
+    return { name: resolveDisplayName(identity, user), role: role ? (roleLabels[role] ?? role) : "ผู้ใช้งาน" };
+  } catch {
+    return null;
+  }
+}
+
 /** A nav item is "closed" when every module behind that page is closed to members. */
 function isClosed(href: string, modules: ModuleState) {
   const keys = modulesForPath(href);
@@ -57,67 +61,62 @@ function isClosed(href: string, modules: ModuleState) {
 }
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const modules = await loadModules();
+  const [modules, user] = await Promise.all([loadModules(), loadUser()]);
+  const closed = navHrefs.filter((href) => isClosed(href, modules));
+
+  const userCard = user ? (
+    <div className="mb-2 flex items-center gap-3 rounded-lg bg-[#f8f9fb] px-3 py-2.5">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#f8edf4] text-sm font-bold text-[#722257]">
+        {user.name.trim().charAt(0) || "ผ"}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-sm font-semibold text-[#344054]">{user.name}</span>
+        <span className="block truncate text-xs text-[#667085]">{user.role}</span>
+      </span>
+    </div>
+  ) : null;
+
+  const footer = (
+    <div className="grid gap-1">
+      <Link
+        className="flex h-10 items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#667085] transition hover:bg-[#f8edf4] hover:text-[#722257]"
+        href="/account/password"
+      >
+        <KeyRound className="size-4" aria-hidden="true" />
+        เปลี่ยนรหัสผ่าน
+      </Link>
+      <form action={signOut}>
+        <button className="flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-semibold text-[#667085] transition hover:bg-[#fdecec] hover:text-[#b42318]" type="submit">
+          <LogOut className="size-4" aria-hidden="true" />
+          ออกจากระบบ
+        </button>
+      </form>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#f2f5f8] lg:flex">
-      <aside className="border-b border-[#e2e8ef] bg-white text-[#344054] lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-64 lg:shrink-0 lg:flex-col lg:border-b-0 lg:border-r">
-        <div className="px-4 py-4 lg:px-5 lg:py-6">
-          <Link className="flex items-center gap-3" href="/admin">
-            <span className="flex size-10 items-center justify-center rounded-md bg-[#C69214] text-base font-bold text-white">
-              กฟ
-            </span>
-            <span>
-              <span className="block text-sm font-bold text-[#722257]">PEAGC</span>
-              <span className="block text-xs text-[#667085]">ระบบบริหารชมรมกอล์ฟ</span>
-            </span>
-          </Link>
-        </div>
-
-        <nav
-          aria-label="เมนูผู้ดูแลระบบ"
-          className="flex gap-2 overflow-x-auto px-4 pb-4 lg:grid lg:overflow-visible lg:px-3 lg:pb-0"
-        >
-          {adminNavigation.map((item) => (
-            <Link
-              className="flex h-11 shrink-0 items-center gap-3 rounded-md px-3 text-sm font-semibold text-[#475467] transition hover:bg-[#f8edf4] hover:text-[#722257]"
-              href={item.href}
-              key={item.href}
-            >
-              <item.icon className="size-4" aria-hidden="true" />
-              {item.label}
-              {isClosed(item.href, modules) ? (
-                <span className="ml-auto rounded-full bg-[#f1f3ef] px-2 py-0.5 text-[10px] font-semibold text-[#98a2b3]" title="ปิดสำหรับสมาชิก">
-                  ปิด
-                </span>
-              ) : null}
-            </Link>
-          ))}
-        </nav>
-
-        <div className="border-t border-[#e2e8ef] p-3 lg:mt-auto">
-          <form action={signOut}>
-            <button className="flex h-11 w-full items-center gap-3 rounded-md px-3 text-sm font-semibold text-[#667085] transition hover:bg-[#f8edf4] hover:text-[#722257]" type="submit">
-              <LogOut className="size-4" aria-hidden="true" />
-              ออกจากระบบ
-            </button>
-          </form>
-        </div>
-      </aside>
+      <AdminNav closed={closed} footer={footer} userCard={userCard} />
 
       <div className="min-w-0 flex-1">
-        <header className="app-topbar sticky top-0 z-20 hidden h-16 items-center justify-between px-6 lg:flex">
-          <div>
-            <p className="text-sm font-bold text-[#344054]">ศูนย์ควบคุม PEAGC</p>
-            <p className="text-xs text-[#667085]">ระบบสมาชิก กิจกรรม และตารางเรียน</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <label className="relative hidden xl:block">
-              <Search className="absolute left-3 top-2.5 size-4 text-[#98a2b3]" aria-hidden="true" />
-              <input className="h-9 w-72 rounded-md border border-[#e2e8ef] bg-[#f8fafc] pl-9 pr-3 text-sm outline-none focus:border-[#722257]" placeholder="ค้นหาข้อมูลในระบบ" />
-            </label>
-            <span className="rounded-md bg-[#edf9f3] px-3 py-2 text-xs font-bold text-[#16794b]">ระบบออนไลน์</span>
-          </div>
+        <header className="app-topbar sticky top-0 z-30 hidden h-16 items-center justify-between gap-4 px-6 lg:flex">
+          <form action="/admin/members" className="relative w-full max-w-md" role="search">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#98a2b3]" aria-hidden="true" />
+            <input
+              aria-label="ค้นหาสมาชิก"
+              className="h-10 w-full rounded-lg border border-[#e2e8ef] bg-[#f8fafc] pl-9 pr-3 text-sm outline-none transition focus:border-[#722257] focus:bg-white focus:ring-4 focus:ring-[#722257]/10"
+              name="q"
+              placeholder="ค้นหาสมาชิก: ชื่อ เลขสมาชิก รหัสพนักงาน หรือเบอร์โทร"
+              type="search"
+            />
+          </form>
+          <Link
+            className="flex h-10 shrink-0 items-center gap-2 rounded-lg border border-[#e2e8ef] bg-white px-3 text-sm font-semibold text-[#475467] transition hover:border-[#c9b3c2] hover:text-[#722257]"
+            href="/member"
+          >
+            <ExternalLink className="size-4" aria-hidden="true" />
+            ดูหน้าสมาชิก
+          </Link>
         </header>
         {children}
       </div>

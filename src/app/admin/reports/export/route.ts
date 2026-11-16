@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const { lines, totals } = financeByEvent(data.payments);
 
   const body = toCsv(
-    ["กิจกรรม", "อนุมัติแล้ว (บาท)", "จำนวนรายการอนุมัติ", "รอตรวจ (บาท)", "จำนวนรอตรวจ", "คืนเงิน (บาท)", "สุทธิ (บาท)"],
+    ["กิจกรรม", "อนุมัติแล้ว (บาท)", "จำนวนรายการอนุมัติ", "สลิปรอตรวจ (บาท)", "จำนวนสลิปรอตรวจ", "คืนเงิน (บาท)", "สุทธิ (บาท)"],
     [
       ...lines.map((line) => [
         line.eventName,

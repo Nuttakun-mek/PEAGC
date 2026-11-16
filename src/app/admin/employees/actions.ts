@@ -6,6 +6,7 @@ import { parseDirectoryGrid } from "@/lib/directory/import";
 import { redirectAfterAction as redirect } from "@/lib/navigation";
 import { failureStatus, logDbError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeEmail, normalizeEmployeeCode } from "@/lib/validation";
 import { anyCorruptedText, decodeTextFile, hasCorruptedText } from "@/lib/text-integrity";
 
 const employeeAdminRoles = ["platform_owner", "club_admin"];
@@ -104,21 +105,28 @@ async function requireEmployeeAdminClub() {
   return { clubId: role.club_id as string, supabase, userId: user.id };
 }
 
+/** Form values → row, or the `?status=` key of the first invalid field. */
 function getEmployeePayload(formData: FormData, clubId: string, userId: string) {
-  const employeeCode = getString(formData, "employeeCode");
+  // Same normalisation as the file import, so " uat 001" and "UAT001" are one employee.
+  const employeeCode = normalizeEmployeeCode(getString(formData, "employeeCode"));
   const fullName = getString(formData, "fullName");
 
   if (!employeeCode || !fullName) {
-    return null;
+    return { error: "missing-required", payload: null } as const;
   }
 
-  return {
+  const email = normalizeEmail(getString(formData, "email"));
+  if (!email.ok) {
+    return { error: "email-invalid", payload: null } as const;
+  }
+
+  return { error: null, payload: {
     affiliation: getString(formData, "affiliation") || null,
     bureau: getString(formData, "bureau") || null,
     club_id: clubId,
     department: getString(formData, "department") || null,
     division: getString(formData, "division") || null,
-    email: getString(formData, "email").toLowerCase() || null,
+    email: email.value,
     employee_code: employeeCode,
     employment_status: getString(formData, "employmentStatus") || "active",
     association_member_code: getString(formData, "associationMemberCode") || null,
@@ -133,16 +141,22 @@ function getEmployeePayload(formData: FormData, clubId: string, userId: string) 
     title_prefix: getString(formData, "titlePrefix") || null,
     updated_by: userId,
     work_line: getString(formData, "workLine") || null,
-  };
+  } };
+}
+
+/** Employee codes are unique per club (DB constraint); say so instead of a generic error. */
+function duplicateCodeStatus(error: { code?: string } | null, fallback: string) {
+  return error?.code === "23505" ? "employee-code-taken" : failureStatus(fallback, error);
 }
 
 export async function createEmployee(formData: FormData) {
   const { clubId, supabase, userId } = await requireEmployeeAdminClub();
-  const payload = getEmployeePayload(formData, clubId, userId);
+  const parsed = getEmployeePayload(formData, clubId, userId);
 
-  if (!payload) {
-    redirectEmployees("missing-required");
+  if (!parsed.payload) {
+    redirectEmployees(parsed.error);
   }
+  const { payload } = parsed;
   if (anyCorruptedText([payload.full_name, payload.first_name, payload.last_name, payload.department, payload.affiliation])) {
     redirectEmployees("text-corrupted");
   }
@@ -158,7 +172,7 @@ export async function createEmployee(formData: FormData) {
 
   if (error || !employee) {
     logDbError("employee_directory.create", error);
-    redirectEmployees(failureStatus("create-failed", error));
+    redirectEmployees(duplicateCodeStatus(error, "create-failed"));
   }
 
   await supabase.from("audit_logs").insert({
@@ -182,11 +196,12 @@ export async function updateEmployee(formData: FormData) {
   }
 
   const { clubId, supabase, userId } = await requireEmployeeAdminClub();
-  const payload = getEmployeePayload(formData, clubId, userId);
+  const parsed = getEmployeePayload(formData, clubId, userId);
 
-  if (!payload) {
-    redirectEmployees("missing-required", employeeId);
+  if (!parsed.payload) {
+    redirectEmployees(parsed.error, employeeId);
   }
+  const { payload } = parsed;
   if (anyCorruptedText([payload.full_name, payload.first_name, payload.last_name, payload.department, payload.affiliation])) {
     redirectEmployees("text-corrupted", employeeId);
   }
@@ -205,7 +220,7 @@ export async function updateEmployee(formData: FormData) {
 
   if (error) {
     logDbError("employee_directory.update", error);
-    redirectEmployees(failureStatus("update-failed", error), employeeId);
+    redirectEmployees(duplicateCodeStatus(error, "update-failed"), employeeId);
   }
 
   await supabase.from("audit_logs").insert({

@@ -4,6 +4,7 @@ import { redirectAfterAction as redirect } from "@/lib/navigation";
 import { failureStatus, logDbError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 import { anyCorruptedText } from "@/lib/text-integrity";
+import { isValidHandicap, normalizeEmail, normalizeEmployeeCode, normalizePhone } from "@/lib/validation";
 
 const adminRoles = ["platform_owner", "club_admin", "committee"];
 
@@ -84,7 +85,7 @@ async function defaultMemberTypeId(supabase: Client, clubId: string) {
   return (data ?? []).find((type) => type.name === "สมาชิก")?.id ?? data?.[0]?.id ?? null;
 }
 
-function redirectMembers(status: string, memberId?: string, filter?: string): never {
+function redirectMembers(status: string, memberId?: string, filter?: string, extra?: Record<string, string>): never {
   const params = new URLSearchParams({ status });
 
   if (memberId) {
@@ -92,6 +93,9 @@ function redirectMembers(status: string, memberId?: string, filter?: string): ne
   }
   if (filter) {
     params.set("filter", filter);
+  }
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    params.set(key, value);
   }
 
   redirect(`/admin/members?${params.toString()}${memberId ? `#member-${memberId}` : ""}`);
@@ -122,21 +126,38 @@ async function requireAdminClub() {
   return { clubId: role.club_id as string, supabase, userId: user.id };
 }
 
+/** Form values → row, or the `?status=` key of the first invalid field. */
 function getMemberPayload(formData: FormData, clubId: string, userId: string) {
   const fullName = getString(formData, "fullName");
 
   if (!fullName) {
-    return null;
+    return { error: "missing-required", payload: null } as const;
   }
 
-  return {
+  const phone = normalizePhone(getString(formData, "phone"));
+  if (!phone.ok) {
+    return { error: "phone-invalid", payload: null } as const;
+  }
+  const email = normalizeEmail(getString(formData, "email"));
+  if (!email.ok) {
+    return { error: "email-invalid", payload: null } as const;
+  }
+  const handicap = getNumberOrNull(formData, "handicap");
+  if (getString(formData, "handicap") && handicap === null) {
+    return { error: "handicap-invalid", payload: null } as const;
+  }
+  if (!isValidHandicap(handicap)) {
+    return { error: "handicap-invalid", payload: null } as const;
+  }
+
+  return { error: null, payload: {
     club_id: clubId,
     affiliation: getString(formData, "affiliation") || null,
     department: getString(formData, "department") || null,
-    email: getString(formData, "email") || null,
-    employee_code: getString(formData, "employeeCode") || null,
+    email: email.value,
+    employee_code: normalizeEmployeeCode(getString(formData, "employeeCode")) || null,
     full_name: fullName,
-    handicap: getNumberOrNull(formData, "handicap"),
+    handicap,
     joined_at: getDateOrNull(formData, "joinedAt"),
     line_id: getString(formData, "lineId") || null,
     member_code: null as string | null,
@@ -144,14 +165,55 @@ function getMemberPayload(formData: FormData, clubId: string, userId: string) {
     nickname: getString(formData, "nickname") || null,
     note: getString(formData, "note") || null,
     organization: getString(formData, "organization") || null,
-    phone: getString(formData, "phone") || null,
+    phone: phone.value,
     skill_level: getString(formData, "skillLevel") || null,
     status: getString(formData, "status") || "active",
     updated_by: userId,
-  };
+  } };
 }
 
-function hasCorruptedMemberText(payload: NonNullable<ReturnType<typeof getMemberPayload>>) {
+type MemberPayload = NonNullable<ReturnType<typeof getMemberPayload>["payload"]>;
+
+/**
+ * The other member (not archived) already holding this employee code. One employee is one
+ * member; the database enforces the same rule with a unique index.
+ */
+async function findEmployeeCodeOwner(supabase: Client, clubId: string, employeeCode: string | null, exceptMemberId?: string) {
+  if (!employeeCode) {
+    return null;
+  }
+
+  let query = supabase
+    .from("members")
+    .select("id, member_code, full_name")
+    .eq("club_id", clubId)
+    // Case-insensitive exact match (older rows may be lower case); escape LIKE wildcards.
+    .ilike("employee_code", employeeCode.replace(/[\\%_]/g, (char) => `\\${char}`))
+    .is("archived_at", null)
+    .limit(1);
+  if (exceptMemberId) {
+    query = query.neq("id", exceptMemberId);
+  }
+  const { data, error } = await query.maybeSingle();
+
+  if (error) {
+    logDbError("members.employee_code_owner", error);
+  }
+
+  return data ?? null;
+}
+
+function ownerRef(owner: { full_name: string | null; member_code: string | null }) {
+  return [owner.member_code, owner.full_name].filter(Boolean).join(" ");
+}
+
+/** 23505 from either unique rule on members → the matching message. */
+function uniqueViolationStatus(error: { code?: string; message?: string } | null, fallback: string) {
+  if (error?.code !== "23505") return null;
+  return error.message?.includes("employee_code") ? "employee-code-taken" : fallback;
+}
+
+function hasCorruptedMemberText(payload: MemberPayload) {
   return anyCorruptedText([
     payload.full_name,
     payload.nickname,
@@ -169,13 +231,21 @@ function archiveFields(status: string, previousArchivedAt: string | null | undef
 
 export async function createMember(formData: FormData) {
   const { clubId, supabase, userId } = await requireAdminClub();
-  const payload = getMemberPayload(formData, clubId, userId);
+  const parsed = getMemberPayload(formData, clubId, userId);
 
-  if (!payload) {
-    redirectMembers("missing-required");
+  if (!parsed.payload) {
+    redirectMembers(parsed.error);
   }
+  const { payload } = parsed;
   if (hasCorruptedMemberText(payload)) {
     redirectMembers("text-corrupted");
+  }
+
+  if (payload.status !== "archived") {
+    const owner = await findEmployeeCodeOwner(supabase, clubId, payload.employee_code);
+    if (owner) {
+      redirectMembers("employee-code-taken", owner.id, undefined, { ref: ownerRef(owner) });
+    }
   }
 
   const memberCode = await resolveMemberCode(supabase, clubId, getString(formData, "memberCode"));
@@ -199,7 +269,7 @@ export async function createMember(formData: FormData) {
 
   if (error || !member) {
     logDbError("members.create", error);
-    redirectMembers(error?.code === "23505" ? "member-code-taken" : failureStatus("create-failed", error));
+    redirectMembers(uniqueViolationStatus(error, "member-code-taken") ?? failureStatus("create-failed", error));
   }
 
   await supabase.from("audit_logs").insert({
@@ -223,11 +293,12 @@ export async function updateMember(formData: FormData) {
   }
 
   const { clubId, supabase, userId } = await requireAdminClub();
-  const payload = getMemberPayload(formData, clubId, userId);
+  const parsed = getMemberPayload(formData, clubId, userId);
 
-  if (!payload) {
-    redirectMembers("missing-required", memberId);
+  if (!parsed.payload) {
+    redirectMembers(parsed.error, memberId);
   }
+  const { payload } = parsed;
   if (hasCorruptedMemberText(payload)) {
     redirectMembers("text-corrupted", memberId);
   }
@@ -241,6 +312,13 @@ export async function updateMember(formData: FormData) {
 
   if (!before) {
     redirectMembers("update-not-found", memberId);
+  }
+
+  if (payload.status !== "archived") {
+    const owner = await findEmployeeCodeOwner(supabase, clubId, payload.employee_code, memberId);
+    if (owner) {
+      redirectMembers("employee-code-taken", memberId, undefined, { ref: ownerRef(owner) });
+    }
   }
 
   const memberCode = await resolveMemberCode(supabase, clubId, getString(formData, "memberCode"), before.member_code);
@@ -262,7 +340,7 @@ export async function updateMember(formData: FormData) {
 
   if (error) {
     logDbError("members.update", error);
-    redirectMembers(error.code === "23505" ? "member-code-taken" : failureStatus("update-failed", error), memberId);
+    redirectMembers(uniqueViolationStatus(error, "member-code-taken") ?? failureStatus("update-failed", error), memberId);
   }
   if (!saved) {
     redirectMembers("update-not-found", memberId);
@@ -301,6 +379,11 @@ export async function approveMember(formData: FormData) {
     redirectMembers("update-not-found", memberId);
   }
 
+  const approveOwner = await findEmployeeCodeOwner(supabase, clubId, before.employee_code, memberId);
+  if (approveOwner) {
+    redirectMembers("employee-code-taken", memberId, undefined, { ref: ownerRef(approveOwner) });
+  }
+
   const memberCode = await resolveMemberCode(supabase, clubId, getString(formData, "memberCode"), before.member_code);
 
   if (memberCode.error || !memberCode.code) {
@@ -324,7 +407,7 @@ export async function approveMember(formData: FormData) {
 
   if (error) {
     logDbError("members.approve", error);
-    redirectMembers(error.code === "23505" ? "member-code-taken" : failureStatus("approve-failed", error), memberId);
+    redirectMembers(uniqueViolationStatus(error, "member-code-taken") ?? failureStatus("approve-failed", error), memberId);
   }
 
   await supabase.from("audit_logs").insert({
@@ -441,6 +524,17 @@ export async function restoreMember(formData: FormData) {
   }
 
   const { clubId, supabase, userId } = await requireAdminClub();
+  const { data: archived } = await supabase
+    .from("members")
+    .select("employee_code")
+    .eq("club_id", clubId)
+    .eq("id", memberId)
+    .maybeSingle();
+  const restoreOwner = await findEmployeeCodeOwner(supabase, clubId, archived?.employee_code ?? null, memberId);
+  if (restoreOwner) {
+    redirectMembers("employee-code-taken", memberId, "archived", { ref: ownerRef(restoreOwner) });
+  }
+
   const { data: saved, error } = await supabase
     .from("members")
     .update({ archived_at: null, status: "inactive", updated_by: userId })
@@ -451,7 +545,7 @@ export async function restoreMember(formData: FormData) {
 
   if (error || !saved) {
     logDbError("members.restore", error);
-    redirectMembers(failureStatus("restore-failed", error), memberId);
+    redirectMembers(uniqueViolationStatus(error, "restore-failed") ?? failureStatus("restore-failed", error), memberId, "archived");
   }
 
   await supabase.from("audit_logs").insert({

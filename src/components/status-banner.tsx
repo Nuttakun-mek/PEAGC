@@ -14,9 +14,9 @@ const toneStyles: Record<BannerTone, { icon: typeof Info; wrap: string }> = {
 /** Picks a tone from a `?status=` key by its wording so every page colours feedback consistently. */
 export function toneForStatus(status: string | undefined): BannerTone {
   if (!status) return "info";
-  if (/(failed|invalid|closed|full|locked|denied|required|not-approved|too-large|unreadable|mismatch|limit|overlap|started|not-pairable|no-groups|no-players|too-many|outdated|not-found|taken|blocked|corrupt|duplicate|not-saved)/.test(status)) return "error";
-  if (/(pending|review|waitlist|stale|not-open|partial)/.test(status)) return "warning";
-  if (/(saved|created|updated|approved|booked|changed|cancelled|submitted|imported|acked|registered|deleted|archived|removed|generated|sent|checked-in|assigned|moved|cleared|marked|undone|promoted|restored)/.test(status)) return "success";
+  if (/(failed|invalid|closed|full|locked|denied|required|not-approved|too-large|unreadable|mismatch|limit|overlap|started|not-pairable|no-groups|no-players|too-many|outdated|not-found|taken|blocked|corrupt|duplicate|not-saved|wrong|needs-reason|weak|same-password|expired)/.test(status)) return "error";
+  if (/(pending|review|waitlist|stale|not-open|partial|not-bookable)/.test(status)) return "warning";
+  if (/(saved|created|updated|approved|booked|changed|cancelled|submitted|imported|acked|registered|deleted|archived|removed|generated|sent|checked-in|assigned|moved|cleared|marked|undone|promoted|restored|opened)/.test(status)) return "success";
   return "info";
 }
 
@@ -29,7 +29,7 @@ export function StatusBanner({
 }: {
   children: React.ReactNode;
   className?: string;
-  /** Result of a just-submitted action: stays visible at the top of the viewport until dismissed. */
+  /** Result of a just-submitted action: shown as a toast until dismissed or the admin moves on. */
   floating?: boolean;
   title?: string;
   tone?: BannerTone;
@@ -37,8 +37,10 @@ export function StatusBanner({
   const { icon: Icon, wrap } = toneStyles[tone];
   return (
     <StatusBannerShell
-      className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${wrap} ${className}`}
+      // A floating banner is a fixed toast; the caller's layout margins only apply inline.
+      className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${wrap} ${floating ? "" : className}`}
       floating={floating}
+      tone={tone}
     >
       <Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <div className="min-w-0 flex-1 leading-6">

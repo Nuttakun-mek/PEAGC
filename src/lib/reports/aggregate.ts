@@ -2,7 +2,8 @@
 
 import { holdsSeat } from "../events/pairing";
 
-export type PaymentRow = { amount: number | string; event_id: string | null; event_name: string; status: string };
+/** `has_slip: false` marks a pending record without the member's slip (not money to review yet). */
+export type PaymentRow = { amount: number | string; event_id: string | null; event_name: string; has_slip?: boolean; status: string };
 
 export type FinanceLine = {
   approved: number;
@@ -31,7 +32,7 @@ export function financeByEvent(rows: PaymentRow[]) {
     if (row.status === "approved") {
       line.approved += amount;
       line.approvedCount += 1;
-    } else if (row.status === "pending" || row.status === "review") {
+    } else if ((row.status === "pending" || row.status === "review") && row.has_slip !== false) {
       line.pending += amount;
       line.pendingCount += 1;
     } else if (row.status === "refunded") {

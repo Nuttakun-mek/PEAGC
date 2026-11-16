@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { getSessionRoles, getSessionUser } from "@/lib/auth/session";
+import { getSessionIdentity, getSessionRoles, getSessionUser, resolveDisplayName } from "@/lib/auth/session";
 import { hasSupabasePublicConfig, isAuthBypassEnabled } from "@/lib/supabase/env";
-import { createClient } from "@/lib/supabase/server";
 
 export type AppRole = "admin" | "member";
 
@@ -58,15 +57,8 @@ async function getAuthenticatedContext(requiredRole: AppRole | undefined) {
     return null;
   }
 
-  const supabase = await createClient();
-  const [{ data: profile }, roles] = await Promise.all([
-    supabase
-      .from("profiles")
-      .select("display_name, phone, line_id")
-      .eq("id", user.id)
-      .maybeSingle(),
-    getSessionRoles(user.id),
-  ]);
+  const [identity, roles] = await Promise.all([getSessionIdentity(user.id), getSessionRoles(user.id)]);
+  const profile = identity.profile;
 
   const adminRoles = [
     "platform_owner",
@@ -87,13 +79,9 @@ async function getAuthenticatedContext(requiredRole: AppRole | undefined) {
     redirect("/member?status=admin-required");
   }
 
-  const metadataName = [user.metadata.display_name, user.metadata.full_name].find(
-    (value): value is string => typeof value === "string" && value.length > 0,
-  );
-
   return {
     clubId: primaryRole?.club_id ?? null,
-    displayName: profile?.display_name || metadataName || user.email || "สมาชิก",
+    displayName: resolveDisplayName(identity, user),
     email: user.email,
     isBypass: false,
     isProfileComplete: Boolean(profile?.display_name && profile?.phone),

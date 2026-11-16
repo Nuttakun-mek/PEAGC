@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
   BadgeCheck,
@@ -10,6 +11,8 @@ import {
   ShieldAlert,
   UserCheck,
 } from "lucide-react";
+
+import { isAuthBypassEnabled } from "@/lib/supabase/env";
 
 const flowSteps = [
   {
@@ -63,6 +66,11 @@ const flowSteps = [
 ];
 
 export default function DemoAuthFlowPage() {
+  // Walkthrough mock-ups for local demos only; production has no such pages.
+  if (!isAuthBypassEnabled()) {
+    notFound();
+  }
+
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-[#2f3137]">
       <section className="mx-auto w-full max-w-6xl">

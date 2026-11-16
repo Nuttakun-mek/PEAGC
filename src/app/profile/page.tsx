@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowLeft, BadgeCheck, Contact, Flag, IdCard, Save, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Contact, Flag, IdCard, KeyRound, Save, ShieldCheck, UserRound } from "lucide-react";
 
 import { savePersonalProfile } from "@/app/profile/actions";
 import { EmployeeCodeChecker } from "@/components/employee-code-checker";
@@ -7,6 +7,8 @@ import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { SubmitButton } from "@/components/submit-button";
 import { resolveAccess } from "@/lib/auth/access";
 import { createClient } from "@/lib/supabase/server";
+import { orUnset } from "@/lib/display";
+import { HANDICAP_MAX, HANDICAP_MIN, PHONE_ERROR, PHONE_HINT, PHONE_PATTERN } from "@/lib/validation";
 
 type ProfilePageProps = {
   searchParams: Promise<{ bypass?: string; status?: string }>;
@@ -24,6 +26,9 @@ const statusMessages: Record<string, string> = {
   "pending-review": "ส่งข้อมูลแล้ว รอผู้ดูแลตรวจสอบ",
   "profile-failed": "บันทึกประวัติสมาชิกไม่สำเร็จ",
   "text-corrupted": "ข้อความภาษาไทยเสียหาย (แสดงเป็น ???) กรุณาพิมพ์ใหม่ก่อนบันทึก",
+  "phone-invalid": PHONE_ERROR,
+  "handicap-invalid": `แต้มต่อต้องเป็นตัวเลขระหว่าง ${HANDICAP_MIN} ถึง ${HANDICAP_MAX}`,
+  "employee-code-taken": "รหัสพนักงานนี้ถูกใช้สมัครสมาชิกแล้ว หากเป็นรหัสของคุณ กรุณาติดต่อผู้ดูแลชมรม",
 };
 
 const inputClass =
@@ -111,13 +116,24 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                 : "แก้ไขข้อมูลติดต่อและข้อมูลกอล์ฟได้ตลอดเวลา"}
             </p>
           </div>
-          <Link
-            className="flex h-11 w-fit items-center gap-2 rounded-lg border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257] transition hover:border-[#722257]"
-            href={backHref}
-          >
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            กลับหน้าสมาชิก
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            {access.isBypass ? null : (
+              <Link
+                className="flex h-11 w-fit items-center gap-2 rounded-lg border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#3f3a48] transition hover:border-[#722257] hover:text-[#722257]"
+                href="/account/password"
+              >
+                <KeyRound className="size-4" aria-hidden="true" />
+                เปลี่ยนรหัสผ่าน
+              </Link>
+            )}
+            <Link
+              className="flex h-11 w-fit items-center gap-2 rounded-lg border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257] transition hover:border-[#722257]"
+              href={backHref}
+            >
+              <ArrowLeft className="size-4" aria-hidden="true" />
+              กลับหน้าสมาชิก
+            </Link>
+          </div>
         </div>
 
         <ol aria-label="ขั้นตอนการสมัคร" className="mt-6 grid grid-cols-4 gap-2">
@@ -153,7 +169,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
         ) : null}
 
         <form action={savePersonalProfile} className="mt-6 grid gap-5">
-          <Section description="ชื่อที่แสดงและช่องทางติดต่อ" icon={UserRound} step={1} title="ข้อมูลติดต่อ">
+          <Section description="รูปประจำตัวและช่องทางติดต่อ" icon={UserRound} step={1} title="ข้อมูลติดต่อ">
             <div className="grid gap-4 rounded-lg border border-dashed border-[#d9d3e6] bg-[#fbf9fc] p-4 sm:grid-cols-[96px_1fr] sm:items-center">
               <div className="flex size-24 items-center justify-center overflow-hidden rounded-xl bg-[#f8edf4] text-sm font-semibold text-[#722257] ring-4 ring-white">
                 {member?.avatar_url ? (
@@ -178,16 +194,13 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
-                <span className="text-sm font-semibold text-[#3f3a48]">ชื่อแสดงผล <span className="text-[#a33a46]">*</span></span>
-                <input className={inputClass} defaultValue={profile?.display_name ?? access.displayName} disabled={access.isBypass} name="displayName" required />
-              </label>
-              <label className="block">
                 <span className="text-sm font-semibold text-[#3f3a48]">ชื่อเล่น</span>
                 <input className={inputClass} defaultValue={member?.nickname ?? ""} disabled={access.isBypass} name="nickname" placeholder="" />
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-[#3f3a48]">เบอร์โทรศัพท์มือถือ <span className="text-[#a33a46]">*</span></span>
-                <input autoComplete="tel" className={inputClass} defaultValue={profile?.phone ?? ""} disabled={access.isBypass} inputMode="tel" name="phone" pattern="[0-9\-\s]{9,12}" placeholder="08x-xxx-xxxx" required />
+                <input autoComplete="tel" className={`${inputClass} tabular-nums`} data-invalid-message={PHONE_ERROR} data-required-message="กรุณากรอกเบอร์โทรศัพท์มือถือ" defaultValue={(profile?.phone ?? member?.phone ?? "").replace(/\D/g, "")} disabled={access.isBypass} inputMode="numeric" maxLength={10} name="phone" pattern={PHONE_PATTERN} placeholder="0812345678" required />
+                <p className="mt-2 text-xs text-[#6b6475]">{PHONE_HINT}</p>
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-[#3f3a48]">LINE ID</span>
@@ -204,8 +217,8 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-[#3f3a48]">ชื่อ-นามสกุล <span className="text-[#a33a46]">*</span></span>
-                <input autoComplete="name" className={inputClass} defaultValue={member?.full_name ?? ""} disabled={access.isBypass} name="fullName" placeholder="เช่น สมชาย ใจดี" required />
-                <p className="mt-2 text-xs text-[#6b6475]">ไม่ต้องใส่คำนำหน้า</p>
+                <input autoComplete="name" className={inputClass} data-required-message="กรุณากรอกชื่อ-นามสกุล" defaultValue={member?.full_name ?? profile?.display_name ?? ""} disabled={access.isBypass} name="fullName" placeholder="เช่น สมชาย ใจดี" required />
+                <p className="mt-2 text-xs text-[#6b6475]">ไม่ต้องใส่คำนำหน้า ชื่อนี้จะแสดงในระบบทุกหน้า</p>
               </label>
             </div>
 
@@ -228,7 +241,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
                   ].map(([label, value]) => (
                     <div key={label}>
                       <dt className="text-xs text-[#6b6475]">{label}</dt>
-                      <dd className="mt-0.5 font-semibold text-[#3f3a48]">{value || "-"}</dd>
+                      <dd className="mt-0.5 font-semibold text-[#3f3a48]">{orUnset(value)}</dd>
                     </div>
                   ))}
                 </dl>
@@ -245,7 +258,7 @@ export default async function ProfilePage({ searchParams }: ProfilePageProps) {
             <div className="grid gap-4 sm:grid-cols-3">
               <label className="block sm:col-span-1">
                 <span className="text-sm font-semibold text-[#3f3a48]">แต้มต่อ (Handicap)</span>
-                <input className={inputClass} defaultValue={member?.handicap ?? ""} disabled={access.isBypass} inputMode="decimal" name="handicap" placeholder="เช่น 18.5" step="0.1" type="number" />
+                <input className={inputClass} defaultValue={member?.handicap ?? ""} disabled={access.isBypass} inputMode="decimal" max={HANDICAP_MAX} min={HANDICAP_MIN} name="handicap" placeholder="เช่น 18.5" step="0.1" type="number" />
               </label>
               <label className="block">
                 <span className="text-sm font-semibold text-[#3f3a48]">ระดับฝีมือ</span>

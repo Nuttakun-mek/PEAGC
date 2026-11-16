@@ -18,12 +18,15 @@ import {
   updateMember,
 } from "@/app/admin/members/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { CreatePanel } from "@/components/create-panel";
 import { LoadErrorBanner, StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
 import { pickFilter } from "@/lib/filters";
 import { employeeMatchCheckLabels, employeeMatchReasonLabels, labelFor } from "@/lib/labels";
 import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
+import { UNSET, formatPhone, orUnset } from "@/lib/display";
+import { EMAIL_ERROR, HANDICAP_MAX, HANDICAP_MIN, PHONE_ERROR, PHONE_HINT, PHONE_PATTERN } from "@/lib/validation";
 
 type AdminMembersPageProps = {
   searchParams: Promise<{
@@ -31,6 +34,7 @@ type AdminMembersPageProps = {
     filter?: string;
     member?: string;
     q?: string;
+    ref?: string;
     status?: string;
     type?: string;
   }>;
@@ -205,6 +209,10 @@ const statusMessages: Record<string, string> = {
   "member-code-taken": "เลขสมาชิกนี้ถูกใช้งานแล้ว (รวมสมาชิกที่เก็บถาวร) กรุณาใช้เลขอื่นหรือเว้นว่างให้ระบบออกเลขให้",
   "update-failed": "แก้ไขสมาชิกไม่สำเร็จ",
   updated: "แก้ไขสมาชิกเรียบร้อยแล้ว",
+  "phone-invalid": PHONE_ERROR,
+  "email-invalid": EMAIL_ERROR,
+  "handicap-invalid": `แต้มต่อต้องเป็นตัวเลขระหว่าง ${HANDICAP_MIN} ถึง ${HANDICAP_MAX}`,
+  "employee-code-taken": "รหัสพนักงานนี้มีสมาชิกใช้อยู่แล้ว (หนึ่งรหัสพนักงานเป็นสมาชิกได้คนเดียว) กรุณาตรวจรหัส หรือแก้ไขสมาชิกเดิมแทน",
 };
 
 const employeeMatchLabels: Record<string, string> = {
@@ -272,14 +280,16 @@ function MemberForm({
   return (
     <form action={action} className="grid gap-4">
       {member ? <input name="memberId" type="hidden" value={member.id} /> : null}
-      <div className="flex items-center gap-2">
-        {member ? (
-          <Pencil className="size-4 text-[#722257]" aria-hidden="true" />
-        ) : (
-          <Plus className="size-4 text-[#722257]" aria-hidden="true" />
-        )}
-        <h2 className="text-lg font-semibold text-[#722257]">{title}</h2>
-      </div>
+      {title ? (
+        <div className="flex items-center gap-2">
+          {member ? (
+            <Pencil className="size-4 text-[#722257]" aria-hidden="true" />
+          ) : (
+            <Plus className="size-4 text-[#722257]" aria-hidden="true" />
+          )}
+          <h2 className="text-lg font-semibold text-[#722257]">{title}</h2>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-3">
         <label className="block">
@@ -289,10 +299,10 @@ function MemberForm({
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 uppercase outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={member?.member_code ?? ""}
             disabled={disabled}
+            data-invalid-message="เลขสมาชิกต้องเป็นรูปแบบ PEAGC-0001 (ตัวเลขอย่างน้อย 4 หลัก) หรือเว้นว่างให้ระบบออกเลขให้"
             name="memberCode"
             pattern="[Pp][Ee][Aa][Gg][Cc]-[0-9]{4,}"
             placeholder={nextMemberCode ? `เว้นว่าง = ${nextMemberCode}` : "เว้นว่างให้ระบบออกเลข"}
-            title="รูปแบบ PEAGC-0001 หรือเว้นว่างให้ระบบออกเลขถัดไปให้"
           />
           <span className="mt-1 block text-xs text-[#6b6475]">
             {member?.member_code
@@ -303,18 +313,23 @@ function MemberForm({
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">รหัสพนักงาน</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+            autoComplete="off"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 uppercase outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={member?.employee_code ?? ""}
             disabled={disabled}
+            maxLength={30}
             name="employeeCode"
           />
+          <span className="mt-1 block text-xs text-[#6b6475]">ห้ามซ้ำกับสมาชิกคนอื่น</span>
         </label>
         <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ชื่อ-นามสกุล</span>
+          <span className="text-sm font-semibold text-[#3f3a48]">ชื่อ-นามสกุล <span className="text-[#b42318]">*</span></span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+            data-required-message="กรุณากรอกชื่อ-นามสกุลของสมาชิก"
             defaultValue={member?.full_name ?? ""}
             disabled={disabled}
+            maxLength={150}
             name="fullName"
             required
           />
@@ -334,19 +349,28 @@ function MemberForm({
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">เบอร์โทร</span>
           <input
-            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
-            defaultValue={member?.phone ?? ""}
+            autoComplete="off"
+            className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 tabular-nums outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+            data-invalid-message={PHONE_ERROR}
+            defaultValue={member?.phone?.replace(/\D/g, "") ?? ""}
             disabled={disabled}
+            inputMode="numeric"
+            maxLength={10}
             name="phone"
+            pattern={PHONE_PATTERN}
+            placeholder="0812345678"
           />
+          <span className="mt-1 block text-xs text-[#6b6475]">{PHONE_HINT}</span>
         </label>
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">อีเมล</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+            data-invalid-message={EMAIL_ERROR}
             defaultValue={member?.email ?? ""}
             disabled={disabled}
             name="email"
+            placeholder="name@example.com"
             type="email"
           />
         </label>
@@ -411,7 +435,7 @@ function MemberForm({
             name="memberTypeId"
             required={memberTypes.length > 0}
           >
-            {memberTypes.length ? null : <option value="">ยังไม่มีประเภทสมาชิก</option>}
+            {memberTypes.length ? null : <option value="">ยังไม่มีประเภทสมาชิก (ตั้งค่าที่หน้าเปิด/ปิดระบบ)</option>}
             {memberTypes.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -443,6 +467,8 @@ function MemberForm({
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
             defaultValue={member?.handicap ?? ""}
             disabled={disabled}
+            max={HANDICAP_MAX}
+            min={HANDICAP_MIN}
             name="handicap"
             step="0.1"
             type="number"
@@ -566,7 +592,11 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    const matchesSearch = !q || haystack.includes(q.toLowerCase());
+    const qDigits = q.replace(/\D/g, "");
+    const matchesSearch =
+      !q ||
+      haystack.includes(q.toLowerCase()) ||
+      (qDigits.length >= 3 && (member.phone ?? "").replace(/\D/g, "").includes(qDigits));
 
     return matchesStatus && matchesType && matchesSearch;
   });
@@ -580,7 +610,10 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
     (member) => member.status === "active" && member.employee_match_detail?.reason === "left_directory",
   );
   const highlightedMember = params.member;
-  const statusMessage = params.status ? statusMessages[params.status] : null;
+  const baseMessage = params.status ? statusMessages[params.status] : null;
+  const statusMessage = baseMessage && params.status === "employee-code-taken" && params.ref
+    ? `${baseMessage} · ใช้อยู่โดย ${params.ref}`
+    : baseMessage;
   const bypassQuery = access.isBypass ? "?bypass=admin" : "";
 
   return (
@@ -627,7 +660,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-5">
+        <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
           {[
             { label: "สมาชิกที่แสดง", value: members.length },
             { label: "รอตรวจสอบ", value: pendingCount },
@@ -636,11 +669,11 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
             { label: "หายจากฐานสมาคม", value: leftDirectoryMembers.length },
           ].map((item) => (
             <article
-              className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
+              className="rounded-lg border border-[#e6e2ee] bg-white/95 p-4 shadow-[0_10px_30px_rgba(114,34,87,0.06)] sm:p-5"
               key={item.label}
             >
               <p className="text-sm font-semibold text-[#6b6475]">{item.label}</p>
-              <p className="mt-2 text-3xl font-semibold text-[#722257]">
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-[#722257] sm:text-3xl">
                 {item.value}
               </p>
             </article>
@@ -664,7 +697,7 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                       key={member.id}
                     >
                       <span className="font-semibold">{member.full_name}</span>
-                      <span className="text-xs text-[#6b6475]">{member.employee_code ?? "-"}</span>
+                      <span className="text-xs text-[#6b6475]">{orUnset(member.employee_code)}</span>
                     </a>
                   ))}
                 </div>
@@ -673,16 +706,20 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
           </section>
         ) : null}
 
-        <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
+        <CreatePanel
+          defaultOpen={Boolean(params.status && !params.member && toneForStatus(params.status) === "error")}
+          hint={nextMemberCode ? `เลขสมาชิกถัดไป ${nextMemberCode}` : undefined}
+          title="เพิ่มสมาชิกใหม่"
+        >
           <MemberForm
             action={createMember}
             defaultTypeId={defaultTypeId}
             disabled={access.isBypass}
             memberTypes={memberTypes}
             nextMemberCode={nextMemberCode}
-            title="เพิ่มสมาชิกใหม่"
+            title=""
           />
-        </section>
+        </CreatePanel>
 
         <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
           <div className="border-b border-[#e6e2ee] p-5">
@@ -699,7 +736,8 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                   className="h-11 w-full rounded-md border border-[#d9d3e6] pl-10 pr-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
                   defaultValue={q}
                   name="q"
-                  placeholder="ค้นหาชื่อ รหัส เบอร์ หรือ email"
+                  placeholder="ค้นหาชื่อ เลขสมาชิก รหัสพนักงาน เบอร์โทร หรืออีเมล"
+                  type="search"
                 />
               </label>
               <label className="relative block">
@@ -772,18 +810,17 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-[#6b6475]">
-                        {member.employee_code ?? "ไม่มีรหัสพนักงาน"} ·{" "}
-                        {member.member_code ?? "ไม่มีรหัสสมาชิก"} ·{" "}
-                        {member.nickname ?? "ไม่มีชื่อเล่น"}
+                        รหัสพนักงาน {orUnset(member.employee_code)} · เลขสมาชิก {orUnset(member.member_code)}
+                        {member.nickname ? ` · ${member.nickname}` : ""}
                       </p>
                     </div>
                     <div className="text-sm text-[#3f3a48]">
-                      <p>{member.phone ?? "-"}</p>
-                      <p className="mt-1 text-[#6b6475]">{member.email ?? "-"}</p>
+                      <p className="tabular-nums">{formatPhone(member.phone)}</p>
+                      <p className="mt-1 break-all text-[#6b6475]">{orUnset(member.email)}</p>
                     </div>
                     <div className="text-sm text-[#3f3a48]">
-                      <p>{member.member_types?.name ?? "ไม่ระบุประเภท"}</p>
-                      <p className="mt-1 text-[#6b6475]">{member.department ?? "-"}</p>
+                      <p>{member.member_types?.name ?? UNSET}</p>
+                      <p className="mt-1 text-[#6b6475]">{orUnset(member.department)}</p>
                     </div>
                     <span className="w-fit rounded-md border border-[#d9d3e6] px-3 py-2 text-sm font-semibold text-[#722257] group-open:bg-white/70">
                       แก้ไข
@@ -795,19 +832,19 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                       <div>
                         <p className="font-semibold text-[#6b6475]">รหัสพนักงาน</p>
                         <p className="mt-1 text-[#722257]">
-                          {member.employee_code ?? "-"}
+                          {orUnset(member.employee_code)}
                         </p>
                       </div>
                       <div>
                         <p className="font-semibold text-[#6b6475]">หน่วยงาน</p>
                         <p className="mt-1 text-[#722257]">
-                          {member.department ?? "-"}
+                          {orUnset(member.department)}
                         </p>
                       </div>
                       <div>
                         <p className="font-semibold text-[#6b6475]">สังกัด</p>
                         <p className="mt-1 text-[#722257]">
-                          {member.affiliation ?? "-"}
+                          {orUnset(member.affiliation)}
                         </p>
                       </div>
                     </div>
@@ -867,10 +904,10 @@ export default async function AdminMembersPage({ searchParams }: AdminMembersPag
                             className="mt-2 h-11 w-full rounded-md border border-[#d7a52c] bg-white px-3 uppercase outline-none focus:border-[#722257]"
                             defaultValue={member.member_code ?? ""}
                             disabled={access.isBypass}
+                            data-invalid-message="เลขสมาชิกต้องเป็นรูปแบบ PEAGC-0001 หรือเว้นว่างให้ระบบออกเลขให้"
                             name="memberCode"
                             pattern="[Pp][Ee][Aa][Gg][Cc]-[0-9]{4,}"
                             placeholder={nextMemberCode ? `เว้นว่าง = ${nextMemberCode}` : "เว้นว่างให้ระบบออกเลข"}
-                            title="รูปแบบ PEAGC-0001 หรือเว้นว่างให้ระบบออกเลขถัดไปให้"
                           />
                         </label>
                         <label className="block">

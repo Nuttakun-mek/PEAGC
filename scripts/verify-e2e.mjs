@@ -7,12 +7,19 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
 const { data: club } = await db.from("clubs").select("id").eq("status", "active").limit(1).single();
 const { data: members } = await db.from("members").select("id,user_id,member_code").eq("club_id", club.id).in("member_code", ["PEAGC-0001", "PEAGC-0003", "PEAGC-0004"]).order("member_code");
 assert(members?.length === 3, "พบบัญชีสมาชิกทดสอบครบ 3 คน");
-for (const account of [
-  ["admin@peagc.local", "Peagc3555!"],
-  ["member@peagc.local", "Member3555!"],
-  ["member2@peagc.local", "Member23555!"],
-  ["member3@peagc.local", "Member33555!"],
-]) {
+// Test-account passwords come from .env.local (E2E_ADMIN_PASSWORD, E2E_MEMBER_PASSWORD,
+// E2E_MEMBER2_PASSWORD, E2E_MEMBER3_PASSWORD); they are never committed to the repository.
+const testAccounts = [
+  ["admin@peagc.local", "E2E_ADMIN_PASSWORD"],
+  ["member@peagc.local", "E2E_MEMBER_PASSWORD"],
+  ["member2@peagc.local", "E2E_MEMBER2_PASSWORD"],
+  ["member3@peagc.local", "E2E_MEMBER3_PASSWORD"],
+].map(([email, key]) => {
+  const password = env[key] ?? process.env[key];
+  if (!password) throw new Error(`Set ${key} in .env.local to run this check`);
+  return [email, password];
+});
+for (const account of testAccounts) {
   const authClient = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: false } });
   const { data, error } = await authClient.auth.signInWithPassword({ email: account[0], password: account[1] });
   assert(!error && Boolean(data.user), `เข้าสู่ระบบ ${account[0]} ได้`);

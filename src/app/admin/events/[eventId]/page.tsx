@@ -38,6 +38,7 @@ import {
   updateAttendance,
   updatePairingGroup,
 } from "./actions";
+import { UNSET, formatPhone, orUnset } from "@/lib/display";
 
 type PageProps = {
   params: Promise<{ eventId: string }>;
@@ -252,7 +253,7 @@ export default async function EventOperationsPage({ params, searchParams }: Page
               </span>
               <span className="inline-flex items-center gap-1">
                 <Clock className="size-4" aria-hidden="true" />
-                {event.tee_off_time?.slice(0, 5) ?? "-"}
+                {event.tee_off_time ? `${event.tee_off_time.slice(0, 5)} น.` : UNSET}
               </span>
               <span className="inline-flex items-center gap-1">
                 <MapPin className="size-4" aria-hidden="true" />
@@ -349,8 +350,8 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                         ) : null}
                       </div>
                       <p className="mt-1 text-xs text-[#6b6475]">
-                        {row.members?.member_code ?? "ไม่มีเลขสมาชิก"} · HC {row.members?.handicap ?? "-"} · {row.members?.phone ?? "-"}
-                        {group ? ` · ก๊วน ${group.group_no} (${group.tee_time?.slice(0, 5) ?? "-"} หลุม ${group.start_hole})` : seated ? " · ยังไม่จัดก๊วน" : ""}
+                        {row.members?.member_code ?? "ไม่มีเลขสมาชิก"} · HC {orUnset(row.members?.handicap)} · {formatPhone(row.members?.phone)}
+                        {group ? ` · ก๊วน ${group.group_no} (${group.tee_time ? `${group.tee_time.slice(0, 5)} น.` : "ยังไม่ระบุเวลา"} หลุม ${group.start_hole})` : seated ? " · ยังไม่จัดก๊วน" : ""}
                       </p>
                     </div>
 
@@ -507,7 +508,7 @@ export default async function EventOperationsPage({ params, searchParams }: Page
               <ul className="mt-2 flex flex-wrap gap-2">
                 {unpaired.map((row) => (
                   <li className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-[#3f3a48]" key={row.id}>
-                    {playerName(row)} · HC {row.members?.handicap ?? "-"}
+                    {playerName(row)} · HC {orUnset(row.members?.handicap)}
                     {!isConfirmed(row.status) ? " · ค้างชำระ" : ""}
                   </li>
                 ))}
@@ -521,7 +522,7 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                 const players = playersByGroup.get(group.id) ?? [];
                 const full = players.length >= group.capacity;
                 const handicaps = players.map((p) => p.members?.handicap).filter((h): h is number => typeof h === "number");
-                const average = handicaps.length ? (handicaps.reduce((a, b) => a + b, 0) / handicaps.length).toFixed(1) : "-";
+                const average = handicaps.length ? (handicaps.reduce((a, b) => a + b, 0) / handicaps.length).toFixed(1) : UNSET;
 
                 return (
                   <article className="flex flex-col rounded-lg border border-[#e6e2ee] bg-white" id={`group-${group.id}`} key={group.id}>
@@ -546,7 +547,7 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                               {playerName(row)}
                             </p>
                             <p className="text-xs text-[#6b6475]">
-                              HC {row.members?.handicap ?? "-"}
+                              HC {orUnset(row.members?.handicap)}
                               {!isConfirmed(row.status) ? " · ค้างชำระ" : ""}
                             </p>
                           </div>
@@ -581,7 +582,7 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                         <select className={`${inputClass} h-9`} id={`add-${group.id}`} name="registrationId" required>
                           {unpaired.map((row) => (
                             <option key={row.id} value={row.id}>
-                              {playerName(row)} · HC {row.members?.handicap ?? "-"}
+                              {playerName(row)} · HC {orUnset(row.members?.handicap)}
                             </option>
                           ))}
                         </select>

@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+
+import { ThaiFormValidation } from "@/components/thai-form-validation";
+
 import "./globals.css";
 
 const sarabun = localFont({
@@ -27,6 +30,7 @@ export default function RootLayout({
   return (
     <html lang="th" className={`h-full antialiased ${sarabun.variable}`} suppressHydrationWarning>
       <body className="min-h-full flex flex-col" suppressHydrationWarning>
+        <ThaiFormValidation />
         {children}
       </body>
     </html>

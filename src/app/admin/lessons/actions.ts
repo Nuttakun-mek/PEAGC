@@ -1,6 +1,6 @@
 "use server";
 
-import { fromBangkokInputValue, parseTimeRangesDetailed, planSlots } from "@/lib/lessons/booking";
+import { bangkokDate, fromBangkokInputValue, getBookingPhase, parseTimeRangesDetailed, planSlots } from "@/lib/lessons/booking";
 import { redirectAfterAction as redirect } from "@/lib/navigation";
 import { failureStatus, logDbError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
@@ -35,8 +35,70 @@ function getStringList(formData: FormData, key: string) {
     .filter(Boolean);
 }
 
-function redirectLessons(status: string): never {
-  redirect(`/admin/lessons?status=${encodeURIComponent(status)}`);
+function redirectLessons(status: string, anchor?: string): never {
+  redirect(`/admin/lessons?status=${encodeURIComponent(status)}${anchor ? `#${anchor}` : ""}`);
+}
+
+type Client = Awaited<ReturnType<typeof createClient>>;
+
+/**
+ * Opens member booking now (keeps a close time that is still in the future). Used by the
+ * "เปิดให้จองทันที" button and by the slot forms, so new rounds are not stuck at "ยังไม่เปิด"
+ * just because no registration window was ever set. Returns whether anything changed.
+ */
+async function openBookingWindowNow(supabase: Client, clubId: string, userId: string) {
+  const { data: before, error: readError } = await supabase
+    .from("lesson_booking_settings")
+    .select("*")
+    .eq("club_id", clubId)
+    .maybeSingle();
+
+  if (readError) {
+    logDbError("lesson_booking_settings.open_now.read", readError);
+    return { error: readError, opened: false } as const;
+  }
+  if (getBookingPhase(before) === "open") {
+    return { error: null, opened: false } as const;
+  }
+
+  const now = Date.now();
+  const keepClose = before?.booking_close_at && Date.parse(before.booking_close_at) > now + 60_000;
+  const payload = {
+    booking_close_at: keepClose ? before.booking_close_at : null,
+    booking_open_at: new Date(now).toISOString(),
+    club_id: clubId,
+    updated_by: userId,
+  };
+  const { error } = await supabase.from("lesson_booking_settings").upsert(payload, { onConflict: "club_id" });
+
+  if (error) {
+    logDbError("lesson_booking_settings.open_now", error);
+    return { error, opened: false } as const;
+  }
+
+  await supabase.from("audit_logs").insert({
+    action: "lesson_booking_settings.opened_now",
+    actor_user_id: userId,
+    after_data: payload,
+    before_data: before,
+    club_id: clubId,
+    entity_id: clubId,
+    entity_type: "lesson_booking_settings",
+    metadata: { source: "admin.lessons" },
+  });
+
+  return { error: null, opened: true } as const;
+}
+
+export async function openLessonBookingNow() {
+  const { clubId, supabase, userId } = await requireLessonAdminClub();
+  const result = await openBookingWindowNow(supabase, clubId, userId);
+
+  if (result.error) {
+    redirectLessons(failureStatus("settings-save-failed", result.error), "booking-window");
+  }
+
+  redirectLessons(result.opened ? "booking-opened" : "booking-already-open", "booking-window");
 }
 
 async function requireLessonAdminClub() {
@@ -185,6 +247,7 @@ export async function createLessonSlot(formData: FormData) {
     .select("id")
     .eq("club_id", clubId)
     .eq("id", programId)
+    .is("archived_at", null)
     .maybeSingle();
 
   if (!program) {
@@ -235,7 +298,8 @@ export async function createLessonSlot(formData: FormData) {
     metadata: { source: "admin.lessons" },
   });
 
-  redirectLessons("slot-created");
+  const opened = getBoolean(formData, "openBookingNow") ? await openBookingWindowNow(supabase, clubId, userId) : null;
+  redirectLessons(opened?.opened ? "slot-created-opened" : "slot-created", `slot-${slot.id}`);
 }
 
 export async function updateLessonSlot(formData: FormData) {
@@ -494,6 +558,7 @@ export async function generateLessonSlots(formData: FormData) {
     .select("id")
     .eq("club_id", clubId)
     .eq("id", programId)
+    .is("archived_at", null)
     .maybeSingle();
 
   if (!program) {
@@ -559,7 +624,8 @@ export async function generateLessonSlots(formData: FormData) {
     metadata: { skipped: items.length - rows.length, source: "admin.lessons" },
   });
 
-  redirectLessons(`generated:${created?.length ?? rows.length}:${items.length - rows.length}`);
+  const opened = getBoolean(formData, "openBookingNow") ? await openBookingWindowNow(supabase, clubId, userId) : null;
+  redirectLessons(`generated:${created?.length ?? rows.length}:${items.length - rows.length}${opened?.opened ? ":opened" : ""}`);
 }
 
 export async function removeLessonBooking(formData: FormData) {
@@ -592,4 +658,107 @@ export async function removeLessonBooking(formData: FormData) {
     metadata: { source: "admin.lessons" },
   });
   redirectLessons("booking-removed");
+}
+
+/**
+ * Removes a course from the admin lists and the member portal (soft delete). Refused while any
+ * upcoming round of the course still has members booked; upcoming rounds without bookings are
+ * archived with it. Past rounds stay for history and reports.
+ */
+export async function archiveLessonProgram(formData: FormData) {
+  const programId = getString(formData, "programId");
+  if (!programId) redirectLessons("program-not-found");
+
+  const { clubId, supabase, userId } = await requireLessonAdminClub();
+  const today = bangkokDate();
+  const [{ data: before }, { data: upcoming, error: upcomingError }] = await Promise.all([
+    supabase.from("lesson_programs").select("*").eq("club_id", clubId).eq("id", programId).is("archived_at", null).maybeSingle(),
+    supabase
+      .from("lesson_slots")
+      .select("id, lesson_bookings(id, status)")
+      .eq("club_id", clubId)
+      .eq("program_id", programId)
+      .is("archived_at", null)
+      .gte("lesson_date", today),
+  ]);
+
+  if (!before) redirectLessons("program-not-found");
+  if (upcomingError) {
+    logDbError("lesson_programs.archive.check", upcomingError);
+    redirectLessons(failureStatus("program-archive-failed", upcomingError));
+  }
+
+  type UpcomingSlot = { id: string; lesson_bookings: Array<{ status: string }> | null };
+  const slots = (upcoming ?? []) as UpcomingSlot[];
+  const booked = slots.filter((slot) => (slot.lesson_bookings ?? []).some((booking) => booking.status !== "cancelled"));
+  if (booked.length) {
+    redirectLessons(`program-archive-blocked:${booked.length}`, `program-${programId}`);
+  }
+
+  const now = new Date().toISOString();
+  const { data: saved, error } = await supabase
+    .from("lesson_programs")
+    .update({ archived_at: now, status: "archived", updated_by: userId })
+    .eq("club_id", clubId)
+    .eq("id", programId)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !saved) {
+    logDbError("lesson_programs.archive", error);
+    redirectLessons(failureStatus("program-archive-failed", error));
+  }
+
+  if (slots.length) {
+    const { error: slotError } = await supabase
+      .from("lesson_slots")
+      .update({ archived_at: now, status: "cancelled", updated_by: userId })
+      .eq("club_id", clubId)
+      .in("id", slots.map((slot) => slot.id));
+    if (slotError) logDbError("lesson_programs.archive.slots", slotError);
+  }
+
+  await supabase.from("audit_logs").insert({
+    action: "lesson_program.archived",
+    actor_user_id: userId,
+    before_data: before,
+    club_id: clubId,
+    entity_id: programId,
+    entity_type: "lesson_programs",
+    metadata: { archived_upcoming_slots: slots.length, source: "admin.lessons" },
+  });
+
+  redirectLessons("program-archived", "archived-programs");
+}
+
+export async function restoreLessonProgram(formData: FormData) {
+  const programId = getString(formData, "programId");
+  if (!programId) redirectLessons("program-not-found");
+
+  const { clubId, supabase, userId } = await requireLessonAdminClub();
+  const { data: saved, error } = await supabase
+    .from("lesson_programs")
+    .update({ archived_at: null, status: "inactive", updated_by: userId })
+    .eq("club_id", clubId)
+    .eq("id", programId)
+    .not("archived_at", "is", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !saved) {
+    logDbError("lesson_programs.restore", error);
+    redirectLessons(error ? failureStatus("program-restore-failed", error) : "program-not-found");
+  }
+
+  await supabase.from("audit_logs").insert({
+    action: "lesson_program.restored",
+    actor_user_id: userId,
+    after_data: { archived_at: null, status: "inactive" },
+    club_id: clubId,
+    entity_id: programId,
+    entity_type: "lesson_programs",
+    metadata: { source: "admin.lessons" },
+  });
+
+  redirectLessons("program-restored", `program-${programId}`);
 }

@@ -1,3 +1,5 @@
+import { UNSET } from "@/lib/display";
+
 /** Thai display labels for stored enum values. Keep every admin screen on these maps. */
 
 export const eventStatusLabels: Record<string, string> = {
@@ -40,7 +42,18 @@ export const employeeMatchReasonLabels: Record<string, string> = {
   left_directory: "ไม่อยู่ในฐานสมาชิกสมาคมเดือนล่าสุด",
 };
 
-export function labelFor(map: Record<string, string>, value: string | null | undefined, fallback = "-") {
+export function labelFor(map: Record<string, string>, value: string | null | undefined, fallback = UNSET) {
   if (!value) return fallback;
   return map[value] ?? value;
 }
+
+export const roleLabels: Record<string, string> = {
+  auditor: "ผู้ตรวจสอบ",
+  club_admin: "ผู้ดูแลชมรม",
+  committee: "กรรมการ",
+  finance_officer: "เจ้าหน้าที่การเงิน",
+  member: "สมาชิก",
+  platform_owner: "เจ้าของระบบ",
+  scoring_officer: "เจ้าหน้าที่บันทึกคะแนน",
+  tournament_director: "ผู้อำนวยการแข่งขัน",
+};

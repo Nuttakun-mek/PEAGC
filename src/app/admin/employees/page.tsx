@@ -24,6 +24,8 @@ import { isDirectoryStale } from "@/lib/directory/import";
 import { formatBangkokDateTime } from "@/lib/lessons/booking";
 import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
+import { orUnset } from "@/lib/display";
+import { EMAIL_ERROR } from "@/lib/validation";
 
 type AdminEmployeesPageProps = {
   searchParams: Promise<{
@@ -111,6 +113,8 @@ const statusMessages: Record<string, string> = {
   "text-corrupted": "ข้อความภาษาไทยเสียหาย (แสดงเป็น ???) กรุณาพิมพ์ใหม่ก่อนบันทึก",
   created: "เพิ่มรายชื่อแล้ว",
   "missing-required": "กรอกรหัสพนักงานและชื่อ-นามสกุล",
+  "email-invalid": EMAIL_ERROR,
+  "employee-code-taken": "บันทึกไม่สำเร็จ รหัสพนักงานนี้มีอยู่ในฐานแล้ว (ไม่สนใจตัวพิมพ์เล็ก/ใหญ่และช่องว่าง) กรุณาค้นหาแล้วแก้ไขรายการเดิมแทน",
   "update-failed": "แก้ไขไม่สำเร็จ",
   updated: "บันทึกแล้ว",
 };
@@ -143,16 +147,21 @@ function EmployeeForm({
           <span className="text-sm font-semibold text-[#3f3a48]">รหัสพนักงาน</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+            autoComplete="off"
+            data-required-message="กรุณากรอกรหัสพนักงาน"
             defaultValue={employee?.employee_code ?? ""}
             disabled={disabled}
+            maxLength={30}
             name="employeeCode"
             required
           />
+          <span className="mt-1 block text-xs text-[#6b6475]">ห้ามซ้ำ ระบบจะตัดช่องว่างและแปลงเป็นตัวพิมพ์ใหญ่</span>
         </label>
         <label className="block md:col-span-2">
           <span className="text-sm font-semibold text-[#3f3a48]">ชื่อ-นามสกุล</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+            data-required-message="กรุณากรอกชื่อ-นามสกุล"
             defaultValue={employee?.full_name ?? ""}
             disabled={disabled}
             name="fullName"
@@ -196,9 +205,11 @@ function EmployeeForm({
           <span className="text-sm font-semibold text-[#3f3a48]">อีเมลองค์กร</span>
           <input
             className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10"
+            data-invalid-message={EMAIL_ERROR}
             defaultValue={employee?.email ?? ""}
             disabled={disabled}
             name="email"
+            placeholder="name@pea.co.th"
             type="email"
           />
         </label>
@@ -655,9 +666,9 @@ export default async function AdminEmployeesPage({
                       </p>
                     </div>
                     <div className="text-sm text-[#3f3a48]">
-                      <p>{employee.position ?? employee.department ?? "-"}</p>
+                      <p>{orUnset(employee.position ?? employee.department)}</p>
                       <p className="mt-1 text-[#6b6475]">
-                        {employee.work_line ?? employee.affiliation ?? "-"}
+                        {orUnset(employee.work_line ?? employee.affiliation)}
                       </p>
                     </div>
                     <div className="text-sm text-[#3f3a48]">
@@ -695,7 +706,7 @@ export default async function AdminEmployeesPage({
                       ].map((item) => (
                         <div key={item.label}>
                           <p className="font-semibold text-[#6b6475]">{item.label}</p>
-                          <p className="mt-1 text-[#722257]">{item.value || "-"}</p>
+                          <p className="mt-1 text-[#722257]">{orUnset(item.value)}</p>
                         </div>
                       ))}
                     </div>

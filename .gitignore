@@ -42,3 +42,6 @@ dev*.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Local backups written by scripts/cleanup-test-data.mjs (contain member data)
+test-data-backup-*.json

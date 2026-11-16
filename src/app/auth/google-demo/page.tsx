@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -11,6 +12,8 @@ import {
   Mail,
   ShieldCheck,
 } from "lucide-react";
+
+import { isAuthBypassEnabled } from "@/lib/supabase/env";
 
 type GoogleDemoPageProps = {
   searchParams: Promise<{ step?: string }>;
@@ -92,6 +95,11 @@ function PageShell({
 }
 
 export default async function GoogleDemoPage({ searchParams }: GoogleDemoPageProps) {
+  // Walkthrough mock-ups for local demos only; production has no such pages.
+  if (!isAuthBypassEnabled()) {
+    notFound();
+  }
+
   const params = await searchParams;
   const step = getStep(params.step);
 

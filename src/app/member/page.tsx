@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { signOut } from "@/app/actions/auth";
+import { UNSET, formatThaiDate, orUnset } from "@/lib/display";
 import { MemberAvatar } from "@/components/member-avatar";
 import { MemberCard } from "@/components/member-card";
 import { StatusBanner, toneForStatus } from "@/components/status-banner";
@@ -316,8 +317,8 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
         }
       : null;
   const currentMember = member ?? demoMember;
-  const displayName =
-    currentMember?.nickname || currentMember?.full_name || access.displayName;
+  // One name everywhere: the member's full name (the same name admins see).
+  const displayName = currentMember?.full_name || access.displayName;
   const profileHref = access.isBypass ? "/profile?bypass=member" : "/profile";
   const isPending = currentMember?.status === "pending_verification";
   // Admin on/off switches per module (see /admin/settings). Demo mode shows everything.
@@ -564,7 +565,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
 
   return (
     <main className="min-h-screen bg-transparent px-4 py-6 text-[#2f3137]">
-      <div className="mx-auto grid w-full max-w-[1500px] gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="mx-auto grid w-full max-w-[1500px] grid-cols-1 gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
         <section className="rounded-lg border border-[#e2e8ef] bg-white/95 p-5 shadow-[0_8px_24px_rgba(30,41,59,0.05)]">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -634,10 +635,10 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
 
           <dl className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-[#e6e2ee] bg-white/70 p-4 text-sm">
             {[
-              ["แต้มต่อ", currentMember?.handicap ?? "-"],
-              ["ระดับฝีมือ", currentMember?.skill_level === "beginner" ? "เริ่มต้น" : currentMember?.skill_level === "intermediate" ? "ปานกลาง" : currentMember?.skill_level === "advanced" ? "ชำนาญ" : "-"],
-              ["หน่วยงาน", currentMember?.department ?? currentMember?.organization ?? "-"],
-              ["ตำแหน่ง", currentMember?.position ?? currentMember?.affiliation ?? "-"],
+              ["แต้มต่อ", orUnset(currentMember?.handicap)],
+              ["ระดับฝีมือ", currentMember?.skill_level === "beginner" ? "เริ่มต้น" : currentMember?.skill_level === "intermediate" ? "ปานกลาง" : currentMember?.skill_level === "advanced" ? "ชำนาญ" : UNSET],
+              ["หน่วยงาน", orUnset(currentMember?.department ?? currentMember?.organization)],
+              ["ตำแหน่ง", orUnset(currentMember?.position ?? currentMember?.affiliation)],
             ].map(([label, value]) => (
               <div key={String(label)}>
                 <dt className="text-xs text-[#6b6475]">{label}</dt>
@@ -688,7 +689,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
           ) : null}
         </section>
 
-        <section className="grid min-w-0 gap-4">
+        <section className="grid min-w-0 grid-cols-1 gap-4">
           {nothingOpen ? (
             <article className="rounded-lg border border-dashed border-[#d9d3e6] bg-white/80 p-8 text-center">
               <p className="text-lg font-semibold text-[#722257]">ระบบกำลังจะเปิดให้บริการ</p>
@@ -822,8 +823,8 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                             <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#6b6475]">
                               <span className="flex items-center gap-1">
                                 <CalendarDays className="size-3.5" aria-hidden="true" />
-                                {event?.event_date ?? "-"} ·{" "}
-                                {event?.tee_off_time?.slice(0, 5) ?? "-"}
+                                {formatThaiDate(event?.event_date)}
+                                {event?.tee_off_time ? ` · ${event.tee_off_time.slice(0, 5)} น.` : ""}
                               </span>
                               <span className="flex items-center gap-1">
                                 <MapPin className="size-3.5" aria-hidden="true" />
@@ -844,7 +845,7 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                                 <p className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-[#edf9f3] px-3 py-2 text-xs font-semibold text-[#16794b]">
                                   {group ? (
                                     <span>
-                                      ก๊วน {group.group_no} · ออกตัว {group.tee_time?.slice(0, 5) ?? "-"} น. · หลุม {group.start_hole}
+                                      ก๊วน {group.group_no} · ออกตัว {group.tee_time ? `${group.tee_time.slice(0, 5)} น.` : UNSET} · หลุม {group.start_hole}
                                     </span>
                                   ) : null}
                                   {registration.checked_in_at ? <span>· เช็กอินแล้ว</span> : null}
@@ -939,9 +940,8 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                             <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#6b6475]">
                               <span className="flex items-center gap-1">
                                 <Clock className="size-3.5" aria-hidden="true" />
-                                {slot?.lesson_date ?? "-"} ·{" "}
-                                {slot?.start_time?.slice(0, 5) ?? "-"}-
-                                {slot?.end_time?.slice(0, 5) ?? "-"}
+                                {formatThaiDate(slot?.lesson_date)}
+                                {slot?.start_time ? ` · ${slot.start_time.slice(0, 5)}-${slot.end_time?.slice(0, 5) ?? ""} น.` : ""}
                               </span>
                               <span className="flex items-center gap-1">
                                 <MapPin className="size-3.5" aria-hidden="true" />
@@ -1023,7 +1023,8 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                           <div className="mt-2 flex flex-wrap gap-3 text-sm text-[#6b6475]">
                             <span className="flex items-center gap-1">
                               <CalendarDays className="size-4" aria-hidden="true" />
-                              {event.event_date} · {event.tee_off_time?.slice(0, 5) ?? "-"}
+                              {formatThaiDate(event.event_date)}
+                              {event.tee_off_time ? ` · ${event.tee_off_time.slice(0, 5)} น.` : ""}
                             </span>
                             <span className="flex items-center gap-1">
                               <MapPin className="size-4" aria-hidden="true" />
@@ -1178,16 +1179,16 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
                             </span>
                           </div>
                           <p className="mt-1 text-sm text-[#6b6475]">
-                            {event?.event_date ?? "-"} · {event?.venue ?? "ยังไม่ระบุสนาม"}
+                            {formatThaiDate(event?.event_date)} · {event?.venue ?? "ยังไม่ระบุสนาม"}
                           </p>
                         </div>
                         <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
                           {[
-                            ["คะแนนรวม", score.gross_score ?? "-"],
-                            ["คะแนนสุทธิ", score.net_score ?? "-"],
-                            ["สเตเบิลฟอร์ด", score.stableford_points ?? "-"],
-                            ["กลุ่ม", score.flight ?? "-"],
-                            ["อันดับ", score.overall_rank ? `#${score.overall_rank}` : "-"],
+                            ["คะแนนรวม", orUnset(score.gross_score)],
+                            ["คะแนนสุทธิ", orUnset(score.net_score)],
+                            ["สเตเบิลฟอร์ด", orUnset(score.stableford_points)],
+                            ["กลุ่ม", orUnset(score.flight)],
+                            ["อันดับ", score.overall_rank ? `#${score.overall_rank}` : UNSET],
                           ].map(([label, value]) => (
                             <div className="rounded-md bg-white px-3 py-2" key={label}>
                               <p className="text-xs font-semibold text-[#6b6475]">

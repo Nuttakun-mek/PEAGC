@@ -1,37 +1,86 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+/** How long a success/info result stays on screen before it fades out on its own. */
+const AUTO_HIDE_MS = 7000;
 
 /**
- * Client wrapper for StatusBanner. A floating banner sticks to the top of the viewport so the
- * result of a save is visible even when the form that was submitted sits far down the page
- * (the lesson generator, edit panels at the bottom of long lists), and can be dismissed.
+ * Client wrapper for StatusBanner. A floating banner is the result of the action that was just
+ * submitted: it shows as a toast that stays visible wherever the form was on the page, and it
+ * goes away once the admin moves on (types into a form, opens another item, submits again) so
+ * the message of the previous item never sits on top of the next one. Successes also fade out
+ * by themselves; errors stay until dismissed or acted on.
  */
 export function StatusBannerShell({
   children,
   className,
   floating,
+  tone,
 }: {
   children: React.ReactNode;
   className: string;
   floating: boolean;
+  tone: "success" | "info" | "warning" | "error";
 }) {
   // Every server render (each save) delivers a new `children` element, so remembering which
   // one was dismissed brings the banner back for the next save even if the text is the same.
   const [dismissed, setDismissed] = useState<React.ReactNode>(null);
+  const hidden = dismissed !== null && dismissed === children;
+  const autoHide = floating && (tone === "success" || tone === "info");
 
-  if (dismissed !== null && dismissed === children) {
+  useEffect(() => {
+    if (!floating || hidden) return;
+
+    // The result is shown; drop it from the address bar so reload/back does not replay it.
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("status")) {
+      url.searchParams.delete("status");
+      // `null` state lets the Next router copy its own state and sync to the new URL.
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+
+    const dismiss = () => setDismissed(children);
+    const onInput = (event: Event) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest("form")) dismiss();
+    };
+    const onClick = (event: MouseEvent) => {
+      const summary = event.target instanceof Element ? event.target.closest("summary") : null;
+      if (summary?.parentElement instanceof HTMLDetailsElement && !summary.parentElement.open) dismiss();
+    };
+    const onSubmit = () => dismiss();
+
+    document.addEventListener("input", onInput, true);
+    document.addEventListener("click", onClick, true);
+    document.addEventListener("submit", onSubmit, true);
+    const timer = autoHide ? window.setTimeout(dismiss, AUTO_HIDE_MS) : null;
+
+    return () => {
+      document.removeEventListener("input", onInput, true);
+      document.removeEventListener("click", onClick, true);
+      document.removeEventListener("submit", onSubmit, true);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [autoHide, children, floating, hidden]);
+
+  if (hidden) {
     return null;
   }
 
+  if (!floating) {
+    return (
+      <div className={className} role="status">
+        {children}
+      </div>
+    );
+  }
+
   return (
-    <div
-      className={`${className} ${floating ? "sticky top-3 z-30 shadow-[0_12px_32px_rgba(16,24,40,0.14)] lg:top-20" : ""}`}
-      role="status"
-    >
-      {children}
-      {floating ? (
+    <div className="status-toast-region" role={tone === "error" ? "alert" : "status"}>
+      <div className={`status-toast ${className}`}>
+        {children}
         <button
           aria-label="ปิดข้อความ"
           className="-m-1 rounded p-1 opacity-70 transition hover:opacity-100"
@@ -40,7 +89,8 @@ export function StatusBannerShell({
         >
           <X className="size-4" aria-hidden="true" />
         </button>
-      ) : null}
+        {autoHide ? <span aria-hidden="true" className="status-toast-timer" style={{ animationDuration: `${AUTO_HIDE_MS}ms` }} /> : null}
+      </div>
     </div>
   );
 }

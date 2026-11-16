@@ -4,7 +4,8 @@ import { StatusBanner } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
 import { getStaffClub } from "@/lib/auth/staff";
 import { baht, eventAttendance, financeByEvent, lessonUsageByProgram, percent } from "@/lib/reports/aggregate";
-import { loadReportData, reportPeriod, reportRoles } from "@/lib/reports/load";
+import { formatThaiDate } from "@/lib/display";
+import { loadReportData, reportPeriod, reportPresets, reportRoles } from "@/lib/reports/load";
 
 type PageProps = { searchParams: Promise<{ bypass?: string; from?: string; to?: string }> };
 
@@ -56,8 +57,8 @@ export default async function ReportsPage({ searchParams }: PageProps) {
   );
 
   const kpis = [
-    { icon: CircleDollarSign, label: "รายรับที่อนุมัติ", value: data.paymentAccess ? baht(finance.totals.approved) : "-" },
-    { icon: CircleDollarSign, label: "รอตรวจสอบ", value: data.paymentAccess ? baht(finance.totals.pending) : "-" },
+    { icon: CircleDollarSign, label: "รายรับที่อนุมัติ", value: data.paymentAccess ? baht(finance.totals.approved) : "ไม่มีสิทธิ์ดู" },
+    { icon: CircleDollarSign, label: "สลิปรอตรวจ", value: data.paymentAccess ? baht(finance.totals.pending) : "ไม่มีสิทธิ์ดู" },
     { icon: GraduationCap, label: "ที่นั่งเรียนที่จอง", value: `${lessonTotals.booked}/${lessonTotals.seats} (${percent(lessonTotals.seats ? lessonTotals.booked / lessonTotals.seats : null)})` },
     { icon: UsersRound, label: "สมาชิกใช้งาน / รออนุมัติ", value: `${data.members.active} / ${data.members.pending}` },
   ];
@@ -71,14 +72,33 @@ export default async function ReportsPage({ searchParams }: PageProps) {
             <h1 className="mt-1 flex items-center gap-2 text-3xl font-semibold text-[#722257]">
               <BarChart3 className="size-7" aria-hidden="true" /> รายงานการเงินและการใช้งาน
             </h1>
-            <p className="mt-2 text-sm text-[#6b6475]">ช่วง {period.from} ถึง {period.to} · สมาชิกใหม่ในช่วงนี้ {data.members.new} คน</p>
+            <p className="mt-2 text-sm text-[#6b6475]">
+              ช่วง {formatThaiDate(period.from)} ถึง {formatThaiDate(period.to)} · สมาชิกใหม่ในช่วงนี้ {data.members.new} คน (ไม่นับที่เก็บถาวร)
+            </p>
           </div>
           <form className="flex flex-wrap items-end gap-2">
-            <label className="text-xs font-semibold">ตั้งแต่<input className="mt-1 block h-10 rounded-md border border-[#d9d3e6] px-2 text-sm" defaultValue={period.from} name="from" type="date" /></label>
-            <label className="text-xs font-semibold">ถึง<input className="mt-1 block h-10 rounded-md border border-[#d9d3e6] px-2 text-sm" defaultValue={period.to} name="to" type="date" /></label>
+            <label className="text-xs font-semibold">ตั้งแต่<input className="mt-1 block h-10 rounded-md border border-[#d9d3e6] bg-white px-2 text-sm" defaultValue={period.from} name="from" required type="date" /></label>
+            <label className="text-xs font-semibold">ถึง<input className="mt-1 block h-10 rounded-md border border-[#d9d3e6] bg-white px-2 text-sm" defaultValue={period.to} name="to" required type="date" /></label>
             <button className="h-10 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white" type="submit">แสดง</button>
           </form>
         </div>
+
+        <nav aria-label="ช่วงเวลาด่วน" className="mt-4 flex flex-wrap gap-2">
+          {reportPresets().map((preset) => {
+            const active = preset.from === period.from && preset.to === period.to;
+            return (
+              <a
+                aria-current={active ? "true" : undefined}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${active ? "border-[#722257] bg-[#722257] text-white" : "border-[#d9d3e6] bg-white text-[#722257] hover:border-[#722257]"}`}
+                href={`/admin/reports?from=${preset.from}&to=${preset.to}`}
+                key={preset.label}
+              >
+                {preset.label}
+              </a>
+            );
+          })}
+          <span className="self-center text-xs text-[#6b6475]">เลือกวันที่ในอนาคตได้ เพื่อดูรอบเรียนและกิจกรรมที่กำลังจะมาถึง</span>
+        </nav>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           {kpis.map((item) => (
@@ -103,7 +123,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
           ) : finance.lines.length ? (
             <div className="mt-3 overflow-x-auto">
               <table className="min-w-full text-sm">
-                <thead><tr><th className={th}>กิจกรรม</th><th className={th}>อนุมัติแล้ว</th><th className={th}>รอตรวจ</th><th className={th}>คืนเงิน</th><th className={th}>สุทธิ</th></tr></thead>
+                <thead><tr><th className={th}>กิจกรรม</th><th className={th}>อนุมัติแล้ว</th><th className={th}>สลิปรอตรวจ</th><th className={th}>คืนเงิน</th><th className={th}>สุทธิ</th></tr></thead>
                 <tbody className="divide-y divide-[#f3f0f6]">
                   {finance.lines.map((line) => (
                     <tr key={line.eventId}>
@@ -157,7 +177,7 @@ export default async function ReportsPage({ searchParams }: PageProps) {
                 <tbody className="divide-y divide-[#f3f0f6]">
                   {events.map((row) => (
                     <tr key={row.eventId}>
-                      <td className={td}>{row.eventDate}</td>
+                      <td className={td}>{formatThaiDate(row.eventDate)}</td>
                       <td className="py-2 pr-4"><a className="font-semibold text-[#722257] hover:underline" href={`/admin/events/${row.eventId}`}>{row.name}</a></td>
                       <td className={td}>{row.seats}{row.capacity ? `/${row.capacity}` : ""}</td>
                       <td className="py-2 pr-4"><Ratio value={row.fill} /></td>

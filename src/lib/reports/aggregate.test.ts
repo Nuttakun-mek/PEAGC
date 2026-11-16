@@ -3,6 +3,14 @@ import { describe, expect, it } from "vitest";
 import { eventAttendance, financeByEvent, lessonUsageByProgram, percent } from "./aggregate";
 
 describe("financeByEvent", () => {
+  it("does not count a pending record without the member's slip as money to review", () => {
+    const { totals } = financeByEvent([
+      { amount: 500, event_id: "e1", event_name: "A", has_slip: false, status: "review" },
+      { amount: 700, event_id: "e1", event_name: "A", has_slip: true, status: "review" },
+    ]);
+    expect(totals.pending).toBe(700);
+  });
+
   it("splits approved, pending and refunded per event with totals", () => {
     const { lines, totals } = financeByEvent([
       { amount: "1500", event_id: "e1", event_name: "Cup", status: "approved" },

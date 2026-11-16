@@ -6,6 +6,7 @@ import { resolveAccess } from "@/lib/auth/access";
 import { announcementStatusLabels, labelFor } from "@/lib/labels";
 import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
+import { formatThaiDate, orUnset } from "@/lib/display";
 
 import { archiveAnnouncement, createAward, deleteAward, saveAnnouncement } from "./actions";
 
@@ -98,13 +99,13 @@ export default async function AdminContentPage({ searchParams }: { searchParams:
 
       <section className="rounded-lg border border-[#e2e8ef] bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><Award className="size-5 text-[#b17b0a]"/><h2 className="text-lg font-semibold">เพิ่มรางวัลสมาชิก</h2></div>
         <form action={createAward} className="mt-4 grid gap-3"><select className={inputClass} name="memberId" required><option value="">เลือกสมาชิก</option>{members?.map((m) => <option key={m.id} value={m.id}>{m.member_code} · {m.full_name}</option>)}</select><input className={inputClass} name="title" placeholder="ชื่อรางวัล" required/><div className="grid gap-3 sm:grid-cols-2"><select className={inputClass} name="eventId"><option value="">ไม่ผูกกิจกรรม</option>{events?.map((e) => <option key={e.id} value={e.id}>{e.name}</option>)}</select><input className={inputClass} name="awardedAt" required type="date"/></div><input className={inputClass} name="awardType" placeholder="ประเภทรางวัล เช่น ชนะเลิศ"/><input className={inputClass} name="note" placeholder="หมายเหตุ"/><button className="flex h-10 w-fit items-center gap-2 rounded-md bg-[#C69214] px-4 text-sm font-semibold text-white"><Save className="size-4"/>บันทึกรางวัล</button></form>
-        <div className="mt-5 divide-y divide-[#edf0f3] border-t border-[#edf0f3]">{awards?.map((item) => <div className="flex items-start justify-between gap-3 py-3" key={item.id}><div><p className="text-sm font-semibold">{item.title}</p><p className="mt-1 text-xs text-[#667085]">{first(item.members)?.full_name ?? "-"} · {first(item.events)?.name ?? item.award_type}</p></div><form action={deleteAward}><input name="id" type="hidden" value={item.id}/><ConfirmSubmitButton className="flex h-9 items-center gap-1.5 rounded-md border border-[#efcbd0] bg-white px-3 text-xs font-semibold text-[#a33a46] hover:bg-[#fff7f7]" message="ยืนยันลบรางวัลนี้"><Trash2 className="size-3.5" aria-hidden="true"/>ลบ</ConfirmSubmitButton></form></div>)}</div>
+        <div className="mt-5 divide-y divide-[#edf0f3] border-t border-[#edf0f3]">{awards?.map((item) => <div className="flex items-start justify-between gap-3 py-3" key={item.id}><div><p className="text-sm font-semibold">{item.title}</p><p className="mt-1 text-xs text-[#667085]">{orUnset(first(item.members)?.full_name)} · {first(item.events)?.name ?? item.award_type}</p></div><form action={deleteAward}><input name="id" type="hidden" value={item.id}/><ConfirmSubmitButton className="flex h-9 items-center gap-1.5 rounded-md border border-[#efcbd0] bg-white px-3 text-xs font-semibold text-[#a33a46] hover:bg-[#fff7f7]" message="ยืนยันลบรางวัลนี้"><Trash2 className="size-3.5" aria-hidden="true"/>ลบ</ConfirmSubmitButton></form></div>)}</div>
       </section>
     </div>
 
     <section className="mt-5 rounded-lg border border-[#e2e8ef] bg-white p-5 shadow-sm"><div className="flex items-center gap-2"><Flag className="size-5 text-[#722257]"/><h2 className="text-lg font-semibold">คะแนนการแข่งขัน</h2></div>
       <p className="mt-2 text-sm text-[#667085]">กรอกคะแนน สแกนการ์ด ยืนยัน และประกาศผล ทำในหน้าคะแนนของแต่ละกิจกรรม (เก็บทุกการ์ดเป็นประวัติ ไม่แก้ทับ)</p>
-      <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{events?.slice(0, 12).map((event) => <li key={event.id}><a className="flex items-center justify-between rounded-md border border-[#e2e8ef] px-3 py-2 text-sm hover:border-[#722257]" href={`/admin/events/${event.id}/scoring`}><span className="font-semibold">{event.name}</span><span className="text-xs text-[#98a2b3]">{event.event_date}</span></a></li>)}</ul>
+      <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{events?.slice(0, 12).map((event) => <li key={event.id}><a className="flex items-center justify-between rounded-md border border-[#e2e8ef] px-3 py-2 text-sm hover:border-[#722257]" href={`/admin/events/${event.id}/scoring`}><span className="font-semibold">{event.name}</span><span className="text-xs text-[#98a2b3]">{formatThaiDate(event.event_date)}</span></a></li>)}</ul>
     </section>
   </div></main>;
 }

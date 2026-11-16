@@ -14,6 +14,7 @@ import {
 
 import { createEvent, setEventStatus, updateEvent } from "@/app/admin/events/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { CreatePanel } from "@/components/create-panel";
 import { LoadErrorBanner, StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
 import { holdsSeat } from "@/lib/events/pairing";
@@ -21,6 +22,7 @@ import { pickFilter } from "@/lib/filters";
 import { eventStatusLabels, eventStatusOptions, eventTypeLabels } from "@/lib/labels";
 import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
+import { UNSET, formatPhone, formatThaiDateWithWeekday, orUnset } from "@/lib/display";
 
 type AdminEventsPageProps = {
   searchParams: Promise<{
@@ -177,14 +179,16 @@ function EventForm({
   return (
     <form action={action} className="grid gap-4">
       {event ? <input name="eventId" type="hidden" value={event.id} /> : null}
-      <div className="flex items-center gap-2">
-        {event ? (
-          <Pencil className="size-4 text-[#722257]" aria-hidden="true" />
-        ) : (
-          <Plus className="size-4 text-[#722257]" aria-hidden="true" />
-        )}
-        <h2 className="text-lg font-semibold text-[#722257]">{title}</h2>
-      </div>
+      {title ? (
+        <div className="flex items-center gap-2">
+          {event ? (
+            <Pencil className="size-4 text-[#722257]" aria-hidden="true" />
+          ) : (
+            <Plus className="size-4 text-[#722257]" aria-hidden="true" />
+          )}
+          <h2 className="text-lg font-semibold text-[#722257]">{title}</h2>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
         <label className="block">
@@ -465,27 +469,31 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3">
+        <div className="mt-6 grid grid-cols-3 gap-3">
           {[
             { label: "กิจกรรมที่แสดง", value: events.length },
             { label: "เปิดรับสมัคร", value: openCount },
             { label: "ฉบับร่าง", value: draftCount },
           ].map((item) => (
             <article
-              className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
+              className="rounded-lg border border-[#e6e2ee] bg-white/95 p-4 shadow-[0_10px_30px_rgba(114,34,87,0.06)] sm:p-5"
               key={item.label}
             >
               <p className="text-sm font-semibold text-[#6b6475]">{item.label}</p>
-              <p className="mt-2 text-3xl font-semibold text-[#722257]">
+              <p className="mt-2 text-2xl font-semibold tabular-nums text-[#722257] sm:text-3xl">
                 {item.value}
               </p>
             </article>
           ))}
         </div>
 
-        <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-          <EventForm action={createEvent} disabled={access.isBypass} title="สร้างกิจกรรมใหม่" />
-        </section>
+        <CreatePanel
+          defaultOpen={Boolean(params.status && !params.event && toneForStatus(params.status) === "error")}
+          hint="ตั้งชื่อ วันที่ ราคา และจำนวนรับ แล้วเปิดรับสมัครเมื่อพร้อม"
+          title="สร้างกิจกรรมใหม่"
+        >
+          <EventForm action={createEvent} disabled={access.isBypass} title="" />
+        </CreatePanel>
 
         <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
           <div className="border-b border-[#e6e2ee] p-5">
@@ -559,9 +567,9 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                       </p>
                     </div>
                     <div className="text-sm text-[#3f3a48]">
-                      <p>{event.event_date}</p>
+                      <p>{formatThaiDateWithWeekday(event.event_date)}</p>
                       <p className="mt-1 text-[#6b6475]">
-                        เวลาออกรอบ {event.tee_off_time?.slice(0, 5) ?? "-"}
+                        เวลาออกรอบ {event.tee_off_time ? `${event.tee_off_time.slice(0, 5)} น.` : UNSET}
                       </p>
                     </div>
                     <div className="text-sm text-[#3f3a48]">
@@ -570,7 +578,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                         {event.capacity ? ` / ${event.capacity} คน` : " คน"}
                       </p>
                       <p className="mt-1 text-[#6b6475]">
-                        สมาชิก {event.member_price.toLocaleString()} บาท
+                        สมาชิก {event.member_price.toLocaleString("th-TH")} บาท
                       </p>
                     </div>
                     <span className="w-fit rounded-md border border-[#d9d3e6] px-3 py-2 text-sm font-semibold text-[#722257] group-open:bg-white/70">
@@ -632,7 +640,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                               <div>
                                 <p className="font-semibold text-[#3f3a48]">{registration.members?.full_name ?? "ผู้สมัคร"}</p>
                                 <p className="mt-0.5 text-xs text-[#6b6475]">
-                                  {registration.members?.member_code ?? "ยังไม่มีเลขสมาชิก"} · {registration.members?.phone ?? "-"}
+                                  {registration.members?.member_code ?? "ยังไม่มีเลขสมาชิก"} · {formatPhone(registration.members?.phone)}
                                 </p>
                               </div>
                               <span className="text-xs font-semibold text-[#722257]">
@@ -650,7 +658,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                         <MapPin className="mt-0.5 size-4 text-[#722257]" aria-hidden="true" />
                         <div>
                           <p className="font-semibold text-[#6b6475]">สนาม</p>
-                          <p className="mt-1 text-[#722257]">{event.venue ?? "-"}</p>
+                          <p className="mt-1 text-[#722257]">{orUnset(event.venue)}</p>
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
@@ -658,7 +666,7 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                         <div>
                           <p className="font-semibold text-[#6b6475]">จำนวนรับ</p>
                           <p className="mt-1 text-[#722257]">
-                            {event.capacity ?? "-"} คน
+                            {event.capacity ? `${event.capacity} คน` : "ไม่จำกัด"}
                           </p>
                         </div>
                       </div>
@@ -667,8 +675,8 @@ export default async function AdminEventsPage({ searchParams }: AdminEventsPageP
                         <div>
                           <p className="font-semibold text-[#6b6475]">ราคา</p>
                           <p className="mt-1 text-[#722257]">
-                            สมาชิก {event.member_price.toLocaleString()} / แขก{" "}
-                            {event.guest_price.toLocaleString()}
+                            สมาชิก {event.member_price.toLocaleString("th-TH")} / แขก{" "}
+                            {event.guest_price.toLocaleString("th-TH")}
                           </p>
                         </div>
                       </div>

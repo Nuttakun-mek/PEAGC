@@ -3,6 +3,8 @@
 import { redirectAfterAction as redirect } from "@/lib/navigation";
 
 import { fromBangkokInputValue } from "@/lib/lessons/booking";
+import { needsNoSlipReason } from "@/lib/payments";
+import { failureStatus, logDbError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
 const paymentAdminRoles = ["platform_owner", "club_admin", "finance_officer"];
@@ -18,14 +20,22 @@ function getNumber(formData: FormData, key: string) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function redirectPayments(status: string, registrationId?: string): never {
+function redirectPayments(status: string, registrationId?: string, keep?: { event?: string; q?: string; stage?: string }): never {
   const params = new URLSearchParams({ status });
 
   if (registrationId) {
     params.set("registration", registrationId);
   }
+  // Keep the list the admin was working in (filters live in their own params, not in `status`).
+  for (const [key, value] of Object.entries(keep ?? {})) {
+    if (value) params.set(key, value);
+  }
 
-  redirect(`/admin/payments?${params.toString()}`);
+  redirect(`/admin/payments?${params.toString()}${registrationId ? `#registration-${registrationId}` : ""}`);
+}
+
+function keepFilters(formData: FormData) {
+  return { event: getString(formData, "keepEvent"), q: getString(formData, "keepQ"), stage: getString(formData, "keepStage") };
 }
 
 async function requirePaymentAdminClub() {
@@ -60,13 +70,17 @@ export async function updatePaymentReview(formData: FormData) {
   const note = getString(formData, "note");
   const amount = getNumber(formData, "amount");
   const transferredAt = getString(formData, "transferredAt");
+  const keep = keepFilters(formData);
 
   if (!registrationId) {
-    redirectPayments("missing-registration");
+    redirectPayments("missing-registration", undefined, keep);
   }
 
   if (!["pending", "review", "approved", "rejected", "refunded"].includes(paymentStatus)) {
-    redirectPayments("invalid-status", registrationId);
+    redirectPayments("invalid-status", registrationId, keep);
+  }
+  if (amount < 0) {
+    redirectPayments("amount-invalid", registrationId, keep);
   }
 
   const { clubId, supabase, userId } = await requirePaymentAdminClub();
@@ -78,7 +92,7 @@ export async function updatePaymentReview(formData: FormData) {
     .maybeSingle();
 
   if (!registration) {
-    redirectPayments("missing-registration");
+    redirectPayments("missing-registration", undefined, keep);
   }
 
   const paymentPayload = {
@@ -103,6 +117,13 @@ export async function updatePaymentReview(formData: FormData) {
         .maybeSingle()
     : { data: null };
 
+  // Money approved without the member's slip needs a written reason (cash at the venue,
+  // checked against the bank statement, ...). The slip is read from the record, not the form.
+  const hasSlip = Boolean(beforePayment?.slip_file_id);
+  if (needsNoSlipReason({ hasSlip, note, status: paymentStatus })) {
+    redirectPayments("approve-needs-reason", registrationId, keep);
+  }
+
   const paymentResult = paymentId
     ? await supabase
         .from("payment_records")
@@ -121,7 +142,8 @@ export async function updatePaymentReview(formData: FormData) {
         .single();
 
   if (paymentResult.error || !paymentResult.data) {
-    redirectPayments("payment-update-failed", registrationId);
+    logDbError("payment_records.review", paymentResult.error);
+    redirectPayments(failureStatus("payment-update-failed", paymentResult.error), registrationId, keep);
   }
 
   // A waitlisted registration keeps its place in the queue; approving money must not
@@ -149,7 +171,8 @@ export async function updatePaymentReview(formData: FormData) {
     .select("id");
 
   if (registrationError || !updatedRegistrations?.length) {
-    redirectPayments("registration-update-failed", registrationId);
+    logDbError("event_registrations.payment_status", registrationError);
+    redirectPayments("registration-update-failed", registrationId, keep);
   }
 
   await supabase.from("audit_logs").insert({
@@ -167,10 +190,11 @@ export async function updatePaymentReview(formData: FormData) {
     entity_id: paymentResult.data.id,
     entity_type: "payment_records",
     metadata: {
+      approved_without_slip: paymentStatus === "approved" && !hasSlip,
       registration_id: registrationId,
       source: "admin.payments",
     },
   });
 
-  redirectPayments("payment-updated", registrationId);
+  redirectPayments(paymentStatus === "approved" ? "payment-approved" : "payment-updated", registrationId, keep);
 }

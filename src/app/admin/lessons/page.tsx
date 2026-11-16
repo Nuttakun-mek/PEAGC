@@ -9,13 +9,18 @@ import {
   ListOrdered,
   Megaphone,
   Plus,
+  RotateCcw,
   Trash2,
+  Unlock,
 } from "lucide-react";
 
 import {
+  archiveLessonProgram,
   createLessonProgram,
   createLessonSlot,
   archiveLessonSlot,
+  openLessonBookingNow,
+  restoreLessonProgram,
   generateLessonSlots,
   removeLessonBooking,
   saveLessonBookingSettings,
@@ -24,6 +29,7 @@ import {
   updateLessonSlot,
 } from "@/app/admin/lessons/actions";
 import {
+  type BookingPhase,
   type LessonBookingSettings,
   defaultLessonBookingSettings,
   formatBangkokDateTime,
@@ -37,6 +43,7 @@ import { LessonSlotTable } from "@/components/lesson-slot-table";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { LoadErrorBanner, StatusBanner, toneForStatus } from "@/components/status-banner";
 import { resolveAccess } from "@/lib/auth/access";
+import { formatThaiDate, orUnset } from "@/lib/display";
 import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
@@ -184,7 +191,49 @@ const statusMessages: Record<string, string> = {
   "slot-not-found": "ไม่พบรอบเรียนที่ต้องการแก้ไข",
   "slot-updated": "บันทึกการแก้ไขรอบเรียนเรียบร้อยแล้ว",
   "slot-update-failed": "บันทึกการแก้ไขรอบเรียนไม่สำเร็จ",
+  "slot-created-opened": "สร้างรอบเรียนแล้ว และเปิดให้สมาชิกจองได้ทันที",
+  "booking-opened": "เปิดให้สมาชิกจองรอบเรียนแล้ว ตั้งแต่ตอนนี้",
+  "booking-already-open": "ขณะนี้เปิดให้สมาชิกจองอยู่แล้ว",
+  "program-archived": "ลบคอร์สแล้ว (เก็บถาวร) รอบเรียนที่ยังไม่มีผู้จองของคอร์สนี้ถูกนำออกด้วย กู้คืนได้ที่ \"คอร์สที่เก็บถาวร\"",
+  "program-archive-failed": "ลบคอร์สไม่สำเร็จ",
+  "program-restored": "กู้คืนคอร์สแล้ว สถานะเป็น \"ปิดใช้งาน\" เปลี่ยนเป็น \"ใช้งาน\" เมื่อพร้อมเปิดรับ",
+  "program-restore-failed": "กู้คืนคอร์สไม่สำเร็จ",
 };
+
+const phaseInfo: Record<BookingPhase, { label: string; tone: string }> = {
+  after: { label: "ปิดลงทะเบียนแล้ว สมาชิกจองไม่ได้", tone: "border-[#f3c6cb] bg-[#fff7f7] text-[#9f1d1d]" },
+  before: { label: "ตั้งเวลาเปิดลงทะเบียนไว้ล่วงหน้า สมาชิกยังจองไม่ได้", tone: "border-[#efd9a6] bg-[#fffbf0] text-[#805300]" },
+  open: { label: "เปิดลงทะเบียนอยู่ สมาชิกจองรอบเรียนได้", tone: "border-[#bfe3cf] bg-[#f3fbf6] text-[#16794b]" },
+  unset: { label: "ยังไม่ได้เปิดลงทะเบียน สมาชิกเห็นรอบเรียนเป็น \"ยังไม่เปิด\"", tone: "border-[#f3c6cb] bg-[#fff7f7] text-[#9f1d1d]" },
+};
+
+/** On create forms: open member booking together with the new rounds (checked unless a future opening is scheduled). */
+function OpenNowOption({ disabled, openAt, phase }: { disabled?: boolean; openAt: string | null; phase: BookingPhase }) {
+  if (phase === "open") {
+    return (
+      <p className="flex items-center gap-2 rounded-md border border-[#bfe3cf] bg-[#f3fbf6] px-3 py-2.5 text-sm text-[#16794b]">
+        <span className="size-2 rounded-full bg-[#16794b]" aria-hidden="true" />
+        เปิดลงทะเบียนอยู่ สมาชิกจองรอบใหม่ได้ทันทีหลังบันทึก
+      </p>
+    );
+  }
+  const scheduled = phase === "before";
+  return (
+    <label className="flex items-start gap-3 rounded-md border border-[#efd9a6] bg-[#fffbf0] px-3 py-3 text-sm text-[#3f3a48]">
+      <input className="mt-1" defaultChecked={!scheduled} disabled={disabled} name="openBookingNow" type="checkbox" />
+      <span>
+        <span className="font-semibold">เปิดให้สมาชิกจองทันทีหลังบันทึก</span>
+        <span className="mt-0.5 block text-xs leading-5 text-[#805300]">
+          {scheduled
+            ? `ตอนนี้ตั้งเวลาเปิดจองไว้ ${formatBangkokDateTime(openAt)} ถ้าติ๊กจะเปิดจองทันทีแทน`
+            : phase === "after"
+              ? "ช่วงลงทะเบียนปิดไปแล้ว ถ้าไม่ติ๊ก สมาชิกจะเห็นรอบนี้แต่จองไม่ได้"
+              : "ยังไม่ได้ตั้งช่วงเปิดลงทะเบียน ถ้าไม่ติ๊ก สมาชิกจะเห็นรอบนี้เป็น \"ยังไม่เปิด\""}
+        </span>
+      </span>
+    </label>
+  );
+}
 
 const lessonStatusLabels: Record<string, string> = {
   active: "ใช้งาน",
@@ -239,13 +288,13 @@ function ProgramForm({
   title?: string;
 }) {
   return (
-    <form action={action} className="grid gap-4">
+    <form action={action} className="@container grid gap-4">
       {program ? <input name="programId" type="hidden" value={program.id} /> : null}
       <div className="flex items-center gap-2">
         <Plus className="size-4 text-[#722257]" aria-hidden="true" />
         <h2 className="text-lg font-semibold text-[#722257]">{title}</h2>
       </div>
-      <div className="grid gap-4 md:grid-cols-[1fr_180px_180px]">
+      <div className="grid gap-4 @lg:grid-cols-[1fr_180px_180px]">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">ชื่อคอร์ส</span>
           <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={program?.name ?? ""} disabled={disabled} name="name" required />
@@ -267,7 +316,7 @@ function ProgramForm({
           </select>
         </label>
       </div>
-      <div className="grid gap-4 md:grid-cols-[1fr_160px]">
+      <div className="grid gap-4 @lg:grid-cols-[1fr_160px]">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">ผู้สอน</span>
           <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={program?.coach_name ?? ""} disabled={disabled} name="coachName" />
@@ -281,7 +330,7 @@ function ProgramForm({
         <span className="text-sm font-semibold text-[#3f3a48]">รายละเอียด</span>
         <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={program?.description ?? ""} disabled={disabled} name="description" />
       </label>
-      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] md:w-fit" disabled={disabled} type="submit">
+      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] @md:w-fit" disabled={disabled} type="submit">
         <BadgeCheck className="size-4" aria-hidden="true" />
         {program ? "บันทึกการแก้ไข" : "บันทึกคอร์ส"}
       </button>
@@ -291,25 +340,28 @@ function ProgramForm({
 
 function SlotForm({
   action = createLessonSlot,
+  booking,
   disabled,
   programs,
   slot,
   title = "สร้างรอบเรียน",
 }: {
   action?: (formData: FormData) => Promise<void>;
+  /** Create form only: current member booking window, to offer opening it with the new round. */
+  booking?: { openAt: string | null; phase: BookingPhase };
   disabled?: boolean;
   programs: ProgramRow[];
   slot?: SlotRow;
   title?: string;
 }) {
   return (
-    <form action={action} className="grid gap-4">
+    <form action={action} className="@container grid gap-4">
       {slot ? <input name="slotId" type="hidden" value={slot.id} /> : null}
       <div className="flex items-center gap-2">
         <CalendarClock className="size-4 text-[#722257]" aria-hidden="true" />
         <h2 className="text-lg font-semibold text-[#722257]">{title}</h2>
       </div>
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr_140px]">
+      <div className="grid gap-4 @lg:grid-cols-[1fr_1fr_140px]">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">คอร์ส</span>
           <select className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.program_id} disabled={disabled || !programs.length} name="programId" required>
@@ -338,7 +390,7 @@ function SlotForm({
           </span>
         </label>
       </div>
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 @lg:grid-cols-3 @4xl:grid-cols-6">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">วันที่</span>
           <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.lesson_date ?? ""} disabled={disabled} name="lessonDate" required type="date" />
@@ -364,7 +416,7 @@ function SlotForm({
           <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.coach_name ?? ""} disabled={disabled} name="coachName" />
         </label>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 @md:grid-cols-2">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">สถานที่</span>
           <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.venue ?? ""} disabled={disabled} name="venue" />
@@ -374,7 +426,7 @@ function SlotForm({
           <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.note ?? ""} disabled={disabled} name="note" />
         </label>
       </div>
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 @lg:grid-cols-3 @4xl:grid-cols-5">
         {[
           { key: "targetWorkLines", label: "สายงาน", value: slot?.target_work_lines },
           { key: "targetBureaus", label: "สำนัก", value: slot?.target_bureaus },
@@ -388,7 +440,7 @@ function SlotForm({
           </label>
         ))}
       </div>
-      <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+      <div className="grid gap-4 @lg:grid-cols-[1fr_180px]">
         <label className="flex items-center gap-3 rounded-md border border-[#e6e2ee] bg-white/70 px-3 py-3 text-sm font-semibold text-[#3f3a48]">
           <input defaultChecked={slot?.allow_member_reschedule ?? true} disabled={disabled} name="allowMemberReschedule" type="checkbox" />
           อนุญาตให้สมาชิกเปลี่ยนเวลาเรียนเอง
@@ -398,7 +450,8 @@ function SlotForm({
           <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.reschedule_cutoff_hours ?? 12} disabled={disabled} min="0" name="rescheduleCutoffHours" type="number" />
         </label>
       </div>
-      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] md:w-fit" disabled={disabled || !programs.length} type="submit">
+      {!slot && booking ? <OpenNowOption disabled={disabled} openAt={booking.openAt} phase={booking.phase} /> : null}
+      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] @md:w-fit" disabled={disabled || !programs.length} type="submit">
         <BadgeCheck className="size-4" aria-hidden="true" />
         {slot ? "บันทึกการแก้ไข" : "บันทึกรอบเรียน"}
       </button>
@@ -413,7 +466,7 @@ function BookingSettingsForm({ disabled, settings }: { disabled?: boolean; setti
   const phase = getBookingPhase(settings);
   const phaseLabel = { after: "ปิดลงทะเบียนแล้ว", before: "รอเปิดลงทะเบียน", open: "เปิดลงทะเบียนอยู่", unset: "ยังไม่กำหนดรอบ" }[phase];
   return (
-    <form action={saveLessonBookingSettings} className="grid gap-4">
+    <form action={saveLessonBookingSettings} className="@container grid scroll-mt-24 gap-4" id="booking-settings">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Megaphone className="size-4 text-[#722257]" aria-hidden="true" />
@@ -421,7 +474,7 @@ function BookingSettingsForm({ disabled, settings }: { disabled?: boolean; setti
         </div>
         <span className={`rounded-md px-2 py-1 text-xs font-semibold ${phase === "open" ? "bg-[#edf9f3] text-[#16794b]" : "bg-[#f1f3ef] text-[#6b6475]"}`}>{phaseLabel}</span>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 @md:grid-cols-2">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">เปิดลงทะเบียน (เวลาไทย)</span>
           <input className={inputClass} defaultValue={toBangkokInputValue(settings.booking_open_at)} disabled={disabled} name="bookingOpenAt" type="datetime-local" />
@@ -453,7 +506,7 @@ function BookingSettingsForm({ disabled, settings }: { disabled?: boolean; setti
         ออกเป็นฉบับใหม่ (สมาชิกต้องกดรับทราบอีกครั้ง)
         {settings.announcement_version ? <span className="text-xs font-normal text-[#6b6475]">(ฉบับปัจจุบัน {settings.announcement_version})</span> : null}
       </label>
-      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] md:w-fit" disabled={disabled} type="submit">
+      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] @md:w-fit" disabled={disabled} type="submit">
         <BadgeCheck className="size-4" aria-hidden="true" />
         บันทึกการตั้งค่า
       </button>
@@ -461,15 +514,23 @@ function BookingSettingsForm({ disabled, settings }: { disabled?: boolean; setti
   );
 }
 
-function SlotGeneratorForm({ disabled, programs }: { disabled?: boolean; programs: ProgramRow[] }) {
+function SlotGeneratorForm({
+  booking,
+  disabled,
+  programs,
+}: {
+  booking: { openAt: string | null; phase: BookingPhase };
+  disabled?: boolean;
+  programs: ProgramRow[];
+}) {
   return (
-    <form action={generateLessonSlots} className="grid gap-4">
+    <form action={generateLessonSlots} className="@container grid gap-4">
       <div className="flex items-center gap-2">
         <CalendarClock className="size-4 text-[#722257]" aria-hidden="true" />
         <h2 className="text-lg font-semibold text-[#722257]">สร้างรอบเรียนหลายรอบ</h2>
       </div>
       <p className="text-sm text-[#6b6475]">เลือกช่วงวันที่ วันในสัปดาห์ และช่วงเวลา ระบบจะสร้างรอบให้ทั้งหมดและข้ามรอบที่มีอยู่แล้ว (สูงสุด 300 รอบ)</p>
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
+      <div className="grid gap-4 @md:grid-cols-2">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">คอร์ส</span>
           <select className={inputClass} disabled={disabled || !programs.length} name="programId" required>
@@ -481,7 +542,7 @@ function SlotGeneratorForm({ disabled, programs }: { disabled?: boolean; program
           <input className={inputClass} disabled={disabled} name="title" placeholder="เช่น คลาสผู้เริ่มต้น รอบเย็น" required />
         </label>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 @lg:grid-cols-3">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">ตั้งแต่วันที่</span>
           <input className={inputClass} disabled={disabled} name="dateFrom" required type="date" />
@@ -513,7 +574,7 @@ function SlotGeneratorForm({ disabled, programs }: { disabled?: boolean; program
           </label>
         ))}
       </div>
-      <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-4 @lg:grid-cols-3 @4xl:grid-cols-6">
         <label className="block">
           <span className="text-sm font-semibold text-[#3f3a48]">ที่นั่งต่อรอบ</span>
           <input className={inputClass} defaultValue={8} disabled={disabled} min="1" name="capacity" type="number" />
@@ -542,7 +603,7 @@ function SlotGeneratorForm({ disabled, programs }: { disabled?: boolean; program
           </select>
         </label>
       </div>
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 @lg:grid-cols-3 @4xl:grid-cols-5">
         {[
           { key: "targetWorkLines", label: "สายงาน" },
           { key: "targetBureaus", label: "สำนัก" },
@@ -556,7 +617,7 @@ function SlotGeneratorForm({ disabled, programs }: { disabled?: boolean; program
           </label>
         ))}
       </div>
-      <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+      <div className="grid gap-4 @lg:grid-cols-[1fr_180px]">
         <label className="flex items-center gap-3 rounded-md border border-[#e6e2ee] bg-white/70 px-3 py-3 text-sm font-semibold text-[#3f3a48]">
           <input defaultChecked disabled={disabled} name="allowMemberReschedule" type="checkbox" />
           อนุญาตให้สมาชิกเปลี่ยนเวลาเรียนเอง
@@ -566,8 +627,9 @@ function SlotGeneratorForm({ disabled, programs }: { disabled?: boolean; program
           <input className={inputClass} defaultValue={12} disabled={disabled} min="0" name="rescheduleCutoffHours" type="number" />
         </label>
       </div>
+      <OpenNowOption disabled={disabled} openAt={booking.openAt} phase={booking.phase} />
       <div className="flex flex-wrap items-center gap-3">
-        <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] md:w-fit" disabled={disabled || !programs.length} type="submit">
+        <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] @md:w-fit" disabled={disabled || !programs.length} type="submit">
           <Plus className="size-4" aria-hidden="true" />
           สร้างรอบเรียน
         </button>
@@ -618,8 +680,8 @@ function SlotRoster({ bookings, disabled, slot }: { bookings: BookingRow[]; disa
                       <span className="rounded-md bg-[#f1f3ef] px-2 py-1 text-xs font-semibold">ยกเลิก</span>
                     )}
                   </td>
-                  <td className="px-2 py-2 font-semibold text-[#3f3a48]">{member?.full_name ?? "-"}{member?.nickname ? <span className="font-normal text-[#6b6475]"> ({member.nickname})</span> : null}</td>
-                  <td className="px-2 py-2 tabular-nums">{member?.employee_code ?? "-"}</td>
+                  <td className="px-2 py-2 font-semibold text-[#3f3a48]">{orUnset(member?.full_name)}{member?.nickname ? <span className="font-normal text-[#6b6475]"> ({member.nickname})</span> : null}</td>
+                  <td className="px-2 py-2 tabular-nums">{orUnset(member?.employee_code)}</td>
                   <td className="px-2 py-2 text-xs text-[#6b6475]">{[member?.phone, member?.email, member?.line_id ? `LINE ${member.line_id}` : null].filter(Boolean).join(" · ") || "-"}</td>
                   <td className="px-2 py-2 text-xs tabular-nums">{formatBangkokDateTime(booking.booked_at)}</td>
                   <td className="px-2 py-2">
@@ -672,11 +734,12 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
   let slots = sampleSlots;
   let bookings = sampleBookings;
   let lessonSettings: LessonBookingSettings = { ...defaultLessonBookingSettings };
+  let archivedPrograms: Array<{ archived_at: string | null; id: string; name: string }> = [];
   let loadError: ReturnType<typeof collectLoadErrors> = null;
 
   if (!access.isBypass && access.clubId) {
     const supabase = await createClient();
-    const [programResult, slotResult, bookingResult, settingsResult] = await Promise.all([
+    const [programResult, slotResult, bookingResult, settingsResult, archivedResult] = await Promise.all([
       supabase
         .from("lesson_programs")
         .select("id, name, coach_name, level, price, description, status")
@@ -703,6 +766,13 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
         .select("booking_open_at, booking_close_at, max_bookings_per_member, cancel_cutoff_hours, announcement_title, announcement_body, announcement_version")
         .eq("club_id", access.clubId)
         .maybeSingle(),
+      supabase
+        .from("lesson_programs")
+        .select("id, name, archived_at")
+        .eq("club_id", access.clubId)
+        .not("archived_at", "is", null)
+        .order("archived_at", { ascending: false })
+        .limit(30),
     ]);
 
     loadError = collectLoadErrors("admin.lessons", [
@@ -717,7 +787,14 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
     if (settingsResult.data) {
       lessonSettings = { ...defaultLessonBookingSettings, ...settingsResult.data };
     }
+    archivedPrograms = archivedResult.data ?? [];
   }
+
+  if (access.isBypass) {
+    lessonSettings = { ...lessonSettings, booking_open_at: "2026-01-01T01:00:00.000Z" };
+  }
+  const bookingPhase = getBookingPhase(lessonSettings);
+  const booking = { openAt: lessonSettings.booking_open_at, phase: bookingPhase };
 
   const activePrograms = programs.filter((program) => program.status === "active");
   const openSlots = slots.filter((slot) => slot.status === "open");
@@ -740,16 +817,21 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
     confirmedCount += seats.confirmed;
     seatTotal += slot.capacity;
   });
+  const notBookableYet = bookingPhase !== "open" ? " · สมาชิกยังจองไม่ได้จนกว่าจะเปิดลงทะเบียน (ดูกล่องสถานะการจองด้านบน)" : "";
   const statusMessage = params.status
-    ? statusMessages[params.status]
-      ?? (params.status.startsWith("generated:")
-        ? (() => {
-            const [, created, skipped] = params.status.split(":");
-            return `สร้าง ${created} รอบเรียนแล้ว${Number(skipped) ? ` (ข้าม ${skipped} รอบที่มีอยู่แล้ว)` : ""}`;
-          })()
-        : params.status.startsWith("generate-invalid:")
-          ? params.status.slice("generate-invalid:".length)
-          : null)
+    ? params.status === "slot-created"
+      ? `${statusMessages["slot-created"]}${notBookableYet}`
+      : statusMessages[params.status]
+        ?? (params.status.startsWith("generated:")
+          ? (() => {
+              const [, created, skipped, opened] = params.status.split(":");
+              return `สร้าง ${created} รอบเรียนแล้ว${Number(skipped) ? ` (ข้าม ${skipped} รอบที่มีอยู่แล้ว)` : ""}${opened ? " และเปิดให้สมาชิกจองได้ทันที" : notBookableYet}`;
+            })()
+          : params.status.startsWith("generate-invalid:")
+            ? params.status.slice("generate-invalid:".length)
+            : params.status.startsWith("program-archive-blocked:")
+              ? `ยังลบคอร์สนี้ไม่ได้ เพราะมี ${params.status.split(":")[1]} รอบที่กำลังจะมาถึงและยังมีผู้จองอยู่ กรุณาย้ายหรือยกเลิกการจองในรอบเหล่านั้นก่อน`
+              : null)
     : null;
   const bypassQuery = access.isBypass ? "?bypass=admin" : "";
 
@@ -786,7 +868,34 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-3 xl:grid-cols-5">
+        <section className={`mt-6 flex scroll-mt-24 flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${phaseInfo[bookingPhase].tone}`} id="booking-window">
+          <div className="flex items-start gap-3">
+            <span className={`mt-1 size-2.5 shrink-0 rounded-full ${bookingPhase === "open" ? "bg-[#16794b]" : bookingPhase === "before" ? "bg-[#d7a52c]" : "bg-[#b42318]"}`} aria-hidden="true" />
+            <div>
+              <p className="text-sm font-semibold">สถานะการจองของสมาชิก: {phaseInfo[bookingPhase].label}</p>
+              <p className="mt-0.5 text-xs text-[#6b6475]">
+                {lessonSettings.booking_open_at ? `เปิด ${formatBangkokDateTime(lessonSettings.booking_open_at)}` : "ยังไม่ได้ตั้งเวลาเปิด"}
+                {" · "}
+                {lessonSettings.booking_close_at ? `ปิด ${formatBangkokDateTime(lessonSettings.booking_close_at)}` : "ไม่มีกำหนดปิด"}
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {bookingPhase !== "open" && !access.isBypass ? (
+              <form action={openLessonBookingNow}>
+                <button className="flex h-10 items-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white transition hover:bg-[#8b2d6b]" type="submit">
+                  <Unlock className="size-4" aria-hidden="true" />
+                  เปิดให้จองทันที
+                </button>
+              </form>
+            ) : null}
+            <a className="flex h-10 items-center rounded-md border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257]" href="#booking-settings">
+              ตั้งเวลาเปิด/ปิด
+            </a>
+          </div>
+        </section>
+
+        <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
           {[
             { icon: BookOpenCheck, label: "คอร์สที่ใช้งาน", value: String(activePrograms.length) },
             { icon: CalendarClock, label: "รอบเปิดจอง", value: String(openSlots.length) },
@@ -794,13 +903,13 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
             { icon: Megaphone, label: "คิวสำรอง", value: String(waitlistedCount) },
             { icon: ClipboardCheck, label: "รอลงเวลา", value: String(bookedCount) },
           ].map((item) => (
-            <article className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]" key={item.label}>
+            <article className="rounded-lg border border-[#e6e2ee] bg-white/95 p-4 shadow-[0_10px_30px_rgba(114,34,87,0.06)] sm:p-5" key={item.label}>
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-[#6b6475]">{item.label}</p>
-                  <p className="mt-2 text-3xl font-semibold text-[#722257]">{item.value}</p>
+                  <p className="mt-2 text-2xl font-semibold tabular-nums text-[#722257] sm:text-3xl">{item.value}</p>
                 </div>
-                <div className="flex size-11 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
+                <div className="hidden size-11 shrink-0 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257] sm:flex">
                   <item.icon className="size-5" aria-hidden="true" />
                 </div>
               </div>
@@ -813,7 +922,7 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
             <BookingSettingsForm disabled={access.isBypass} settings={lessonSettings} />
           </section>
           <section className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-            <SlotGeneratorForm disabled={access.isBypass} programs={activePrograms} />
+            <SlotGeneratorForm booking={booking} disabled={access.isBypass} programs={activePrograms} />
           </section>
         </div>
 
@@ -822,7 +931,7 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
             <ProgramForm disabled={access.isBypass} />
           </section>
           <section className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-            <SlotForm disabled={access.isBypass} programs={activePrograms} />
+            <SlotForm booking={booking} disabled={access.isBypass} programs={activePrograms} />
           </section>
         </div>
 
@@ -833,7 +942,7 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
           <div className="divide-y divide-[#e6e2ee]">
             {programs.length ? (
               programs.map((program) => (
-                <details className="group px-5 py-4" key={program.id}>
+                <details className="group scroll-mt-24 px-5 py-4" id={`program-${program.id}`} key={program.id}>
                   <summary className="grid cursor-pointer list-none gap-4 md:grid-cols-[44px_1fr_0.5fr_0.5fr_92px] md:items-center">
                     <div className="flex size-11 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
                       <BookOpenCheck className="size-5" aria-hidden="true" />
@@ -853,7 +962,7 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
                       {lessonLevelLabels[program.level] ?? program.level}
                     </p>
                     <p className="text-sm font-semibold text-[#722257]">
-                      {program.price.toLocaleString()} บาท
+                      {program.price.toLocaleString("th-TH")} บาท
                     </p>
                     <span className="w-fit rounded-md border border-[#d9d3e6] px-3 py-2 text-sm font-semibold text-[#722257] group-open:bg-[#f8edf4]">
                       แก้ไข
@@ -867,14 +976,54 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
                       title={`แก้ไข ${program.name}`}
                     />
                   </div>
+                  {access.isBypass ? null : (
+                    <form action={archiveLessonProgram} className="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-[#efcbd0] bg-[#fff7f7] p-4">
+                      <input name="programId" type="hidden" value={program.id} />
+                      <p className="min-w-0 flex-1 text-sm text-[#6b6475]">
+                        ลบคอร์สออกจากระบบ (เก็บถาวร กู้คืนได้) รอบเรียนที่กำลังจะมาถึงและยังไม่มีผู้จองจะถูกนำออกด้วย ประวัติการเรียนที่ผ่านมายังอยู่ครบ
+                      </p>
+                      <ConfirmSubmitButton
+                        className="flex h-10 items-center gap-2 rounded-md border border-[#efcbd0] bg-white px-4 text-sm font-semibold text-[#a33a46] hover:bg-[#fff1f1]"
+                        confirmLabel="ลบคอร์ส"
+                        message={`ยืนยันลบคอร์ส "${program.name}"? (เก็บถาวร กู้คืนได้ภายหลัง)`}
+                      >
+                        <Trash2 className="size-4" aria-hidden="true" />
+                        ลบคอร์ส
+                      </ConfirmSubmitButton>
+                    </form>
+                  )}
                 </details>
               ))
             ) : (
               <div className="px-5 py-10 text-center text-sm text-[#6b6475]">
-                ยังไม่มีคอร์สเรียน
+                ยังไม่มีคอร์สเรียน เริ่มจากฟอร์ม &quot;สร้างคอร์สเรียน&quot; ด้านบน
               </div>
             )}
           </div>
+          {archivedPrograms.length ? (
+            <details className="scroll-mt-24 border-t border-[#e6e2ee] px-5 py-4" id="archived-programs">
+              <summary className="cursor-pointer text-sm font-semibold text-[#6b6475]">
+                คอร์สที่เก็บถาวร ({archivedPrograms.length})
+              </summary>
+              <ul className="mt-3 divide-y divide-[#f0edf3] rounded-md border border-[#e6e2ee] bg-white">
+                {archivedPrograms.map((program) => (
+                  <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3" key={program.id}>
+                    <span className="text-sm">
+                      <span className="font-semibold text-[#3f3a48]">{program.name}</span>
+                      <span className="ml-2 text-xs text-[#6b6475]">เก็บถาวรเมื่อ {formatThaiDate(program.archived_at)}</span>
+                    </span>
+                    <form action={restoreLessonProgram}>
+                      <input name="programId" type="hidden" value={program.id} />
+                      <button className="flex h-9 items-center gap-2 rounded-md border border-[#d9d3e6] bg-white px-3 text-sm font-semibold text-[#722257] hover:bg-[#f8edf4]" type="submit">
+                        <RotateCcw className="size-4" aria-hidden="true" />
+                        กู้คืน
+                      </button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </section>
 
         <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
@@ -908,7 +1057,7 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
                   id: slot.id,
                   startTime: slot.start_time,
                   statusLabel: lessonStatusLabels[slot.status] ?? slot.status,
-                  subtitle: `${program?.name ?? "-"} · ${slot.coach_name ?? "ยังไม่ระบุผู้สอน"}`,
+                  subtitle: `${orUnset(program?.name)} · ${slot.coach_name ?? "ยังไม่ระบุผู้สอน"}`,
                   title: slot.title,
                   venue: slot.venue,
                 };
@@ -937,11 +1086,11 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
                           </span>
                         </div>
                         <p className="mt-1 text-sm text-[#6b6475]">
-                          {program?.name ?? "-"} · {slot.venue ?? "ยังไม่ระบุสถานที่"}
+                          {orUnset(program?.name)} · {slot.venue ?? "ยังไม่ระบุสถานที่"}
                         </p>
                       </div>
                       <p className="text-sm text-[#3f3a48]">
-                        {slot.lesson_date} · {slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)}
+                        {formatThaiDate(slot.lesson_date)} · {slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)} น.
                       </p>
                       <p className="text-sm text-[#3f3a48]">
                         จอง {Math.min(bookedCountBySlot.get(slot.id) ?? 0, slot.capacity)}/{slot.capacity}

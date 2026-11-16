@@ -1,6 +1,5 @@
 import "server-only";
 
-import { bangkokDate } from "@/lib/lessons/booking";
 import type { createClient } from "@/lib/supabase/server";
 
 import type { EventRow, LessonBookingRow, LessonSlotRow, PaymentRow, RegistrationRow } from "./aggregate";
@@ -9,15 +8,7 @@ type Client = Awaited<ReturnType<typeof createClient>>;
 
 export const reportRoles = ["platform_owner", "club_admin", "committee", "finance_officer", "tournament_director", "auditor"];
 
-const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-
-/** Report period from query params; defaults to 1 Jan of the current (Bangkok) year .. today. */
-export function reportPeriod(from?: string, to?: string) {
-  const today = bangkokDate();
-  const start = from && datePattern.test(from) ? from : `${today.slice(0, 4)}-01-01`;
-  const end = to && datePattern.test(to) ? to : today;
-  return start <= end ? { from: start, to: end } : { from: end, to: start };
-}
+export { reportPeriod, reportPresets } from "./period";
 
 /** Bangkok calendar day bounds as ISO instants, for timestamptz filters. */
 function dayStart(date: string) {
@@ -31,7 +22,7 @@ export async function loadReportData(supabase: Client, clubId: string, period: {
   const [payments, slots, bookings, events, registrations, activeMembers, pendingMembers, newMembers] = await Promise.all([
     supabase
       .from("payment_records")
-      .select("amount, status, event_registrations(event_id, events(name))")
+      .select("amount, status, slip_file_id, event_registrations(event_id, events(name))")
       .eq("club_id", clubId)
       .gte("created_at", dayStart(period.from))
       .lte("created_at", dayEnd(period.to))
@@ -68,15 +59,17 @@ export async function loadReportData(supabase: Client, clubId: string, period: {
       .limit(20000),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("club_id", clubId).eq("status", "active").is("archived_at", null),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("club_id", clubId).eq("status", "pending_verification").is("archived_at", null),
+    // New members exclude archived (deleted) rows, the same scope as the member list.
     supabase
       .from("members")
       .select("id", { count: "exact", head: true })
       .eq("club_id", clubId)
+      .is("archived_at", null)
       .gte("created_at", dayStart(period.from))
       .lte("created_at", dayEnd(period.to)),
   ]);
 
-  type PaymentJoin = { amount: number; event_registrations: { event_id: string; events: { name: string } | null } | null; status: string };
+  type PaymentJoin = { amount: number; event_registrations: { event_id: string; events: { name: string } | null } | null; slip_file_id: string | null; status: string };
   type SlotJoin = { capacity: number; id: string; lesson_date: string; lesson_programs: { name: string } | null; program_id: string; status: string };
 
   return {
@@ -88,6 +81,7 @@ export async function loadReportData(supabase: Client, clubId: string, period: {
       amount: row.amount,
       event_id: row.event_registrations?.event_id ?? null,
       event_name: row.event_registrations?.events?.name ?? "ไม่ระบุกิจกรรม",
+      has_slip: Boolean(row.slip_file_id),
       status: row.status,
     })),
     registrations: (registrations.data ?? []) as RegistrationRow[],
