@@ -31,6 +31,8 @@ import {
 import {
   type BookingPhase,
   type LessonBookingSettings,
+  addDays,
+  bangkokDate,
   defaultLessonBookingSettings,
   formatBangkokDateTime,
   getBookingPhase,
@@ -45,7 +47,12 @@ import { LoadErrorBanner, StatusBanner, toneForStatus } from "@/components/statu
 import { resolveAccess } from "@/lib/auth/access";
 import { formatThaiDate, orUnset } from "@/lib/display";
 import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { createClient } from "@/lib/supabase/server";
+
+/** The slot schedule starts this many days back (recent rounds still need attendance). */
+const SLOT_WINDOW_PAST_DAYS = 30;
+const SLOT_WINDOW_LIMIT = 300;
 
 type AdminLessonsPageProps = {
   searchParams: Promise<{ bypass?: string; status?: string }>;
@@ -736,9 +743,13 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
   let lessonSettings: LessonBookingSettings = { ...defaultLessonBookingSettings };
   let archivedPrograms: Array<{ archived_at: string | null; id: string; name: string }> = [];
   let loadError: ReturnType<typeof collectLoadErrors> = null;
+  // Recent and upcoming rounds only: with every round ever made, ordered oldest first, new rounds
+  // fell off the page once the club passed the row limit.
+  const slotWindowStart = addDays(bangkokDate(), -SLOT_WINDOW_PAST_DAYS);
 
   if (!access.isBypass && access.clubId) {
     const supabase = await createClient();
+    const clubId = access.clubId;
     const [programResult, slotResult, bookingResult, settingsResult, archivedResult] = await Promise.all([
       supabase
         .from("lesson_programs")
@@ -752,15 +763,21 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
         .select("id, program_id, title, coach_name, venue, lesson_date, start_time, end_time, capacity, waitlist_capacity, booked_count, status, note, allow_member_reschedule, reschedule_cutoff_hours, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections, lesson_programs(name)")
         .eq("club_id", access.clubId)
         .is("archived_at", null)
+        .gte("lesson_date", slotWindowStart)
         .order("lesson_date", { ascending: true })
         .order("start_time", { ascending: true })
-        .limit(300),
-      supabase
-        .from("lesson_bookings")
-        .select("id, slot_id, status, queue_seq, booked_at, checked_in_at, attendance_note, members(full_name, nickname, employee_code, phone, email, line_id), lesson_slots(title, lesson_date, start_time)")
-        .eq("club_id", access.clubId)
-        .order("queue_seq", { ascending: true })
-        .limit(2000),
+        .limit(SLOT_WINDOW_LIMIT),
+      fetchAllRows((from, to) =>
+        supabase
+          .from("lesson_bookings")
+          .select("id, slot_id, status, queue_seq, booked_at, checked_in_at, attendance_note, members(full_name, nickname, employee_code, phone, email, line_id), lesson_slots!inner(title, lesson_date, start_time)")
+          .eq("club_id", clubId)
+          .gte("lesson_slots.lesson_date", slotWindowStart)
+          .is("lesson_slots.archived_at", null)
+          .order("queue_seq", { ascending: true })
+          .order("id")
+          .range(from, to),
+      ),
       supabase
         .from("lesson_booking_settings")
         .select("booking_open_at, booking_close_at, max_bookings_per_member, cancel_cutoff_hours, announcement_title, announcement_body, announcement_version")
@@ -1031,6 +1048,10 @@ export default async function AdminLessonsPage({ searchParams }: AdminLessonsPag
             <div>
               <h2 className="text-xl font-semibold text-[#722257]">ตารางรอบเรียนแบบ Slot</h2>
               <p className="mt-1 text-sm text-[#6b6475]">ดูรอบตามวันและเวลา กดแก้ไขเพื่อจัดการและดูรายชื่อ</p>
+              <p className="mt-1 text-xs text-[#6b6475]">
+                แสดงรอบตั้งแต่ {formatThaiDate(slotWindowStart)} (ย้อนหลัง {SLOT_WINDOW_PAST_DAYS} วัน) เป็นต้นไป
+                {slots.length >= SLOT_WINDOW_LIMIT ? ` · แสดง ${SLOT_WINDOW_LIMIT} รอบแรก` : ""} · รอบที่เก่ากว่านี้ดูได้ในรายงานและไฟล์ CSV
+              </p>
             </div>
             {!access.isBypass ? (
               <a className="flex h-10 items-center gap-2 rounded-md border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257]" href="/admin/lessons/export">

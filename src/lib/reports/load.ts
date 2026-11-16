@@ -1,5 +1,6 @@
 import "server-only";
 
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import type { createClient } from "@/lib/supabase/server";
 
 import type { EventRow, LessonBookingRow, LessonSlotRow, PaymentRow, RegistrationRow } from "./aggregate";
@@ -19,44 +20,61 @@ function dayEnd(date: string) {
 }
 
 export async function loadReportData(supabase: Client, clubId: string, period: { from: string; to: string }) {
+  // Row lists page through fetchAllRows: one request returns at most 1,000 rows (Supabase's
+  // default Max rows), and a year of bookings or payments can pass that and skew the totals.
   const [payments, slots, bookings, events, registrations, activeMembers, pendingMembers, newMembers] = await Promise.all([
-    supabase
-      .from("payment_records")
-      .select("amount, status, slip_file_id, event_registrations(event_id, events(name))")
-      .eq("club_id", clubId)
-      .gte("created_at", dayStart(period.from))
-      .lte("created_at", dayEnd(period.to))
-      .limit(10000),
-    supabase
-      .from("lesson_slots")
-      .select("id, program_id, capacity, status, lesson_date, lesson_programs(name)")
-      .eq("club_id", clubId)
-      .is("archived_at", null)
-      .gte("lesson_date", period.from)
-      .lte("lesson_date", period.to)
-      .limit(5000),
-    supabase
-      .from("lesson_bookings")
-      .select("slot_id, status, lesson_slots!inner(lesson_date)")
-      .eq("club_id", clubId)
-      .gte("lesson_slots.lesson_date", period.from)
-      .lte("lesson_slots.lesson_date", period.to)
-      .limit(20000),
-    supabase
-      .from("events")
-      .select("id, name, event_date, capacity")
-      .eq("club_id", clubId)
-      .is("archived_at", null)
-      .gte("event_date", period.from)
-      .lte("event_date", period.to)
-      .limit(500),
-    supabase
-      .from("event_registrations")
-      .select("event_id, status, checked_in_at, events!inner(event_date)")
-      .eq("club_id", clubId)
-      .gte("events.event_date", period.from)
-      .lte("events.event_date", period.to)
-      .limit(20000),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("payment_records")
+        .select("amount, status, slip_file_id, event_registrations(event_id, events(name))")
+        .eq("club_id", clubId)
+        .gte("created_at", dayStart(period.from))
+        .lte("created_at", dayEnd(period.to))
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("lesson_slots")
+        .select("id, program_id, capacity, status, lesson_date, lesson_programs(name)")
+        .eq("club_id", clubId)
+        .is("archived_at", null)
+        .gte("lesson_date", period.from)
+        .lte("lesson_date", period.to)
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("lesson_bookings")
+        .select("slot_id, status, lesson_slots!inner(lesson_date)")
+        .eq("club_id", clubId)
+        .gte("lesson_slots.lesson_date", period.from)
+        .lte("lesson_slots.lesson_date", period.to)
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("events")
+        .select("id, name, event_date, capacity")
+        .eq("club_id", clubId)
+        .is("archived_at", null)
+        .gte("event_date", period.from)
+        .lte("event_date", period.to)
+        .order("id")
+        .range(from, to),
+    ),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("event_registrations")
+        .select("event_id, status, checked_in_at, events!inner(event_date)")
+        .eq("club_id", clubId)
+        .gte("events.event_date", period.from)
+        .lte("events.event_date", period.to)
+        .order("id")
+        .range(from, to),
+    ),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("club_id", clubId).eq("status", "active").is("archived_at", null),
     supabase.from("members").select("id", { count: "exact", head: true }).eq("club_id", clubId).eq("status", "pending_verification").is("archived_at", null),
     // New members exclude archived (deleted) rows, the same scope as the member list.

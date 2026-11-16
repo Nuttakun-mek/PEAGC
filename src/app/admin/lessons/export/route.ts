@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { csvCell } from "@/lib/csv";
 import { queueStatusLabel } from "@/lib/lessons/booking";
+import { fetchAllRows } from "@/lib/supabase/fetch-all";
 import { createClient } from "@/lib/supabase/server";
 
 const allowedRoles = ["platform_owner", "club_admin", "committee"];
@@ -75,14 +76,18 @@ export async function GET(request: Request) {
     return new NextResponse("ไม่มีสิทธิ์เข้าถึง", { status: 403 });
   }
 
-  const { data, error } = await supabase
-    .from("lesson_bookings")
-    .select(
-      "id, slot_id, status, queue_seq, booked_at, attendance_note, members(full_name, nickname, employee_code, phone, email, line_id), lesson_slots(title, lesson_date, start_time, end_time, capacity, coach_name, venue)",
-    )
-    .eq("club_id", role.club_id)
-    .order("queue_seq", { ascending: true })
-    .limit(5000);
+  // Every booking, page by page (one request returns at most 1,000 rows).
+  const { data, error } = await fetchAllRows((from, to) =>
+    supabase
+      .from("lesson_bookings")
+      .select(
+        "id, slot_id, status, queue_seq, booked_at, attendance_note, members(full_name, nickname, employee_code, phone, email, line_id), lesson_slots(title, lesson_date, start_time, end_time, capacity, coach_name, venue)",
+      )
+      .eq("club_id", role.club_id)
+      .order("queue_seq", { ascending: true })
+      .order("id")
+      .range(from, to),
+  );
 
   if (error) {
     return new NextResponse("ดึงข้อมูลไม่สำเร็จ", { status: 500 });
