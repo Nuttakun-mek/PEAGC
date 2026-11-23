@@ -121,7 +121,13 @@ export function interpretCell(cell: CellReading, par: number, notation: CardNota
   return { flags, pickup: false, raw, strokes: null };
 }
 
-export type OcrPlayerRow = { cells: CellReading[]; name: string; nameConfidence: Confidence };
+export type OcrPlayerRow = {
+  cells: CellReading[];
+  name: string;
+  nameConfidence: Confidence;
+  /** OUT / IN / TOTAL as written on the card ("" when blank); compared with the hole sums. */
+  totals?: { in: string; out: string; total: string };
+};
 
 export function interpretRow(row: OcrPlayerRow, pars: number[], notation: CardNotation) {
   const cells = pars.map((par, index) =>

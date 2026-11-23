@@ -104,7 +104,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ even
         return ga - gb || a.created_at.localeCompare(b.created_at);
       });
     const body = toCsv(
-      ["ก๊วน", "เวลาออกตัว", "หลุมเริ่ม", "ชื่อ-นามสกุล", "ชื่อเล่น", "เลขสมาชิก", "แฮนดิแคป", "โทร", "เช็กอิน"],
+      ["ก๊วน", "เวลาออกตัว", "หลุมเริ่ม", "ชื่อ-นามสกุล", "ชื่อเล่น", "เลขสมาชิก", "แต้มต่อที่ชมรมตั้ง (HC)", "โทร", "เช็กอิน"],
       seated.map((row) => [
         row.event_pairing_groups?.group_no ?? "ยังไม่จัด",
         row.event_pairing_groups?.tee_time?.slice(0, 5) ?? "",
@@ -128,7 +128,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ even
 
   const body = toCsv(
     [
-      "ลำดับ", "ชื่อ-นามสกุล", "ชื่อเล่น", "เลขสมาชิก", "รหัสพนักงาน", "หน่วยงาน", "โทร", "อีเมล", "แฮนดิแคป",
+      "ลำดับ", "ชื่อ-นามสกุล", "ชื่อเล่น", "เลขสมาชิก", "รหัสพนักงาน", "หน่วยงาน", "โทร", "อีเมล", "แต้มต่อที่ชมรมตั้ง (HC)",
       "สถานะการสมัคร", "สถานะการชำระ", "ยอดชำระ", "ก๊วน", "เวลาออกตัว", "เช็กอิน", "วันที่สมัคร",
     ],
     selected.map((row, index) => {

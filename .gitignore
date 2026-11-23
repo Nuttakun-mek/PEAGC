@@ -45,3 +45,7 @@ next-env.d.ts
 
 # Local backups written by scripts/cleanup-test-data.mjs (contain member data)
 test-data-backup-*.json
+
+# Process core dumps (can be hundreds of MB)
+/core
+/core.*

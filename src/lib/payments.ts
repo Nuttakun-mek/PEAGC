@@ -28,7 +28,7 @@ export const paymentStageLabels: Record<PaymentStage, string> = {
   not_required: "ไม่ต้องชำระ",
   refunded: "คืนเงินแล้ว",
   rejected: "สลิปไม่ผ่าน",
-  waitlist: "รายชื่อสำรอง",
+  waitlist: "คิวสำรอง",
 };
 
 /** Labels for payment_records.status values. */
@@ -60,4 +60,13 @@ export const NO_SLIP_REASON_MIN = 5;
 
 export function needsNoSlipReason(input: { hasSlip: boolean; note: string; status: string }) {
   return input.status === "approved" && !input.hasSlip && input.note.trim().length < NO_SLIP_REASON_MIN;
+}
+
+/** Stage of a payment that is not tied to an event registration (lesson package, membership fee …). */
+export function paymentRecordStage(payment: { slip_file_id: string | null; status: string }): PaymentStage {
+  if (payment.status === "refunded") return "refunded";
+  if (payment.status === "approved") return "approved";
+  if (payment.status === "rejected") return "rejected";
+  if (payment.slip_file_id && (payment.status === "review" || payment.status === "pending")) return "awaiting_review";
+  return "awaiting_payment";
 }

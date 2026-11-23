@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { getSessionIdentity, getSessionRoles, getSessionUser, resolveDisplayName } from "@/lib/auth/session";
+import { isAdminRole } from "@/lib/auth/roles";
 import { hasSupabasePublicConfig, isAuthBypassEnabled } from "@/lib/supabase/env";
 
 export type AppRole = "admin" | "member";
@@ -60,23 +61,15 @@ async function getAuthenticatedContext(requiredRole: AppRole | undefined) {
   const [identity, roles] = await Promise.all([getSessionIdentity(user.id), getSessionRoles(user.id)]);
   const profile = identity.profile;
 
-  const adminRoles = [
-    "platform_owner",
-    "club_admin",
-    "committee",
-    "finance_officer",
-    "tournament_director",
-    "scoring_officer",
-  ];
-  const hasAdminRole = Boolean(
-    roles?.some((item) => adminRoles.includes(item.role_key)),
-  );
+  // Admin roles (incl. auditor) come from src/lib/auth/roles.ts; which admin pages each role may
+  // open is checked per page with requireAdminArea. A coach is not an admin.
+  const hasAdminRole = Boolean(roles?.some((item) => isAdminRole(item.role_key)));
   const role: AppRole = hasAdminRole ? "admin" : "member";
   const primaryRole =
-    roles?.find((item) => adminRoles.includes(item.role_key)) ?? roles?.[0] ?? null;
+    roles?.find((item) => isAdminRole(item.role_key)) ?? roles?.[0] ?? null;
 
   if (requiredRole === "admin" && !hasAdminRole) {
-    redirect("/member?status=admin-required");
+    redirect(roles?.some((item) => item.role_key === "coach") ? "/coach" : "/member?status=admin-required");
   }
 
   return {

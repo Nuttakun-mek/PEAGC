@@ -69,16 +69,19 @@ export function StatusBannerShell({
     return null;
   }
 
+  // Screen readers announce the result: errors right away, everything else when idle.
+  const live = tone === "error" ? ({ "aria-live": "assertive", role: "alert" } as const) : ({ "aria-live": "polite", role: "status" } as const);
+
   if (!floating) {
     return (
-      <div className={className} role="status">
+      <div aria-atomic="true" className={className} {...live}>
         {children}
       </div>
     );
   }
 
   return (
-    <div className="status-toast-region" role={tone === "error" ? "alert" : "status"}>
+    <div aria-atomic="true" className="status-toast-region" {...live}>
       <div className={`status-toast ${className}`}>
         {children}
         <button

@@ -1,1152 +1,547 @@
 import Link from "next/link";
-import {
-  ArrowLeft,
-  BadgeCheck,
-  BookOpenCheck,
-  CalendarClock,
-  ClipboardCheck,
-  Download,
-  ListOrdered,
-  Megaphone,
-  Plus,
-  RotateCcw,
-  Trash2,
-  Unlock,
-} from "lucide-react";
+import { GraduationCap } from "lucide-react";
 
 import {
-  archiveLessonProgram,
-  createLessonProgram,
-  createLessonSlot,
-  archiveLessonSlot,
-  openLessonBookingNow,
-  restoreLessonProgram,
-  generateLessonSlots,
-  removeLessonBooking,
-  saveLessonBookingSettings,
-  updateLessonAttendance,
-  updateLessonProgram,
-  updateLessonSlot,
-} from "@/app/admin/lessons/actions";
-import {
-  type BookingPhase,
-  type LessonBookingSettings,
-  addDays,
-  bangkokDate,
-  defaultLessonBookingSettings,
-  formatBangkokDateTime,
-  getBookingPhase,
-  queueStatus,
-  queueStatusLabel,
-  seatSummary,
-  toBangkokInputValue,
-} from "@/lib/lessons/booking";
-import { LessonSlotTable } from "@/components/lesson-slot-table";
-import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
-import { LoadErrorBanner, StatusBanner, toneForStatus } from "@/components/status-banner";
+  type CourseExtras,
+  type LessonsBase,
+  type LoadIssue,
+  type StaffName,
+  countAnnouncementAcks,
+  loadClosures,
+  loadCourseExtras,
+  loadLessonsBase,
+  loadRoster,
+  loadSlot,
+  loadSlotList,
+  loadSlotsBetween,
+  loadStaffNames,
+} from "@/app/admin/lessons/data";
+import { LessonsAdminCalendar, LessonsAdminClosureList, LessonsAdminSlotList } from "@/components/lessons-admin-calendar";
+import { LessonsAdminCoaches } from "@/components/lessons-admin-coaches";
+import { LessonsAdminCourses } from "@/components/lessons-admin-courses";
+import { LessonsAdminDrawer } from "@/components/lessons-admin-dialog";
+import { SlotForm, phaseDetail, phaseInfo, sectionTitle } from "@/components/lessons-admin-fields";
+import { LessonsAdminAnnouncement, LessonsAdminRules } from "@/components/lessons-admin-rules";
+import { LessonsAdminSlotPanel } from "@/components/lessons-admin-slot-panel";
+import { LessonsAdminWizard } from "@/components/lessons-admin-wizard";
+import { LessonsOpenHash } from "@/components/lessons-open-hash";
+import { CreatePanel } from "@/components/create-panel";
+import { type BannerTone, LoadErrorBanner, StatusBanner, toneForStatus } from "@/components/status-banner";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { buttonPrimary, card } from "@/components/ui/styles";
 import { resolveAccess } from "@/lib/auth/access";
-import { formatThaiDate, orUnset } from "@/lib/display";
-import { collectLoadErrors, dbFailureMessages } from "@/lib/supabase/errors";
-import { fetchAllRows } from "@/lib/supabase/fetch-all";
+import { requireAdminArea } from "@/lib/auth/admin-area";
+import { appIcons } from "@/lib/icons";
+import {
+  type AdminLessonSlot,
+  type CalendarQuery,
+  type LessonsAdminTab,
+  type MoveTarget,
+  closureStatusMessage,
+  coachHours,
+  generatedStatusMessage,
+  lessonsAdminHref,
+  lessonsAdminTabs,
+  moveTargets,
+  parseCalendarQuery,
+  parseLessonsTab,
+} from "@/lib/lessons/admin";
+import { MAX_GENERATED_SLOTS, addDays, bangkokDate, getBookingPhase } from "@/lib/lessons/booking";
+import { formatMonthLabel, monthRange, weekRange } from "@/lib/lessons/calendar";
+import { rpcErrorMessage } from "@/lib/lessons/errors";
+import { defaultLessonRules } from "@/lib/lessons/rules";
+import { lessonSampleData } from "@/lib/lessons/sample-data";
+import type { LessonClosure, LessonRosterRow } from "@/lib/lessons/types";
+import { collectLoadErrors, dbFailureMessages, logDbError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
-/** The slot schedule starts this many days back (recent rounds still need attendance). */
-const SLOT_WINDOW_PAST_DAYS = 30;
-const SLOT_WINDOW_LIMIT = 300;
+/** The list view starts this many days back (recent rounds still need attendance). */
+const LIST_PAST_DAYS = 30;
+const LIST_LIMIT = 300;
+/** Rounds offered in "ย้ายไปรอบอื่น". */
+const MOVE_WINDOW_DAYS = 60;
 
 type AdminLessonsPageProps = {
-  searchParams: Promise<{ bypass?: string; status?: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
 };
-
-type ProgramRow = {
-  coach_name: string | null;
-  description: string | null;
-  id: string;
-  level: string;
-  name: string;
-  price: number;
-  status: string;
-};
-
-type SlotRow = {
-  allow_member_reschedule?: boolean;
-  booked_count?: number;
-  capacity: number;
-  coach_name: string | null;
-  id: string;
-  lesson_date: string;
-  lesson_programs: { name: string } | { name: string }[] | null;
-  note?: string | null;
-  program_id: string;
-  start_time: string;
-  end_time: string;
-  status: string;
-  target_bureaus?: string[] | null;
-  target_departments?: string[] | null;
-  target_divisions?: string[] | null;
-  target_sections?: string[] | null;
-  target_work_lines?: string[] | null;
-  reschedule_cutoff_hours?: number;
-  title: string;
-  venue: string | null;
-  waitlist_capacity?: number;
-};
-
-type BookingMember = {
-  email?: string | null;
-  employee_code: string | null;
-  full_name: string;
-  line_id?: string | null;
-  nickname: string | null;
-  phone?: string | null;
-};
-
-type BookingRow = {
-  attendance_note: string | null;
-  booked_at?: string;
-  checked_in_at: string | null;
-  id: string;
-  queue_seq?: number | null;
-  slot_id: string;
-  lesson_slots: {
-    lesson_date: string;
-    start_time: string;
-    title: string;
-  } | {
-    lesson_date: string;
-    start_time: string;
-    title: string;
-  }[] | null;
-  members: BookingMember | BookingMember[] | null;
-  status: string;
-};
-
-const samplePrograms: ProgramRow[] = [
-  {
-    coach_name: "ผู้ฝึกสอน กฟภ.",
-    description: "พื้นฐานวงสวิงและ short game",
-    id: "sample-program-1",
-    level: "beginner",
-    name: "พื้นฐานกอล์ฟ",
-    price: 1200,
-    status: "active",
-  },
-];
-
-const sampleSlots: SlotRow[] = [
-  {
-    capacity: 6,
-    coach_name: "ผู้ฝึกสอน กฟภ.",
-    end_time: "18:30",
-    id: "sample-slot-1",
-    lesson_date: "2026-08-20",
-    lesson_programs: { name: "พื้นฐานกอล์ฟ" },
-    note: null,
-    program_id: "sample-program-1",
-    start_time: "17:00",
-    status: "open",
-    title: "ฝึกวงสวิงรอบเย็น",
-    venue: "สนามฝึกซ้อม เอ",
-  },
-];
-
-const sampleBookings: BookingRow[] = [
-  {
-    attendance_note: null,
-    checked_in_at: null,
-    id: "sample-booking-1",
-    slot_id: "sample-slot-1",
-    lesson_slots: {
-      lesson_date: "2026-08-20",
-      start_time: "17:00",
-      title: "Swing Clinic รอบเย็น",
-    },
-    members: {
-      employee_code: "PEA001",
-      full_name: "สมาชิกทดลอง",
-      nickname: "Demo",
-    },
-    status: "booked",
-  },
-];
 
 const statusMessages: Record<string, string> = {
   ...dbFailureMessages,
-  "text-corrupted": "ข้อความภาษาไทยเสียหาย (แสดงเป็น ???) กรุณาพิมพ์ใหม่ก่อนบันทึก",
+  "announcement-saved": "บันทึกประกาศแล้ว",
   "attendance-missing": "กรุณาเลือกสถานะเข้าเรียน",
-  "attendance-updated": "ลงเวลาเรียนเรียบร้อยแล้ว",
-  "attendance-update-failed": "ลงเวลาเรียนไม่สำเร็จ",
-  "program-created": "สร้างคอร์สเรียนเรียบร้อยแล้ว",
-  "program-create-failed": "สร้างคอร์สเรียนไม่สำเร็จ",
+  "attendance-update-failed": "บันทึกการเช็กชื่อไม่สำเร็จ",
+  "attendance-updated": "บันทึกการเช็กชื่อแล้ว",
+  "booking-already-open": "ตอนนี้เปิดให้สมาชิกจองอยู่แล้ว",
+  "booking-moved": "ย้ายผู้เรียนไปรอบใหม่แล้ว สมาชิกได้รับแจ้งเตือนในแอป",
+  "booking-opened": "เปิดให้สมาชิกจองรอบเรียนแล้ว ตั้งแต่ตอนนี้",
+  "booking-removed": "นำออกแล้ว คนในคิวสำรองลำดับถัดไปได้ที่นั่งแทน",
+  "coach-archived": "เก็บผู้สอนถาวรแล้ว",
+  "coach-created": "เพิ่มผู้สอนแล้ว",
+  "coach-email-invalid": "อีเมลไม่ถูกต้อง",
+  "coach-link-failed": "เชื่อมบัญชีผู้สอนไม่สำเร็จ",
+  "coach-link-unavailable": "ยังไม่ได้ตั้งค่ากุญแจผู้ดูแลฐานข้อมูล (SUPABASE_SECRET_KEY) จึงเชื่อมบัญชีผู้สอนไม่ได้",
+  "coach-login-linked": "เชื่อมบัญชีแล้ว ผู้สอนเข้าสู่ระบบแล้วเห็นตารางสอนของตัวเองได้เลย",
+  "coach-login-not-found": "ไม่พบบัญชีที่ใช้อีเมลนี้ ให้ผู้สอนสมัครบัญชีด้วยอีเมลนี้ก่อน",
+  "coach-login-taken": "บัญชีนี้เชื่อมกับผู้สอนคนอื่นอยู่แล้ว",
+  "coach-login-unlinked": "ยกเลิกการเชื่อมบัญชีแล้ว",
+  "coach-missing": "กรุณากรอกชื่อผู้สอน",
+  "coach-not-found": "ไม่พบผู้สอนคนนี้",
+  "coach-save-failed": "บันทึกผู้สอนไม่สำเร็จ",
+  "coach-saved": "บันทึกผู้สอนแล้ว",
+  "credits-adjust-failed": "ปรับเครดิตไม่สำเร็จ",
+  "day-close-failed": "งดเรียนไม่สำเร็จ",
+  "generate-nothing-new": "รอบในช่วงนี้มีอยู่แล้วทั้งหมด ไม่ได้สร้างรอบใหม่",
+  "move-failed": "ย้ายรอบไม่สำเร็จ",
+  "move-target-missing": "เลือกรอบที่จะย้ายไปก่อน",
+  "package-archived": "เก็บแพ็กเกจถาวรแล้ว คนที่ซื้อไปแล้วยังใช้เครดิตได้",
+  "package-created": "เพิ่มแพ็กเกจแล้ว",
+  "package-credits-invalid": "จำนวนครั้งต้องเป็นจำนวนเต็ม 1–1,000",
+  "package-days-invalid": "อายุการใช้ต้องเป็นจำนวนเต็ม 1–3,650 วัน",
+  "package-limit-invalid": "จำนวนที่ซื้อได้ต่อคนต้องเป็นจำนวนเต็มตั้งแต่ 1 (หรือเว้นว่าง)",
+  "package-missing": "กรุณากรอกชื่อแพ็กเกจ",
+  "package-not-found": "ไม่พบแพ็กเกจนี้",
+  "package-price-invalid": "ราคาไม่ถูกต้อง",
+  "package-restored": "กู้คืนแพ็กเกจแล้ว สถานะ \"ปิดขาย\" เปลี่ยนเป็น \"เปิดขาย\" เมื่อพร้อม",
+  "package-save-failed": "บันทึกแพ็กเกจไม่สำเร็จ",
+  "package-saved": "บันทึกแพ็กเกจแล้ว",
+  "program-archive-failed": "ลบคอร์สไม่สำเร็จ",
+  "program-archived": "ลบคอร์สแล้ว (เก็บถาวร) รอบที่ยังไม่มีคนจองของคอร์สนี้ถูกลบไปด้วย กู้คืนได้ที่ \"คอร์สที่เก็บถาวร\"",
+  "program-create-failed": "เพิ่มคอร์สเรียนไม่สำเร็จ",
+  "program-created": "เพิ่มคอร์สเรียนแล้ว",
   "program-missing": "กรุณากรอกชื่อคอร์สเรียน",
   "program-not-found": "ไม่พบคอร์สเรียน",
-  "program-updated": "บันทึกการแก้ไขคอร์สเรียนเรียบร้อยแล้ว",
-  "program-update-failed": "บันทึกการแก้ไขคอร์สเรียนไม่สำเร็จ",
-  "slot-created": "สร้างรอบเรียนเรียบร้อยแล้ว",
-  "slot-create-failed": "สร้างรอบเรียนไม่สำเร็จ",
-  "slot-capacity-too-low": "ที่นั่งรวมคิวสำรองน้อยกว่าจำนวนที่จองอยู่",
-  "booking-removed": "นำออกแล้ว คิวถัดไปเลื่อนขึ้นอัตโนมัติ",
-  "generate-nothing-new": "รอบทั้งหมดมีอยู่แล้ว",
-  "generate-times-invalid": "รูปแบบเวลาไม่ถูกต้อง ใช้ 09:00-10:00 คั่นแต่ละช่วงด้วยจุลภาค",
-  "settings-save-failed": "บันทึกไม่สำเร็จ",
-  "settings-saved": "บันทึกแล้ว",
-  "settings-window-invalid": "เวลาปิดต้องอยู่หลังเวลาเปิด",
-  "slot-archive-failed": "ลบรอบเรียนไม่สำเร็จ",
-  "slot-archive-has-bookings": "ไม่สามารถลบรอบที่ยังมีสมาชิกจองอยู่ กรุณาย้ายหรือยกเลิกการจองก่อน",
-  "slot-archived": "ลบรอบเรียนออกจากตารางแล้ว",
-  "slot-missing": "กรุณากรอกข้อมูลรอบเรียนให้ครบ",
-  "slot-not-found": "ไม่พบรอบเรียนที่ต้องการแก้ไข",
-  "slot-updated": "บันทึกการแก้ไขรอบเรียนเรียบร้อยแล้ว",
-  "slot-update-failed": "บันทึกการแก้ไขรอบเรียนไม่สำเร็จ",
-  "slot-created-opened": "สร้างรอบเรียนแล้ว และเปิดให้สมาชิกจองได้ทันที",
-  "booking-opened": "เปิดให้สมาชิกจองรอบเรียนแล้ว ตั้งแต่ตอนนี้",
-  "booking-already-open": "ขณะนี้เปิดให้สมาชิกจองอยู่แล้ว",
-  "program-archived": "ลบคอร์สแล้ว (เก็บถาวร) รอบเรียนที่ยังไม่มีผู้จองของคอร์สนี้ถูกนำออกด้วย กู้คืนได้ที่ \"คอร์สที่เก็บถาวร\"",
-  "program-archive-failed": "ลบคอร์สไม่สำเร็จ",
-  "program-restored": "กู้คืนคอร์สแล้ว สถานะเป็น \"ปิดใช้งาน\" เปลี่ยนเป็น \"ใช้งาน\" เมื่อพร้อมเปิดรับ",
   "program-restore-failed": "กู้คืนคอร์สไม่สำเร็จ",
+  "program-restored": "กู้คืนคอร์สแล้ว สถานะเป็น \"ปิดใช้งาน\" เปลี่ยนเป็น \"ใช้งาน\" เมื่อพร้อมเปิดรับ",
+  "program-update-failed": "บันทึกคอร์สเรียนไม่สำเร็จ",
+  "program-updated": "บันทึกคอร์สเรียนแล้ว",
+  "rules-saved": "บันทึกกติกาแล้ว",
+  "settings-save-failed": "บันทึกไม่สำเร็จ",
+  "settings-saved": "บันทึกช่วงเปิดจองแล้ว",
+  "settings-window-invalid": "เวลาปิดจองต้องอยู่หลังเวลาเปิดจอง",
+  "slot-already-cancelled": "รอบนี้ยกเลิกไปแล้ว",
+  "slot-archive-failed": "ลบรอบเรียนไม่สำเร็จ",
+  "slot-archive-has-bookings": "ลบรอบนี้ไม่ได้เพราะยังมีคนจองอยู่ ย้ายหรือนำผู้จองออกก่อน",
+  "slot-archived": "ลบรอบเรียนออกจากตารางแล้ว",
+  "slot-cancelled": "ยกเลิกรอบแล้ว ผู้จองได้คืนเครดิตและได้รับแจ้งเตือนในแอป",
+  "slot-capacity-too-low": "ที่นั่งรวมคิวสำรองน้อยกว่าจำนวนคนที่จองอยู่",
+  "slot-create-failed": "สร้างรอบเรียนไม่สำเร็จ",
+  "slot-created": "สร้างรอบเรียนแล้ว",
+  "slot-created-opened": "สร้างรอบเรียนแล้ว และเปิดให้สมาชิกจองได้เลย",
+  "slot-missing": "กรุณากรอกข้อมูลรอบเรียนให้ครบ",
+  "slot-not-found": "ไม่พบรอบเรียนนี้",
+  "slot-time-invalid": "เวลาเลิกต้องหลังเวลาเริ่ม",
+  "slot-update-failed": "บันทึกรอบเรียนไม่สำเร็จ",
+  "slot-updated": "บันทึกรอบเรียนแล้ว",
+  "text-corrupted": "ข้อความภาษาไทยเสียหาย (แสดงเป็น ???) กรุณาพิมพ์ใหม่ก่อนบันทึก",
+  "venue-archived": "เก็บสถานที่ถาวรแล้ว",
+  "venue-created": "เพิ่มสถานที่แล้ว",
+  "venue-missing": "กรุณากรอกชื่อสถานที่",
+  "venue-not-found": "ไม่พบสถานที่นี้",
+  "venue-numbers-invalid": "จำนวนช่อง (1–500) และคนต่อช่อง (1–100) ต้องเป็นจำนวนเต็ม",
+  "venue-save-failed": "บันทึกสถานที่ไม่สำเร็จ",
+  "venue-saved": "บันทึกสถานที่แล้ว",
 };
 
-const phaseInfo: Record<BookingPhase, { label: string; tone: string }> = {
-  after: { label: "ปิดลงทะเบียนแล้ว สมาชิกจองไม่ได้", tone: "border-[#f3c6cb] bg-[#fff7f7] text-[#9f1d1d]" },
-  before: { label: "ตั้งเวลาเปิดลงทะเบียนไว้ล่วงหน้า สมาชิกยังจองไม่ได้", tone: "border-[#efd9a6] bg-[#fffbf0] text-[#805300]" },
-  open: { label: "เปิดลงทะเบียนอยู่ สมาชิกจองรอบเรียนได้", tone: "border-[#bfe3cf] bg-[#f3fbf6] text-[#16794b]" },
-  unset: { label: "ยังไม่ได้เปิดลงทะเบียน สมาชิกเห็นรอบเรียนเป็น \"ยังไม่เปิด\"", tone: "border-[#f3c6cb] bg-[#fff7f7] text-[#9f1d1d]" },
-};
+const conflictWords: Record<string, string> = { coach: "ผู้สอน", venue: "สถานที่" };
 
-/** On create forms: open member booking together with the new rounds (checked unless a future opening is scheduled). */
-function OpenNowOption({ disabled, openAt, phase }: { disabled?: boolean; openAt: string | null; phase: BookingPhase }) {
-  if (phase === "open") {
-    return (
-      <p className="flex items-center gap-2 rounded-md border border-[#bfe3cf] bg-[#f3fbf6] px-3 py-2.5 text-sm text-[#16794b]">
-        <span className="size-2 rounded-full bg-[#16794b]" aria-hidden="true" />
-        เปิดลงทะเบียนอยู่ สมาชิกจองรอบใหม่ได้ทันทีหลังบันทึก
-      </p>
-    );
+function statusText(status: string, notBookableYet: string) {
+  if (status === "slot-created") return `${statusMessages[status]}${notBookableYet}`;
+  if (statusMessages[status]) return statusMessages[status];
+  const [key, ...rest] = status.split(":");
+  const value = rest.join(":");
+  switch (key) {
+    case "generated":
+      return generatedStatusMessage(status, notBookableYet);
+    case "day-closed":
+      return closureStatusMessage(status);
+    case "generate-invalid":
+    case "rules-invalid":
+    case "credits-invalid":
+      return value || null;
+    case "rpc":
+      return rpcErrorMessage(value);
+    case "credits-adjusted": {
+      const [delta, remaining] = rest.map(Number);
+      return `${delta > 0 ? `เติมเครดิต ${delta}` : `หักเครดิต ${Math.abs(delta)}`} ครั้งแล้ว แพ็กเกจนั้นเหลือ ${remaining} ครั้ง สมาชิกได้รับแจ้งเตือนในแอป`;
+    }
+    case "program-archive-blocked":
+      return `ยังลบคอร์สนี้ไม่ได้ เพราะมี ${value} รอบที่กำลังจะมาถึงและยังมีคนจองอยู่ ย้ายหรือนำผู้จองออกจากรอบเหล่านั้นก่อน`;
+    case "slot-capacity-below-seats":
+      return `ลดที่นั่งให้น้อยกว่า ${value} คนไม่ได้ เพราะมีคนได้ที่นั่งแล้ว ${value} คน ย้ายหรือนำผู้เรียนออกก่อน`;
+    case "slot-waitlist-below-queue":
+      return `ลดคิวสำรองให้น้อยกว่า ${value} คนไม่ได้ เพราะมีคนรออยู่ในคิว ${value} คน`;
+    case "slot-saved-conflict":
+      return `บันทึกแล้ว แต่เวลาชนกับรอบอื่นของ${value.split("+").map((kind) => conflictWords[kind] ?? kind).join("และ")}เดียวกัน ตรวจในปฏิทินอีกครั้ง`;
+    default:
+      return null;
   }
-  const scheduled = phase === "before";
-  return (
-    <label className="flex items-start gap-3 rounded-md border border-[#efd9a6] bg-[#fffbf0] px-3 py-3 text-sm text-[#3f3a48]">
-      <input className="mt-1" defaultChecked={!scheduled} disabled={disabled} name="openBookingNow" type="checkbox" />
-      <span>
-        <span className="font-semibold">เปิดให้สมาชิกจองทันทีหลังบันทึก</span>
-        <span className="mt-0.5 block text-xs leading-5 text-[#805300]">
-          {scheduled
-            ? `ตอนนี้ตั้งเวลาเปิดจองไว้ ${formatBangkokDateTime(openAt)} ถ้าติ๊กจะเปิดจองทันทีแทน`
-            : phase === "after"
-              ? "ช่วงลงทะเบียนปิดไปแล้ว ถ้าไม่ติ๊ก สมาชิกจะเห็นรอบนี้แต่จองไม่ได้"
-              : "ยังไม่ได้ตั้งช่วงเปิดลงทะเบียน ถ้าไม่ติ๊ก สมาชิกจะเห็นรอบนี้เป็น \"ยังไม่เปิด\""}
-        </span>
-      </span>
-    </label>
-  );
 }
 
-const lessonStatusLabels: Record<string, string> = {
-  active: "ใช้งาน",
-  archived: "เก็บถาวร",
-  attended: "เข้าเรียนแล้ว",
-  booked: "จองแล้ว",
-  cancelled: "ยกเลิก",
-  closed: "ปิดรับ",
-  completed: "จบแล้ว",
-  draft: "ฉบับร่าง",
-  inactive: "ปิดใช้งาน",
-  no_show: "ไม่มาเรียน",
-  open: "เปิดจอง",
-};
-
-const lessonLevelLabels: Record<string, string> = {
-  advanced: "ชำนาญ",
-  all: "ทุกระดับ",
-  beginner: "เริ่มต้น",
-  intermediate: "ปานกลาง",
-};
-
-function statusClass(status: string) {
-  if (["active", "attended", "open"].includes(status)) {
-    return "bg-[#f8edf4] text-[#722257]";
-  }
-
-  if (["booked", "draft"].includes(status)) {
-    return "bg-[#fff5d8] text-[#805300]";
-  }
-
-  if (["cancelled", "no_show"].includes(status)) {
-    return "bg-[#fdecec] text-[#991b1b]";
-  }
-
-  return "bg-[#f1f3ef] text-[#6b6475]";
+function bannerTone(status: string): BannerTone {
+  const key = status.split(":")[0];
+  if (["day-closed", "credits-adjusted", "coach-login-linked", "coach-login-unlinked", "qr-rotated", "generated"].includes(key)) return "success";
+  if (["slot-saved-conflict", "slot-already-cancelled", "generate-nothing-new"].includes(key)) return "warning";
+  if (["rpc", "coach-link-unavailable", "move-target-missing", "slot-capacity-below-seats", "slot-waitlist-below-queue"].includes(key)) return "error";
+  return toneForStatus(status);
 }
 
-function firstRelated<T>(value: T | T[] | null) {
-  return Array.isArray(value) ? (value[0] ?? null) : value;
-}
+type PanelData = { moveTargets: MoveTarget[]; roster: LessonRosterRow[]; rosterFailed: boolean; slot: AdminLessonSlot };
 
-function ProgramForm({
-  action = createLessonProgram,
-  disabled,
-  program,
-  title = "สร้างคอร์สเรียน",
-}: {
-  action?: (formData: FormData) => Promise<void>;
-  disabled?: boolean;
-  program?: ProgramRow;
-  title?: string;
-}) {
-  return (
-    <form action={action} className="@container grid gap-4">
-      {program ? <input name="programId" type="hidden" value={program.id} /> : null}
-      <div className="flex items-center gap-2">
-        <Plus className="size-4 text-[#722257]" aria-hidden="true" />
-        <h2 className="text-lg font-semibold text-[#722257]">{title}</h2>
-      </div>
-      <div className="grid gap-4 @lg:grid-cols-[1fr_180px_180px]">
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ชื่อคอร์ส</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={program?.name ?? ""} disabled={disabled} name="name" required />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ระดับ</span>
-          <select className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={program?.level ?? "all"} disabled={disabled} name="level">
-            <option value="all">ทุกระดับ</option>
-            <option value="beginner">เริ่มต้น</option>
-            <option value="intermediate">ปานกลาง</option>
-            <option value="advanced">ชำนาญ</option>
-          </select>
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">สถานะ</span>
-          <select className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={program?.status ?? "active"} disabled={disabled} name="status">
-            <option value="active">ใช้งาน</option>
-            <option value="inactive">ปิดใช้งาน</option>
-          </select>
-        </label>
-      </div>
-      <div className="grid gap-4 @lg:grid-cols-[1fr_160px]">
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ผู้สอน</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={program?.coach_name ?? ""} disabled={disabled} name="coachName" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ราคา</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={program?.price ?? 0} disabled={disabled} min="0" name="price" step="0.01" type="number" />
-        </label>
-      </div>
-      <label className="block">
-        <span className="text-sm font-semibold text-[#3f3a48]">รายละเอียด</span>
-        <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={program?.description ?? ""} disabled={disabled} name="description" />
-      </label>
-      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] @md:w-fit" disabled={disabled} type="submit">
-        <BadgeCheck className="size-4" aria-hidden="true" />
-        {program ? "บันทึกการแก้ไข" : "บันทึกคอร์ส"}
-      </button>
-    </form>
-  );
-}
-
-function SlotForm({
-  action = createLessonSlot,
-  booking,
-  disabled,
-  programs,
-  slot,
-  title = "สร้างรอบเรียน",
-}: {
-  action?: (formData: FormData) => Promise<void>;
-  /** Create form only: current member booking window, to offer opening it with the new round. */
-  booking?: { openAt: string | null; phase: BookingPhase };
-  disabled?: boolean;
-  programs: ProgramRow[];
-  slot?: SlotRow;
-  title?: string;
-}) {
-  return (
-    <form action={action} className="@container grid gap-4">
-      {slot ? <input name="slotId" type="hidden" value={slot.id} /> : null}
-      <div className="flex items-center gap-2">
-        <CalendarClock className="size-4 text-[#722257]" aria-hidden="true" />
-        <h2 className="text-lg font-semibold text-[#722257]">{title}</h2>
-      </div>
-      <div className="grid gap-4 @lg:grid-cols-[1fr_1fr_140px]">
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">คอร์ส</span>
-          <select className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.program_id} disabled={disabled || !programs.length} name="programId" required>
-            {programs.map((program) => (
-              <option key={program.id} value={program.id}>
-                {program.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ชื่อรอบเรียน</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.title ?? ""} disabled={disabled} name="title" required />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">สถานะ</span>
-          <select className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.status ?? "open"} disabled={disabled} name="status">
-            <option value="open">เปิดจอง</option>
-            <option value="draft">ฉบับร่าง</option>
-            <option value="closed">ปิดรับ</option>
-            <option value="completed">เสร็จสิ้น</option>
-            <option value="cancelled">ยกเลิกรอบ (ยกเลิกการจองทั้งหมดและแจ้งผู้จอง)</option>
-          </select>
-          <span className="mt-1 block text-xs text-[#6b6475]">
-            เพิ่มจำนวนที่นั่งแล้ว ผู้ที่เลื่อนจากคิวสำรองจะได้รับแจ้งเตือนอัตโนมัติ
-          </span>
-        </label>
-      </div>
-      <div className="grid gap-4 @lg:grid-cols-3 @4xl:grid-cols-6">
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">วันที่</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.lesson_date ?? ""} disabled={disabled} name="lessonDate" required type="date" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">เริ่ม</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.start_time?.slice(0, 5) ?? ""} disabled={disabled} name="startTime" required type="time" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">เลิก</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.end_time?.slice(0, 5) ?? ""} disabled={disabled} name="endTime" required type="time" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">จำนวนรับ</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.capacity ?? 1} disabled={disabled} min="1" name="capacity" type="number" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">คิวสำรอง</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.waitlist_capacity ?? 0} disabled={disabled} min="0" name="waitlistCapacity" type="number" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ผู้สอน</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.coach_name ?? ""} disabled={disabled} name="coachName" />
-        </label>
-      </div>
-      <div className="grid gap-4 @md:grid-cols-2">
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">สถานที่</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.venue ?? ""} disabled={disabled} name="venue" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">หมายเหตุ</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.note ?? ""} disabled={disabled} name="note" />
-        </label>
-      </div>
-      <div className="grid gap-4 @lg:grid-cols-3 @4xl:grid-cols-5">
-        {[
-          { key: "targetWorkLines", label: "สายงาน", value: slot?.target_work_lines },
-          { key: "targetBureaus", label: "สำนัก", value: slot?.target_bureaus },
-          { key: "targetDivisions", label: "ฝ่าย", value: slot?.target_divisions },
-          { key: "targetDepartments", label: "กอง", value: slot?.target_departments },
-          { key: "targetSections", label: "แผนก", value: slot?.target_sections },
-        ].map((target) => (
-          <label className="block" key={target.key}>
-            <span className="text-sm font-semibold text-[#3f3a48]">{target.label}</span>
-            <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={target.value?.join(", ") ?? ""} disabled={disabled} name={target.key} placeholder="เว้นว่าง = ทุกคน" />
-          </label>
-        ))}
-      </div>
-      <div className="grid gap-4 @lg:grid-cols-[1fr_180px]">
-        <label className="flex items-center gap-3 rounded-md border border-[#e6e2ee] bg-white/70 px-3 py-3 text-sm font-semibold text-[#3f3a48]">
-          <input defaultChecked={slot?.allow_member_reschedule ?? true} disabled={disabled} name="allowMemberReschedule" type="checkbox" />
-          อนุญาตให้สมาชิกเปลี่ยนเวลาเรียนเอง
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ปิดรับเปลี่ยนก่อนเริ่มเรียน (ชั่วโมง)</span>
-          <input className="mt-2 h-11 w-full rounded-md border border-[#d9d3e6] px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" defaultValue={slot?.reschedule_cutoff_hours ?? 12} disabled={disabled} min="0" name="rescheduleCutoffHours" type="number" />
-        </label>
-      </div>
-      {!slot && booking ? <OpenNowOption disabled={disabled} openAt={booking.openAt} phase={booking.phase} /> : null}
-      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] @md:w-fit" disabled={disabled || !programs.length} type="submit">
-        <BadgeCheck className="size-4" aria-hidden="true" />
-        {slot ? "บันทึกการแก้ไข" : "บันทึกรอบเรียน"}
-      </button>
-    </form>
-  );
-}
-
-const inputClass = "mt-2 h-11 w-full rounded-md border border-[#d9d3e6] bg-white px-3 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10";
-const weekdayLabels = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
-
-function BookingSettingsForm({ disabled, settings }: { disabled?: boolean; settings: LessonBookingSettings }) {
-  const phase = getBookingPhase(settings);
-  const phaseLabel = { after: "ปิดลงทะเบียนแล้ว", before: "รอเปิดลงทะเบียน", open: "เปิดลงทะเบียนอยู่", unset: "ยังไม่กำหนดรอบ" }[phase];
-  return (
-    <form action={saveLessonBookingSettings} className="@container grid scroll-mt-24 gap-4" id="booking-settings">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Megaphone className="size-4 text-[#722257]" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-[#722257]">รอบลงทะเบียนและประกาศ</h2>
-        </div>
-        <span className={`rounded-md px-2 py-1 text-xs font-semibold ${phase === "open" ? "bg-[#edf9f3] text-[#16794b]" : "bg-[#f1f3ef] text-[#6b6475]"}`}>{phaseLabel}</span>
-      </div>
-      <div className="grid gap-4 @md:grid-cols-2">
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">เปิดลงทะเบียน (เวลาไทย)</span>
-          <input className={inputClass} defaultValue={toBangkokInputValue(settings.booking_open_at)} disabled={disabled} name="bookingOpenAt" type="datetime-local" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ปิดลงทะเบียน (เว้นว่าง = ไม่ปิด)</span>
-          <input className={inputClass} defaultValue={toBangkokInputValue(settings.booking_close_at)} disabled={disabled} name="bookingCloseAt" type="datetime-local" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">จองได้สูงสุดต่อคน (0 = ไม่จำกัด)</span>
-          <input className={inputClass} defaultValue={settings.max_bookings_per_member} disabled={disabled} min="0" name="maxBookingsPerMember" type="number" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ยกเลิกได้ก่อนเรียน (ชั่วโมง)</span>
-          <input className={inputClass} defaultValue={settings.cancel_cutoff_hours} disabled={disabled} min="0" name="cancelCutoffHours" type="number" />
-        </label>
-      </div>
-      <label className="block">
-        <span className="text-sm font-semibold text-[#3f3a48]">หัวข้อประกาศ</span>
-        <input className={inputClass} defaultValue={settings.announcement_title} disabled={disabled} name="announcementTitle" placeholder="เช่น เงื่อนไขการเข้าเรียนรอบ ธ.ค. 2569" />
-      </label>
-      <label className="block">
-        <span className="text-sm font-semibold text-[#3f3a48]">เนื้อหาประกาศ</span>
-        <span className="block text-xs text-[#6b6475]">สมาชิกต้องกดรับทราบก่อนจอง</span>
-        <textarea className={`${inputClass} min-h-36 py-3 leading-7`} defaultValue={settings.announcement_body} disabled={disabled} name="announcementBody" placeholder="กติกา การแต่งกาย อุปกรณ์ จุดนัดพบ การมาสาย การงดสิทธิ์" />
-      </label>
-      <label className="flex items-center gap-3 rounded-md border border-[#e6e2ee] bg-white/70 px-3 py-3 text-sm font-semibold text-[#3f3a48]">
-        <input defaultChecked={settings.announcement_version === 0} disabled={disabled} name="announcementNewVersion" type="checkbox" />
-        ออกเป็นฉบับใหม่ (สมาชิกต้องกดรับทราบอีกครั้ง)
-        {settings.announcement_version ? <span className="text-xs font-normal text-[#6b6475]">(ฉบับปัจจุบัน {settings.announcement_version})</span> : null}
-      </label>
-      <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] @md:w-fit" disabled={disabled} type="submit">
-        <BadgeCheck className="size-4" aria-hidden="true" />
-        บันทึกการตั้งค่า
-      </button>
-    </form>
-  );
-}
-
-function SlotGeneratorForm({
-  booking,
-  disabled,
-  programs,
-}: {
-  booking: { openAt: string | null; phase: BookingPhase };
-  disabled?: boolean;
-  programs: ProgramRow[];
-}) {
-  return (
-    <form action={generateLessonSlots} className="@container grid gap-4">
-      <div className="flex items-center gap-2">
-        <CalendarClock className="size-4 text-[#722257]" aria-hidden="true" />
-        <h2 className="text-lg font-semibold text-[#722257]">สร้างรอบเรียนหลายรอบ</h2>
-      </div>
-      <p className="text-sm text-[#6b6475]">เลือกช่วงวันที่ วันในสัปดาห์ และช่วงเวลา ระบบจะสร้างรอบให้ทั้งหมดและข้ามรอบที่มีอยู่แล้ว (สูงสุด 300 รอบ)</p>
-      <div className="grid gap-4 @md:grid-cols-2">
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">คอร์ส</span>
-          <select className={inputClass} disabled={disabled || !programs.length} name="programId" required>
-            {programs.map((program) => <option key={program.id} value={program.id}>{program.name}</option>)}
-          </select>
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ชื่อรอบเรียน</span>
-          <input className={inputClass} disabled={disabled} name="title" placeholder="เช่น คลาสผู้เริ่มต้น รอบเย็น" required />
-        </label>
-      </div>
-      <div className="grid gap-4 @lg:grid-cols-3">
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ตั้งแต่วันที่</span>
-          <input className={inputClass} disabled={disabled} name="dateFrom" required type="date" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ถึงวันที่</span>
-          <input className={inputClass} disabled={disabled} name="dateTo" required type="date" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ช่วงเวลา (คั่นด้วยจุลภาค)</span>
-          <input
-            aria-describedby="time-ranges-hint"
-            className={inputClass}
-            defaultValue="16:30-17:30, 17:30-18:30"
-            disabled={disabled}
-            name="timeRanges"
-            placeholder="09:00-10:00, 10:00-11:00"
-            required
-          />
-          <span className="mt-1 block text-xs text-[#6b6475]" id="time-ranges-hint">
-            ใส่เวลาเริ่ม-เวลาจบทุกช่วง เช่น 09:00-10:00 (ใช้ 9.00-10.00 ได้)
-          </span>
-        </label>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {weekdayLabels.map((label, index) => (
-          <label className="flex items-center gap-2 rounded-full border border-[#d9d3e6] px-3 py-1.5 text-sm" key={label}>
-            <input defaultChecked disabled={disabled} name="weekdays" type="checkbox" value={index} /> {label}
-          </label>
-        ))}
-      </div>
-      <div className="grid gap-4 @lg:grid-cols-3 @4xl:grid-cols-6">
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ที่นั่งต่อรอบ</span>
-          <input className={inputClass} defaultValue={8} disabled={disabled} min="1" name="capacity" type="number" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">คิวสำรอง</span>
-          <input className={inputClass} defaultValue={3} disabled={disabled} min="0" name="waitlistCapacity" type="number" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ผู้สอน</span>
-          <input className={inputClass} disabled={disabled} name="coachName" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">สถานที่</span>
-          <input className={inputClass} disabled={disabled} name="venue" placeholder="เช่น สนามไดร์ฟ ช่อง 1-8" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">หมายเหตุ</span>
-          <input className={inputClass} disabled={disabled} name="note" />
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">สถานะ</span>
-          <select className={inputClass} defaultValue="open" disabled={disabled} name="status">
-            <option value="open">เปิดจอง</option>
-            <option value="draft">ฉบับร่าง</option>
-          </select>
-        </label>
-      </div>
-      <div className="grid gap-4 @lg:grid-cols-3 @4xl:grid-cols-5">
-        {[
-          { key: "targetWorkLines", label: "สายงาน" },
-          { key: "targetBureaus", label: "สำนัก" },
-          { key: "targetDivisions", label: "ฝ่าย" },
-          { key: "targetDepartments", label: "กอง" },
-          { key: "targetSections", label: "แผนก" },
-        ].map((target) => (
-          <label className="block" key={target.key}>
-            <span className="text-sm font-semibold text-[#3f3a48]">{target.label}</span>
-            <input className={inputClass} disabled={disabled} name={target.key} placeholder="คั่นด้วยจุลภาค" />
-          </label>
-        ))}
-      </div>
-      <div className="grid gap-4 @lg:grid-cols-[1fr_180px]">
-        <label className="flex items-center gap-3 rounded-md border border-[#e6e2ee] bg-white/70 px-3 py-3 text-sm font-semibold text-[#3f3a48]">
-          <input defaultChecked disabled={disabled} name="allowMemberReschedule" type="checkbox" />
-          อนุญาตให้สมาชิกเปลี่ยนเวลาเรียนเอง
-        </label>
-        <label className="block">
-          <span className="text-sm font-semibold text-[#3f3a48]">ปิดรับเปลี่ยนก่อนเริ่มเรียน (ชั่วโมง)</span>
-          <input className={inputClass} defaultValue={12} disabled={disabled} min="0" name="rescheduleCutoffHours" type="number" />
-        </label>
-      </div>
-      <OpenNowOption disabled={disabled} openAt={booking.openAt} phase={booking.phase} />
-      <div className="flex flex-wrap items-center gap-3">
-        <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white disabled:bg-[#9a94a6] @md:w-fit" disabled={disabled || !programs.length} type="submit">
-          <Plus className="size-4" aria-hidden="true" />
-          สร้างรอบเรียน
-        </button>
-        {!programs.length ? (
-          <span className="text-sm text-[#805300]">ต้องมีคอร์สที่สถานะ &quot;ใช้งาน&quot; อย่างน้อย 1 คอร์สก่อนจึงจะสร้างรอบเรียนได้</span>
-        ) : null}
-      </div>
-    </form>
-  );
-}
-
-function SlotRoster({ bookings, disabled, slot }: { bookings: BookingRow[]; disabled?: boolean; slot: SlotRow }) {
-  const ordered = bookings
-    .filter((booking) => booking.slot_id === slot.id)
-    .sort((a, b) => (a.queue_seq ?? 0) - (b.queue_seq ?? 0));
-  const active = ordered.filter((booking) => booking.status !== "cancelled");
-  const cancelled = ordered.filter((booking) => booking.status === "cancelled");
-
-  if (!ordered.length) {
-    return <p className="mt-4 border-t border-[#e6e2ee] pt-4 text-sm text-[#6b6475]">ยังไม่มีผู้จองรอบนี้</p>;
-  }
-
-  return (
-    <div className="mt-4 border-t border-[#e6e2ee] pt-4">
-      <div className="flex items-center gap-2">
-        <ListOrdered className="size-4 text-[#722257]" aria-hidden="true" />
-        <h4 className="font-semibold text-[#722257]">รายชื่อ ({active.length}/{slot.capacity + (slot.waitlist_capacity ?? 0)})</h4>
-      </div>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[960px] text-sm">
-          <thead>
-            <tr className="text-left text-xs text-[#6b6475]">
-              <th className="px-2 py-2">ลำดับ</th><th className="px-2 py-2">ที่นั่ง</th><th className="px-2 py-2">ชื่อ-นามสกุล</th><th className="px-2 py-2">รหัส</th><th className="px-2 py-2">ติดต่อ</th><th className="px-2 py-2">เวลาจอง</th><th className="px-2 py-2">ลงเวลาเรียน</th><th className="px-2 py-2"></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-[#ece8f1]">
-            {[...active, ...cancelled].map((booking, index) => {
-              const member = firstRelated(booking.members);
-              const position = index < active.length ? index + 1 : null;
-              const seat = position ? queueStatus(position, slot.capacity) : null;
-              return (
-                <tr className={booking.status === "cancelled" ? "text-[#9a94a6]" : ""} key={booking.id}>
-                  <td className="px-2 py-2 tabular-nums">{position ?? "-"}</td>
-                  <td className="px-2 py-2">
-                    {seat ? (
-                      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${seat.kind === "confirmed" ? "bg-[#f8edf4] text-[#722257]" : "bg-[#fff5d8] text-[#805300]"}`}>{queueStatusLabel(position!, slot.capacity)}</span>
-                    ) : (
-                      <span className="rounded-md bg-[#f1f3ef] px-2 py-1 text-xs font-semibold">ยกเลิก</span>
-                    )}
-                  </td>
-                  <td className="px-2 py-2 font-semibold text-[#3f3a48]">{orUnset(member?.full_name)}{member?.nickname ? <span className="font-normal text-[#6b6475]"> ({member.nickname})</span> : null}</td>
-                  <td className="px-2 py-2 tabular-nums">{orUnset(member?.employee_code)}</td>
-                  <td className="px-2 py-2 text-xs text-[#6b6475]">{[member?.phone, member?.email, member?.line_id ? `LINE ${member.line_id}` : null].filter(Boolean).join(" · ") || "-"}</td>
-                  <td className="px-2 py-2 text-xs tabular-nums">{formatBangkokDateTime(booking.booked_at)}</td>
-                  <td className="px-2 py-2">
-                    {booking.status === "cancelled" ? (
-                      <span className="text-xs">{booking.attendance_note ?? ""}</span>
-                    ) : (
-                      <form action={updateLessonAttendance} className="flex flex-wrap items-center gap-2">
-                        <input name="bookingId" type="hidden" value={booking.id} />
-                        <select className="h-9 rounded-md border border-[#d9d3e6] bg-white px-2 text-xs outline-none focus:border-[#722257]" defaultValue={booking.status} disabled={disabled} name="attendanceStatus">
-                          <option value="booked">จองแล้ว</option>
-                          <option value="attended">เข้าเรียนแล้ว</option>
-                          <option value="no_show">ไม่มาเรียน</option>
-                        </select>
-                        <input className="h-9 w-32 rounded-md border border-[#d9d3e6] px-2 text-xs outline-none focus:border-[#722257]" defaultValue={booking.attendance_note ?? ""} disabled={disabled} name="attendanceNote" placeholder="หมายเหตุ" />
-                        <button className="flex h-9 items-center gap-1 rounded-md bg-[#722257] px-3 text-xs font-semibold text-white disabled:bg-[#9a94a6]" disabled={disabled} type="submit">
-                          <ClipboardCheck className="size-3.5" aria-hidden="true" /> บันทึก
-                        </button>
-                      </form>
-                    )}
-                  </td>
-                  <td className="px-2 py-2">
-                    {booking.status !== "cancelled" && !disabled ? (
-                      <form action={removeLessonBooking}>
-                        <input name="bookingId" type="hidden" value={booking.id} />
-                        <ConfirmSubmitButton className="flex h-9 items-center gap-1 rounded-md border border-[#efcbd0] bg-white px-2 text-xs font-semibold text-[#a33a46]" message={`นำ ${member?.full_name ?? "ผู้เรียน"} ออกจากรอบนี้?`}>
-                          <Trash2 className="size-3.5" aria-hidden="true" /> นำออก
-                        </ConfirmSubmitButton>
-                      </form>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+function filterSlots(slots: AdminLessonSlot[], query: CalendarQuery) {
+  return slots.filter(
+    (slot) =>
+      (!query.course || slot.program_id === query.course) &&
+      (!query.coach || slot.coach_id === query.coach) &&
+      (!query.venue || slot.venue_id === query.venue),
   );
 }
 
 export default async function AdminLessonsPage({ searchParams }: AdminLessonsPageProps) {
   const params = await searchParams;
+  const tab = parseLessonsTab(params.tab);
   const access = await resolveAccess({
     allowBypassRole: "admin",
     nextPath: "/admin/lessons",
     requiredRole: "admin",
     searchParams: params,
   });
-  let programs = samplePrograms;
-  let slots = sampleSlots;
-  let bookings = sampleBookings;
-  let lessonSettings: LessonBookingSettings = { ...defaultLessonBookingSettings };
-  let archivedPrograms: Array<{ archived_at: string | null; id: string; name: string }> = [];
-  let loadError: ReturnType<typeof collectLoadErrors> = null;
-  // Recent and upcoming rounds only: with every round ever made, ordered oldest first, new rounds
-  // fell off the page once the club passed the row limit.
-  const slotWindowStart = addDays(bangkokDate(), -SLOT_WINDOW_PAST_DAYS);
+  await requireAdminArea("lessons", access);
 
-  if (!access.isBypass && access.clubId) {
+  const bypass = access.isBypass;
+  const today = bangkokDate();
+  const query = parseCalendarQuery(params, today);
+  const memberQuery = (params.member ?? "").trim().slice(0, 60);
+  const range = query.view === "month" ? monthRange(query.date) : weekRange(query.date);
+
+  let base: LessonsBase = { coaches: [], issues: [], programs: [], rules: defaultLessonRules, v2: true, venues: [] };
+  const issues: LoadIssue[] = [];
+  let calendarSlots: AdminLessonSlot[] = [];
+  let listFrom = addDays(today, -LIST_PAST_DAYS);
+  let closures: LessonClosure[] = [];
+  let panel: PanelData | null = null;
+  let extras: CourseExtras = {
+    activeEnrollments: 0,
+    archivedPackages: [],
+    archivedPrograms: [],
+    issues: [],
+    memberResults: [],
+    packageStats: new Map(),
+    packages: [],
+    pendingEnrollments: [],
+  };
+  let hours = new Map<string, { hours: number; rounds: number }>();
+  let staffNames = new Map<string, StaffName>();
+  let acks: number | null = null;
+
+  if (bypass) {
+    const sample = lessonSampleData(today);
+    const programName = new Map(sample.programs.map((program) => [program.id, program.name]));
+    const slots: AdminLessonSlot[] = sample.slots.map((slot) => ({
+      ...slot,
+      program_id: slot.program_id ?? "",
+      program_name: programName.get(slot.program_id ?? "") ?? null,
+      title: slot.title ?? "รอบเรียน",
+    }));
+    base = { coaches: sample.coaches, issues: [], programs: sample.programs, rules: sample.rules, v2: true, venues: sample.venues };
+    calendarSlots = query.view === "list" ? slots : slots.filter((slot) => slot.lesson_date >= range.from && slot.lesson_date <= range.to);
+    closures = sample.closures;
+    const selected = query.slot ? slots.find((slot) => slot.id === query.slot) : null;
+    if (selected) {
+      panel = { moveTargets: moveTargets(slots, selected, today), roster: sample.roster, rosterFailed: false, slot: selected };
+    }
+    const stats = new Map<string, { active: number; pending: number }>();
+    sample.enrollments.forEach((row) => {
+      if (!row.package_id) return;
+      const entry = stats.get(row.package_id) ?? { active: 0, pending: 0 };
+      if (row.status === "active") entry.active += 1;
+      if (row.status === "pending_payment") entry.pending += 1;
+      stats.set(row.package_id, entry);
+    });
+    extras = {
+      activeEnrollments: sample.enrollments.filter((row) => row.status === "active").length,
+      archivedPackages: [],
+      archivedPrograms: [],
+      issues: [],
+      memberResults: memberQuery
+        ? [{ employee_code: "500123", enrollments: sample.enrollments, full_name: "สมชาย ใจงาม", id: sample.enrollments[0].member_id, member_code: "PEAGC-0012", nickname: "ชาย", phone: "0890000001" }]
+        : [],
+      packageStats: stats,
+      packages: sample.packages,
+      pendingEnrollments: sample.enrollments.filter((row) => row.status === "pending_payment").map((row) => ({ ...row, member_name: "สมชาย ใจงาม (ชาย)" })),
+    };
+    hours = coachHours(slots);
+  } else if (access.clubId) {
     const supabase = await createClient();
     const clubId = access.clubId;
-    const [programResult, slotResult, bookingResult, settingsResult, archivedResult] = await Promise.all([
-      supabase
-        .from("lesson_programs")
-        .select("id, name, coach_name, level, price, description, status")
-        .eq("club_id", access.clubId)
-        .is("archived_at", null)
-        .order("created_at", { ascending: false })
-        .limit(50),
-      supabase
-        .from("lesson_slots")
-        .select("id, program_id, title, coach_name, venue, lesson_date, start_time, end_time, capacity, waitlist_capacity, booked_count, status, note, allow_member_reschedule, reschedule_cutoff_hours, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections, lesson_programs(name)")
-        .eq("club_id", access.clubId)
-        .is("archived_at", null)
-        .gte("lesson_date", slotWindowStart)
-        .order("lesson_date", { ascending: true })
-        .order("start_time", { ascending: true })
-        .limit(SLOT_WINDOW_LIMIT),
-      fetchAllRows((from, to) =>
-        supabase
-          .from("lesson_bookings")
-          .select("id, slot_id, status, queue_seq, booked_at, checked_in_at, attendance_note, members(full_name, nickname, employee_code, phone, email, line_id), lesson_slots!inner(title, lesson_date, start_time)")
-          .eq("club_id", clubId)
-          .gte("lesson_slots.lesson_date", slotWindowStart)
-          .is("lesson_slots.archived_at", null)
-          .order("queue_seq", { ascending: true })
-          .order("id")
-          .range(from, to),
-      ),
-      supabase
-        .from("lesson_booking_settings")
-        .select("booking_open_at, booking_close_at, max_bookings_per_member, cancel_cutoff_hours, announcement_title, announcement_body, announcement_version")
-        .eq("club_id", access.clubId)
-        .maybeSingle(),
-      supabase
-        .from("lesson_programs")
-        .select("id, name, archived_at")
-        .eq("club_id", access.clubId)
-        .not("archived_at", "is", null)
-        .order("archived_at", { ascending: false })
-        .limit(30),
-    ]);
+    base = await loadLessonsBase(supabase, clubId);
+    issues.push(...base.issues);
 
-    loadError = collectLoadErrors("admin.lessons", [
-      { error: programResult.error, label: "คอร์สเรียน" },
-      { error: slotResult.error, label: "รอบเรียน" },
-      { error: bookingResult.error, label: "การจอง" },
-      { error: settingsResult.error, label: "ตั้งค่าการจอง" },
-    ]);
-    programs = (programResult.data ?? []) as ProgramRow[];
-    slots = (slotResult.data ?? []) as unknown as SlotRow[];
-    bookings = (bookingResult.data ?? []) as unknown as BookingRow[];
-    if (settingsResult.data) {
-      lessonSettings = { ...defaultLessonBookingSettings, ...settingsResult.data };
+    if (tab === "calendar") {
+      if (query.view === "list") {
+        const list = await loadSlotList(supabase, clubId, base.v2, LIST_PAST_DAYS, LIST_LIMIT);
+        calendarSlots = list.slots;
+        listFrom = list.from;
+        issues.push({ error: list.error, label: "รอบเรียน" });
+      } else {
+        const [loaded, closureResult] = await Promise.all([
+          loadSlotsBetween(supabase, clubId, range.from, range.to, base.v2),
+          base.v2 ? loadClosures(supabase, clubId, range.from, range.to) : Promise.resolve({ closures: [], error: null }),
+        ]);
+        calendarSlots = loaded.slots;
+        closures = closureResult.closures;
+        issues.push({ error: loaded.error, label: "รอบเรียน" }, { error: closureResult.error, label: "วันงดเรียน" });
+      }
+
+      if (query.slot) {
+        if (base.v2) {
+          // Offers that ran out are handed to the next person before the roster is read.
+          const { error } = await supabase.rpc("expire_lesson_offers", { p_club_id: clubId });
+          if (error) logDbError("admin.lessons expire_lesson_offers", error);
+        }
+        const found = calendarSlots.find((slot) => slot.id === query.slot) ?? (await loadSlot(supabase, clubId, query.slot, base.v2)).slot;
+        if (found) {
+          const [roster, upcoming] = await Promise.all([
+            loadRoster(supabase, clubId, found, base.v2),
+            base.v2 ? loadSlotsBetween(supabase, clubId, today, addDays(today, MOVE_WINDOW_DAYS), true) : Promise.resolve({ error: null, outdated: false, slots: [] }),
+          ]);
+          if (roster.error) logDbError("admin.lessons roster", roster.error);
+          panel = { moveTargets: moveTargets(upcoming.slots, found, today), roster: roster.roster, rosterFailed: Boolean(roster.error), slot: found };
+        }
+      }
     }
-    archivedPrograms = archivedResult.data ?? [];
+
+    if (tab === "courses") {
+      extras = await loadCourseExtras(supabase, clubId, base.v2, memberQuery);
+      issues.push(...extras.issues);
+    }
+
+    if (tab === "coaches" && base.v2) {
+      const month = monthRange(today);
+      const [monthSlots, names] = await Promise.all([
+        loadSlotsBetween(supabase, clubId, `${today.slice(0, 7)}-01`, month.lastOfMonth, true),
+        loadStaffNames(supabase, clubId),
+      ]);
+      hours = coachHours(monthSlots.slots);
+      staffNames = names.names;
+      issues.push({ error: monthSlots.error, label: "ชั่วโมงสอน" });
+      if (names.error) logDbError("admin.lessons staff names", names.error);
+    }
+
+    if (tab === "announcement") {
+      const result = await countAnnouncementAcks(supabase, clubId, base.rules.announcement_version);
+      acks = result.error ? null : result.count;
+      if (result.error) logDbError("admin.lessons announcement acks", result.error);
+    }
   }
 
-  if (access.isBypass) {
-    lessonSettings = { ...lessonSettings, booking_open_at: "2026-01-01T01:00:00.000Z" };
+  const v2 = base.v2;
+  let loadError = collectLoadErrors("admin.lessons", issues);
+  if (!v2 && !bypass) {
+    loadError = { labels: ["ผู้สอน สถานที่ แพ็กเกจ เครดิต เช็กชื่อด้วย QR งดเรียนทั้งวัน", ...(loadError?.labels ?? [])], outdated: true };
   }
-  const bookingPhase = getBookingPhase(lessonSettings);
-  const booking = { openAt: lessonSettings.booking_open_at, phase: bookingPhase };
 
-  const activePrograms = programs.filter((program) => program.status === "active");
-  const openSlots = slots.filter((slot) => slot.status === "open");
-  const bookedCount = bookings.filter((booking) => booking.status === "booked").length;
-  const bookedCountBySlot = new Map<string, number>();
-  bookings
-    .filter((booking) => !["cancelled"].includes(booking.status))
-    .forEach((booking) => {
-      bookedCountBySlot.set(
-        booking.slot_id,
-        (bookedCountBySlot.get(booking.slot_id) ?? 0) + 1,
-      );
-    });
-  let waitlistedCount = 0;
-  let confirmedCount = 0;
-  let seatTotal = 0;
-  slots.forEach((slot) => {
-    const seats = seatSummary(bookedCountBySlot.get(slot.id) ?? 0, slot.capacity, slot.waitlist_capacity ?? 0);
-    waitlistedCount += seats.waitlisted;
-    confirmedCount += seats.confirmed;
-    seatTotal += slot.capacity;
-  });
-  const notBookableYet = bookingPhase !== "open" ? " · สมาชิกยังจองไม่ได้จนกว่าจะเปิดลงทะเบียน (ดูกล่องสถานะการจองด้านบน)" : "";
-  const statusMessage = params.status
-    ? params.status === "slot-created"
-      ? `${statusMessages["slot-created"]}${notBookableYet}`
-      : statusMessages[params.status]
-        ?? (params.status.startsWith("generated:")
-          ? (() => {
-              const [, created, skipped, opened] = params.status.split(":");
-              return `สร้าง ${created} รอบเรียนแล้ว${Number(skipped) ? ` (ข้าม ${skipped} รอบที่มีอยู่แล้ว)` : ""}${opened ? " และเปิดให้สมาชิกจองได้ทันที" : notBookableYet}`;
-            })()
-          : params.status.startsWith("generate-invalid:")
-            ? params.status.slice("generate-invalid:".length)
-            : params.status.startsWith("program-archive-blocked:")
-              ? `ยังลบคอร์สนี้ไม่ได้ เพราะมี ${params.status.split(":")[1]} รอบที่กำลังจะมาถึงและยังมีผู้จองอยู่ กรุณาย้ายหรือยกเลิกการจองในรอบเหล่านั้นก่อน`
-              : null)
-    : null;
-  const bypassQuery = access.isBypass ? "?bypass=admin" : "";
+  const rules = bypass ? { ...base.rules, booking_open_at: base.rules.booking_open_at ?? "2026-01-01T01:00:00.000Z" } : base.rules;
+  const bookingPhase = getBookingPhase(rules);
+  const booking = { openAt: rules.booking_open_at, phase: bookingPhase };
+  const phase = phaseInfo[bookingPhase];
+  const activePrograms = base.programs.filter((program) => program.status === "active");
+  const usesCredits = base.programs.some((program) => program.requires_package);
+  const shownSlots = filterSlots(calendarSlots, query);
+
+  const notBookableYet = bookingPhase !== "open" ? " · สมาชิกยังจองไม่ได้จนกว่าจะเปิดจอง (ตั้งได้ที่แท็บ \"กติกา\")" : "";
+  const statusMessage = params.status ? statusText(params.status, notBookableYet) : null;
+  const tabHref = (key: LessonsAdminTab, hash?: string) => lessonsAdminHref({ bypass, hash, tab: key });
+  const tabCounts: Partial<Record<LessonsAdminTab, number>> = { coaches: v2 ? base.coaches.length : undefined, courses: base.programs.length };
+  const createFailed = Boolean(params.status && /^(program-missing|program-create-failed|text-corrupted)/.test(params.status));
+  const panelReturnTo = lessonsAdminHref({ ...query, bypass });
+  const calendarReturnTo = lessonsAdminHref({ ...query, bypass, slot: "" });
+  const AddIcon = appIcons.add;
 
   return (
-    <main className="min-h-screen bg-transparent px-4 py-6 text-[#2f3137]">
-      <section className="mx-auto w-full max-w-7xl">
-        <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">ระบบผู้ดูแล</p>
-            <h1 className="mt-1 text-3xl font-semibold text-[#722257]">
-              จัดการตารางเรียนกอล์ฟ
-            </h1>
-            <p className="mt-2 text-sm text-[#6b6475]">
-              จัดคอร์สเรียน เปิดรอบจอง และลงเวลาเข้าเรียนของสมาชิก
-            </p>
-          </div>
-          <Link className="flex h-11 w-fit items-center gap-2 rounded-md border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257]" href={`/admin${bypassQuery}`}>
-            <ArrowLeft className="size-4" aria-hidden="true" />
-            กลับหน้าผู้ดูแล
-          </Link>
-        </div>
+    <main className="px-4 py-6 text-ink sm:px-6 lg:px-8">
+      <LessonsOpenHash key={params.status ?? ""} />
+      <div className="mx-auto w-full max-w-7xl">
+        <PageHeader
+          actions={
+            tab !== "create" ? (
+              <Link className={buttonPrimary} href={tabHref("create")}>
+                <AddIcon className="size-4" aria-hidden="true" />
+                สร้างรอบเรียน
+              </Link>
+            ) : null
+          }
+          description="ปฏิทินรอบเรียน คอร์สและแพ็กเกจ ผู้สอน สถานที่ และกติกาการจอง"
+          title="ตารางเรียน"
+        />
 
-        {statusMessage ? (
-          <StatusBanner className="mt-5" floating tone={toneForStatus(params.status)}>
+        {statusMessage && params.status ? (
+          <StatusBanner className="mt-5" floating tone={bannerTone(params.status)}>
             {statusMessage}
           </StatusBanner>
         ) : null}
 
         <LoadErrorBanner error={loadError} />
 
-        {access.isBypass ? (
-          <div className="mt-5 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
-            โหมดผู้ดูแลทดลอง: แสดงข้อมูลตัวอย่างและปิดการบันทึกจริง ต้องปิดก่อนเปิดใช้งาน
+        {bypass ? (
+          <StatusBanner className="mt-5" tone="warning">
+            โหมดทดลอง: แสดงข้อมูลตัวอย่าง บันทึกจริงไม่ได้
+          </StatusBanner>
+        ) : null}
+
+        <nav aria-label="ส่วนของหน้าตารางเรียน" className="-mx-4 mt-6 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+          <ul className="flex min-w-max gap-1 border-b border-line">
+            {lessonsAdminTabs.map((item) => {
+              const active = item.key === tab;
+              const count = tabCounts[item.key];
+              return (
+                <li key={item.key}>
+                  <Link
+                    aria-current={active ? "page" : undefined}
+                    className={`-mb-px inline-flex h-11 items-center gap-2 whitespace-nowrap border-b-2 px-3 text-sm font-semibold transition ${active ? "border-brand-600 text-brand-600" : "border-transparent text-ink-muted hover:border-line hover:text-brand-600"}`}
+                    href={tabHref(item.key)}
+                  >
+                    {item.label}
+                    {count !== undefined ? (
+                      <span className={`rounded-full px-2 text-xs font-medium tabular-nums ${active ? "bg-brand-50 text-brand-600" : "bg-neutral-bg text-ink-muted"}`}>{count}</span>
+                    ) : null}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        {tab === "calendar" ? (
+          <div className="mt-6 grid gap-4">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-line bg-white px-4 py-3 shadow-card">
+              <StatusBadge tone={phase.tone}>{phase.label}</StatusBadge>
+              <span className="min-w-0 flex-1 text-sm text-ink-muted">{phaseDetail(bookingPhase, rules)}</span>
+              <Link className="text-sm font-semibold text-brand-600 underline-offset-4 hover:underline" href={tabHref("settings", "booking-window")}>
+                ตั้งช่วงเปิดจอง
+              </Link>
+            </div>
+
+            <LessonsAdminCalendar
+              allSlots={calendarSlots}
+              bypass={bypass}
+              closures={closures}
+              coaches={base.coaches}
+              programs={base.programs}
+              query={query}
+              returnTo={calendarReturnTo}
+              slots={shownSlots}
+              today={today}
+              v2={v2}
+              venues={base.venues}
+            />
+
+            {query.view === "list" ? (
+              <LessonsAdminSlotList
+                from={listFrom}
+                limit={LIST_LIMIT}
+                props={{ bypass, closures, coaches: base.coaches, programs: base.programs, query, slots: shownSlots, today, v2, venues: base.venues }}
+              />
+            ) : null}
+
+            {query.view !== "list" && !calendarSlots.length ? (
+              <section className={`${card} text-center`}>
+                <p className="text-sm text-ink-muted">ช่วงนี้ยังไม่มีรอบเรียน สร้างรอบซ้ำทุกสัปดาห์ได้ในขั้นตอนเดียว</p>
+                <Link className={`${buttonPrimary} mt-3`} href={tabHref("create")}>
+                  <AddIcon className="size-4" aria-hidden="true" />
+                  สร้างรอบเรียน
+                </Link>
+              </section>
+            ) : null}
+
+            {query.view !== "list" ? <LessonsAdminClosureList closures={closures} venues={base.venues} /> : null}
+
+            {panel ? (
+              <LessonsAdminDrawer closeHref={calendarReturnTo} title={`รอบ ${panel.slot.title}`}>
+                <LessonsAdminSlotPanel
+                  bypass={bypass}
+                  closeHref={calendarReturnTo}
+                  coaches={base.coaches}
+                  cutoffHours={rules.change_cutoff_hours}
+                  moveTargets={panel.moveTargets}
+                  programs={base.programs}
+                  qrHref={v2 ? `/admin/lessons/slots/${panel.slot.id}/qr${bypass ? "?bypass=admin" : ""}` : null}
+                  returnTo={panelReturnTo}
+                  roster={panel.roster}
+                  rosterFailed={panel.rosterFailed}
+                  slot={panel.slot}
+                  v2={v2}
+                  venues={base.venues}
+                />
+              </LessonsAdminDrawer>
+            ) : null}
           </div>
         ) : null}
 
-        <section className={`mt-6 flex scroll-mt-24 flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between ${phaseInfo[bookingPhase].tone}`} id="booking-window">
-          <div className="flex items-start gap-3">
-            <span className={`mt-1 size-2.5 shrink-0 rounded-full ${bookingPhase === "open" ? "bg-[#16794b]" : bookingPhase === "before" ? "bg-[#d7a52c]" : "bg-[#b42318]"}`} aria-hidden="true" />
-            <div>
-              <p className="text-sm font-semibold">สถานะการจองของสมาชิก: {phaseInfo[bookingPhase].label}</p>
-              <p className="mt-0.5 text-xs text-[#6b6475]">
-                {lessonSettings.booking_open_at ? `เปิด ${formatBangkokDateTime(lessonSettings.booking_open_at)}` : "ยังไม่ได้ตั้งเวลาเปิด"}
-                {" · "}
-                {lessonSettings.booking_close_at ? `ปิด ${formatBangkokDateTime(lessonSettings.booking_close_at)}` : "ไม่มีกำหนดปิด"}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {bookingPhase !== "open" && !access.isBypass ? (
-              <form action={openLessonBookingNow}>
-                <button className="flex h-10 items-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white transition hover:bg-[#8b2d6b]" type="submit">
-                  <Unlock className="size-4" aria-hidden="true" />
-                  เปิดให้จองทันที
-                </button>
-              </form>
-            ) : null}
-            <a className="flex h-10 items-center rounded-md border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257]" href="#booking-settings">
-              ตั้งเวลาเปิด/ปิด
-            </a>
-          </div>
-        </section>
+        {tab === "create" ? (
+          activePrograms.length ? (
+            <>
+              <section className={`mt-6 ${card}`}>
+                <h2 className={sectionTitle}>สร้างรอบซ้ำทุกสัปดาห์</h2>
+                <p className="mb-4 mt-1 text-sm text-ink-muted">
+                  เลือกคอร์ส ผู้สอน สถานที่ วันและเวลา แล้วดูตัวอย่างก่อนสร้าง รอบที่ชนกับรอบเดิมจะถูกข้าม สร้างได้ครั้งละไม่เกิน {MAX_GENERATED_SLOTS} รอบ
+                </p>
+                <LessonsAdminWizard
+                  booking={booking}
+                  bypass={bypass}
+                  coaches={base.coaches}
+                  cutoffHours={rules.change_cutoff_hours}
+                  disabled={bypass}
+                  programs={activePrograms}
+                  today={today}
+                  v2={v2}
+                  venues={base.venues}
+                />
+              </section>
+              <CreatePanel hint="สำหรับรอบพิเศษหรือรอบชดเชยวันเดียว" title="สร้างทีละรอบ">
+                <SlotForm booking={booking} coaches={base.coaches} cutoffHours={rules.change_cutoff_hours} disabled={bypass} programs={activePrograms} v2={v2} venues={base.venues} />
+              </CreatePanel>
+            </>
+          ) : (
+            <section className={`mt-6 ${card} text-center`}>
+              <p className="text-sm text-ink-muted">ต้องมีคอร์สที่สถานะ &quot;ใช้งาน&quot; อย่างน้อย 1 คอร์สก่อน จึงจะสร้างรอบเรียนได้</p>
+              <Link className={`${buttonPrimary} mt-3`} href={tabHref("courses")}>
+                <GraduationCap className="size-4" aria-hidden="true" />
+                ไปที่คอร์สและแพ็กเกจ
+              </Link>
+            </section>
+          )
+        ) : null}
 
-        <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          {[
-            { icon: BookOpenCheck, label: "คอร์สที่ใช้งาน", value: String(activePrograms.length) },
-            { icon: CalendarClock, label: "รอบเปิดจอง", value: String(openSlots.length) },
-            { icon: ListOrdered, label: "ที่นั่งถูกจอง", value: `${confirmedCount}/${seatTotal}` },
-            { icon: Megaphone, label: "คิวสำรอง", value: String(waitlistedCount) },
-            { icon: ClipboardCheck, label: "รอลงเวลา", value: String(bookedCount) },
-          ].map((item) => (
-            <article className="rounded-lg border border-[#e6e2ee] bg-white/95 p-4 shadow-[0_10px_30px_rgba(114,34,87,0.06)] sm:p-5" key={item.label}>
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-[#6b6475]">{item.label}</p>
-                  <p className="mt-2 text-2xl font-semibold tabular-nums text-[#722257] sm:text-3xl">{item.value}</p>
-                </div>
-                <div className="hidden size-11 shrink-0 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257] sm:flex">
-                  <item.icon className="size-5" aria-hidden="true" />
-                </div>
-              </div>
-            </article>
-          ))}
-        </div>
+        {tab === "courses" ? (
+          <LessonsAdminCourses
+            bypass={bypass}
+            coaches={base.coaches}
+            createFailed={createFailed}
+            extras={extras}
+            memberQuery={memberQuery}
+            programs={base.programs}
+            v2={v2}
+            venues={base.venues}
+          />
+        ) : null}
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-2">
-          <section className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-            <BookingSettingsForm disabled={access.isBypass} settings={lessonSettings} />
-          </section>
-          <section className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-            <SlotGeneratorForm booking={booking} disabled={access.isBypass} programs={activePrograms} />
-          </section>
-        </div>
+        {tab === "coaches" ? (
+          <LessonsAdminCoaches
+            bypass={bypass}
+            coaches={base.coaches}
+            hours={hours}
+            monthLabel={`เดือน${formatMonthLabel(today)}`}
+            staffNames={staffNames}
+            v2={v2}
+            venues={base.venues}
+          />
+        ) : null}
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-2">
-          <section className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-            <ProgramForm disabled={access.isBypass} />
-          </section>
-          <section className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-            <SlotForm booking={booking} disabled={access.isBypass} programs={activePrograms} />
-          </section>
-        </div>
+        {tab === "settings" ? <LessonsAdminRules bypass={bypass} phase={bookingPhase} rules={rules} usesCredits={usesCredits} v2={v2} /> : null}
 
-        <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-          <div className="border-b border-[#e6e2ee] p-5">
-            <h2 className="text-xl font-semibold text-[#722257]">คอร์สเรียนทั้งหมด</h2>
-          </div>
-          <div className="divide-y divide-[#e6e2ee]">
-            {programs.length ? (
-              programs.map((program) => (
-                <details className="group scroll-mt-24 px-5 py-4" id={`program-${program.id}`} key={program.id}>
-                  <summary className="grid cursor-pointer list-none gap-4 md:grid-cols-[44px_1fr_0.5fr_0.5fr_92px] md:items-center">
-                    <div className="flex size-11 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
-                      <BookOpenCheck className="size-5" aria-hidden="true" />
-                    </div>
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-[#722257]">{program.name}</p>
-                        <span className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass(program.status)}`}>
-                          {lessonStatusLabels[program.status] ?? program.status}
-                        </span>
-                      </div>
-                      <p className="mt-1 text-sm text-[#6b6475]">
-                        {program.coach_name ?? "ยังไม่ระบุผู้สอน"}
-                      </p>
-                    </div>
-                    <p className="text-sm text-[#3f3a48]">
-                      {lessonLevelLabels[program.level] ?? program.level}
-                    </p>
-                    <p className="text-sm font-semibold text-[#722257]">
-                      {program.price.toLocaleString("th-TH")} บาท
-                    </p>
-                    <span className="w-fit rounded-md border border-[#d9d3e6] px-3 py-2 text-sm font-semibold text-[#722257] group-open:bg-[#f8edf4]">
-                      แก้ไข
-                    </span>
-                  </summary>
-                  <div className="mt-5 rounded-lg border border-[#e6e2ee] bg-[#fbf9fc] p-4">
-                    <ProgramForm
-                      action={updateLessonProgram}
-                      disabled={access.isBypass}
-                      program={program}
-                      title={`แก้ไข ${program.name}`}
-                    />
-                  </div>
-                  {access.isBypass ? null : (
-                    <form action={archiveLessonProgram} className="mt-3 flex flex-wrap items-center gap-3 rounded-md border border-[#efcbd0] bg-[#fff7f7] p-4">
-                      <input name="programId" type="hidden" value={program.id} />
-                      <p className="min-w-0 flex-1 text-sm text-[#6b6475]">
-                        ลบคอร์สออกจากระบบ (เก็บถาวร กู้คืนได้) รอบเรียนที่กำลังจะมาถึงและยังไม่มีผู้จองจะถูกนำออกด้วย ประวัติการเรียนที่ผ่านมายังอยู่ครบ
-                      </p>
-                      <ConfirmSubmitButton
-                        className="flex h-10 items-center gap-2 rounded-md border border-[#efcbd0] bg-white px-4 text-sm font-semibold text-[#a33a46] hover:bg-[#fff1f1]"
-                        confirmLabel="ลบคอร์ส"
-                        message={`ยืนยันลบคอร์ส "${program.name}"? (เก็บถาวร กู้คืนได้ภายหลัง)`}
-                      >
-                        <Trash2 className="size-4" aria-hidden="true" />
-                        ลบคอร์ส
-                      </ConfirmSubmitButton>
-                    </form>
-                  )}
-                </details>
-              ))
-            ) : (
-              <div className="px-5 py-10 text-center text-sm text-[#6b6475]">
-                ยังไม่มีคอร์สเรียน เริ่มจากฟอร์ม &quot;สร้างคอร์สเรียน&quot; ด้านบน
-              </div>
-            )}
-          </div>
-          {archivedPrograms.length ? (
-            <details className="scroll-mt-24 border-t border-[#e6e2ee] px-5 py-4" id="archived-programs">
-              <summary className="cursor-pointer text-sm font-semibold text-[#6b6475]">
-                คอร์สที่เก็บถาวร ({archivedPrograms.length})
-              </summary>
-              <ul className="mt-3 divide-y divide-[#f0edf3] rounded-md border border-[#e6e2ee] bg-white">
-                {archivedPrograms.map((program) => (
-                  <li className="flex flex-wrap items-center justify-between gap-3 px-4 py-3" key={program.id}>
-                    <span className="text-sm">
-                      <span className="font-semibold text-[#3f3a48]">{program.name}</span>
-                      <span className="ml-2 text-xs text-[#6b6475]">เก็บถาวรเมื่อ {formatThaiDate(program.archived_at)}</span>
-                    </span>
-                    <form action={restoreLessonProgram}>
-                      <input name="programId" type="hidden" value={program.id} />
-                      <button className="flex h-9 items-center gap-2 rounded-md border border-[#d9d3e6] bg-white px-3 text-sm font-semibold text-[#722257] hover:bg-[#f8edf4]" type="submit">
-                        <RotateCcw className="size-4" aria-hidden="true" />
-                        กู้คืน
-                      </button>
-                    </form>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-        </section>
-
-        <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-          <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#e6e2ee] p-5">
-            <div>
-              <h2 className="text-xl font-semibold text-[#722257]">ตารางรอบเรียนแบบ Slot</h2>
-              <p className="mt-1 text-sm text-[#6b6475]">ดูรอบตามวันและเวลา กดแก้ไขเพื่อจัดการและดูรายชื่อ</p>
-              <p className="mt-1 text-xs text-[#6b6475]">
-                แสดงรอบตั้งแต่ {formatThaiDate(slotWindowStart)} (ย้อนหลัง {SLOT_WINDOW_PAST_DAYS} วัน) เป็นต้นไป
-                {slots.length >= SLOT_WINDOW_LIMIT ? ` · แสดง ${SLOT_WINDOW_LIMIT} รอบแรก` : ""} · รอบที่เก่ากว่านี้ดูได้ในรายงานและไฟล์ CSV
-              </p>
-            </div>
-            {!access.isBypass ? (
-              <a className="flex h-10 items-center gap-2 rounded-md border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257]" href="/admin/lessons/export">
-                <Download className="size-4" aria-hidden="true" />
-                ดาวน์โหลดรายชื่อ CSV
-              </a>
-            ) : null}
-          </div>
-          <div className="p-5">
-            <LessonSlotTable
-              items={slots.map((slot) => {
-                const program = firstRelated(slot.lesson_programs);
-
-                return {
-                  action: (
-                    <a className="flex h-9 items-center justify-center rounded-md border border-[#722257] bg-white px-3 text-xs font-semibold text-[#722257]" href={`#slot-${slot.id}`}>
-                      แก้ไขรอบ
-                    </a>
-                  ),
-                  bookedCount: bookedCountBySlot.get(slot.id) ?? slot.booked_count ?? 0,
-                  capacity: slot.capacity,
-                  date: slot.lesson_date,
-                  endTime: slot.end_time,
-                  id: slot.id,
-                  startTime: slot.start_time,
-                  statusLabel: lessonStatusLabels[slot.status] ?? slot.status,
-                  subtitle: `${orUnset(program?.name)} · ${slot.coach_name ?? "ยังไม่ระบุผู้สอน"}`,
-                  title: slot.title,
-                  venue: slot.venue,
-                };
-              })}
-            />
-          </div>
-          <div className="border-y border-[#e6e2ee] px-5 py-4">
-            <h3 className="font-semibold text-[#722257]">รายละเอียดและแก้ไขรอบเรียน</h3>
-          </div>
-          <div className="divide-y divide-[#e6e2ee]">
-            {slots.length ? (
-              slots.map((slot) => {
-                const program = firstRelated(slot.lesson_programs);
-
-                return (
-                  <details className="group scroll-mt-4 px-5 py-4" id={`slot-${slot.id}`} key={slot.id}>
-                    <summary className="grid cursor-pointer list-none gap-4 lg:grid-cols-[44px_1fr_0.7fr_0.55fr_92px] lg:items-center">
-                      <div className="flex size-11 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
-                        <CalendarClock className="size-5" aria-hidden="true" />
-                      </div>
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-semibold text-[#722257]">{slot.title}</p>
-                          <span className={`rounded-md px-2 py-1 text-xs font-semibold ${statusClass(slot.status)}`}>
-                            {lessonStatusLabels[slot.status] ?? slot.status}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-sm text-[#6b6475]">
-                          {orUnset(program?.name)} · {slot.venue ?? "ยังไม่ระบุสถานที่"}
-                        </p>
-                      </div>
-                      <p className="text-sm text-[#3f3a48]">
-                        {formatThaiDate(slot.lesson_date)} · {slot.start_time.slice(0, 5)}-{slot.end_time.slice(0, 5)} น.
-                      </p>
-                      <p className="text-sm text-[#3f3a48]">
-                        จอง {Math.min(bookedCountBySlot.get(slot.id) ?? 0, slot.capacity)}/{slot.capacity}
-                        {slot.waitlist_capacity ? ` · สำรอง ${Math.max(0, (bookedCountBySlot.get(slot.id) ?? 0) - slot.capacity)}/${slot.waitlist_capacity}` : ""}
-                      </p>
-                      <span className="w-fit rounded-md border border-[#d9d3e6] px-3 py-2 text-sm font-semibold text-[#722257] group-open:bg-[#f8edf4]">
-                        แก้ไข
-                      </span>
-                    </summary>
-                    <div className="mt-5 rounded-lg border border-[#e6e2ee] bg-[#fbf9fc] p-4">
-                      <SlotForm
-                        action={updateLessonSlot}
-                        disabled={access.isBypass}
-                        programs={programs}
-                        slot={slot}
-                        title={`แก้ไข ${slot.title}`}
-                      />
-                      <form action={archiveLessonSlot} className="mt-4 border-t border-[#e6e2ee] pt-4">
-                        <input name="slotId" type="hidden" value={slot.id} />
-                        <ConfirmSubmitButton className="h-10 rounded-md border border-[#efcbd0] bg-white px-4 text-sm font-semibold text-[#a33a46]" message="ยืนยันลบรอบเรียนนี้ออกจากตาราง">
-                          ลบรอบเรียน
-                        </ConfirmSubmitButton>
-                      </form>
-                      <SlotRoster bookings={bookings} disabled={access.isBypass} slot={slot} />
-                    </div>
-                  </details>
-                );
-              })
-            ) : (
-              <div className="px-5 py-10 text-center text-sm text-[#6b6475]">ยังไม่มีรอบเรียน</div>
-            )}
-          </div>
-        </section>
-
-      </section>
+        {tab === "announcement" ? <LessonsAdminAnnouncement acks={bypass ? 18 : acks} bypass={bypass} rules={rules} /> : null}
+      </div>
     </main>
   );
 }

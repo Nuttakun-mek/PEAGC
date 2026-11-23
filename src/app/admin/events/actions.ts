@@ -109,6 +109,10 @@ function getEventPayload(formData: FormData, clubId: string, userId: string) {
     tee_off_time: getString(formData, "teeOffTime") || null,
     updated_by: userId,
     venue: getString(formData, "venue") || null,
+    // Only sent when the form showed the course field (the courses migration is applied).
+    ...(formData.has("courseTeeId")
+      ? { course_id: null, course_tee_id: getString(formData, "courseTeeId") || null }
+      : {}),
   };
 }
 

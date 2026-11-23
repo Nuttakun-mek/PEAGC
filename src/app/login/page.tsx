@@ -1,19 +1,28 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { KeyRound, ShieldCheck, UserPlus } from "lucide-react";
-
-import { PasswordInput } from "@/components/password-input";
 
 import {
   signInWithGoogle,
   signInWithPassword,
   signUpWithPassword,
 } from "@/app/actions/auth";
+import { CLUB_NAME, ClubCrest, PeaLogo } from "@/components/brand";
+import { EnvBadge } from "@/components/env-badge";
+import { PasswordInput } from "@/components/password-input";
 import { StatusBanner } from "@/components/status-banner";
 import { SubmitButton } from "@/components/submit-button";
+import { buttonClass, fieldHint, fieldInputClass, fieldLabel } from "@/components/ui/styles";
+import { resolvePostLoginPath } from "@/lib/auth/post-login";
+import { getSessionUser } from "@/lib/auth/session";
 import {
   hasSupabasePublicConfig,
   isGoogleAuthEnabled,
 } from "@/lib/supabase/env";
+import { createClient } from "@/lib/supabase/server";
+
+export const metadata: Metadata = { title: "เข้าสู่ระบบ" };
 
 type LoginPageProps = {
   searchParams: Promise<{
@@ -36,9 +45,11 @@ const errorMessages: Record<string, string> = {
   "weak-password": "รหัสผ่านต้องมีอย่างน้อย 8 ตัวอักษร",
   "confirm-failed": "ยืนยันการเข้าสู่ระบบไม่สำเร็จ หรือลิงก์หมดอายุแล้ว",
   "google-failed": "เข้าสู่ระบบด้วย Google ไม่สำเร็จ",
-  "missing-config": "ระบบยังเชื่อมต่อฐานข้อมูลไม่สมบูรณ์",
+  "missing-config": "ยังเชื่อมต่อฐานข้อมูลไม่ได้ กรุณาติดต่อผู้ดูแลชมรม",
   "reset-link-invalid": "ลิงก์ตั้งรหัสผ่านใหม่ไม่ถูกต้องหรือหมดอายุแล้ว กรุณาขอลิงก์ใหม่",
 };
+
+const inputClass = fieldInputClass("lg");
 
 export default async function LoginPage({ searchParams }: LoginPageProps) {
   const params = await searchParams;
@@ -50,113 +61,132 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   const googleEnabled = isGoogleAuthEnabled();
   const errorMessage = params.error ? errorMessages[params.error] : null;
 
+  // Someone who is already signed in goes straight to their page instead of seeing the form again.
+  if (hasAuthConfig && !params.error && !params.signedOut) {
+    const user = await getSessionUser();
+    if (user) {
+      const explicit = next !== "/auth/complete" && !next.startsWith("/login");
+      redirect(explicit ? next : await resolvePostLoginPath(await createClient(), user.id));
+    }
+  }
+
   return (
-    <main className="grid min-h-screen bg-[#f4f7fa] text-[#2f3137] lg:grid-cols-[1.05fr_0.95fr]">
-      <aside className="login-visual relative hidden min-h-screen overflow-hidden p-12 text-white lg:flex lg:flex-col lg:justify-center xl:p-20">
-        <div className="relative z-10 max-w-xl">
-          <div className="mb-12 flex items-center gap-3">
-            <span className="flex size-11 items-center justify-center rounded-md bg-[#C69214] font-bold">PEA</span>
-            <div><p className="font-bold">PEAGC</p><p className="text-xs text-white/65">ชมรมกอล์ฟการไฟฟ้าส่วนภูมิภาค</p></div>
+    <main className="grid min-h-screen bg-white text-ink lg:grid-cols-[1fr_1fr]">
+      <aside className="relative hidden min-h-screen flex-col justify-between bg-brand-600 p-12 text-white lg:flex xl:p-16">
+        <div />
+        <div className="flex flex-col items-center text-center">
+          <div className="flex size-[min(26rem,36vw)] items-center justify-center rounded-full bg-white shadow-[0_24px_60px_rgba(0,0,0,0.25)]">
+            <ClubCrest className="size-[78%]" priority size={420} />
           </div>
-          <p className="text-sm font-semibold text-[#efd798]">PEA Golf Club</p>
-          <h2 className="mt-3 text-4xl font-semibold leading-tight xl:text-5xl">สมาชิก กิจกรรม และคลาสเรียน ในที่เดียว</h2>
-          <p className="mt-5 max-w-lg text-base leading-7 text-white/72">ลงทะเบียนกิจกรรม จองคลาสเรียน และติดตามผลการแข่งขันของชมรม</p>
-          <div className="mt-10 grid max-w-lg grid-cols-3 gap-3">
-            {[['สมาชิก','ข้อมูลครบถ้วน'],['กิจกรรม','สมัครออนไลน์'],['ตารางเรียน','เปลี่ยนเวลาได้']].map(([title, detail]) => (
-              <div className="border-l border-white/25 pl-4" key={title}><p className="text-xl font-bold text-[#f1cf79]">{title}</p><p className="mt-1 text-xs text-white/65">{detail}</p></div>
-            ))}
-          </div>
+          <h2 className="mt-10 text-[2rem] font-semibold leading-[2.5rem]">{CLUB_NAME}</h2>
+        </div>
+        <div className="flex items-center gap-3 text-sm text-white/80">
+          <span className="flex h-11 items-center rounded-lg bg-white px-3">
+            <PeaLogo height={28} />
+          </span>
+          การไฟฟ้าส่วนภูมิภาค
         </div>
       </aside>
-      <div className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-8">
-      <section className="w-full max-w-md p-2 sm:p-6">
-        <div className="flex items-center gap-3">
-          <div className="flex size-11 items-center justify-center rounded-md bg-[#C69214] text-sm font-bold text-[#722257]">
-            PEA
+
+      <div className="flex min-h-screen items-center justify-center bg-canvas px-4 py-8 sm:px-8 lg:bg-white">
+        <section className="w-full max-w-md">
+          {/* The brand panel is hidden on phones, so the crest and name sit above the form there. */}
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <ClubCrest priority size={64} />
+            <p className="text-base font-semibold leading-6 text-brand-600">{CLUB_NAME}</p>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-[#8b5b7a]">PEAGC</p>
-            <h1 className="text-2xl font-semibold text-[#722257]">
-              {isSignup ? "สมัครสมาชิก" : "เข้าสู่ระบบ"}
-            </h1>
-            <p className="mt-1 text-xs font-medium text-[#6b6475]">
-              {isSignup ? "ใช้อีเมลของคุณ" : "ชมรมกอล์ฟการไฟฟ้าส่วนภูมิภาค"}
-            </p>
+
+          <EnvBadge className="mb-3" />
+          <h1 className="text-[1.625rem] font-semibold leading-[2.125rem] text-brand-600 sm:text-display">
+            {isSignup ? "สมัครสมาชิก" : "เข้าสู่ระบบ"}
+          </h1>
+          <p className="mt-1 text-ink-subtle">
+            {isSignup ? "สร้างบัญชีด้วยอีเมล แล้วกรอกรหัสพนักงานเพื่อยืนยันตัวตน" : "ใช้อีเมลและรหัสผ่านที่สมัครไว้"}
+          </p>
+
+          <div className="mt-6 grid grid-cols-2 rounded-lg border border-line bg-white p-1 text-sm font-semibold">
+            <Link
+              aria-current={!isSignup ? "page" : undefined}
+              className={`flex h-10 items-center justify-center rounded-md ${!isSignup ? "bg-brand-600 text-white" : "text-brand-600 hover:bg-brand-50"}`}
+              href={`/login?mode=signin&next=${encodeURIComponent(next)}`}
+            >
+              เข้าสู่ระบบ
+            </Link>
+            <Link
+              aria-current={isSignup ? "page" : undefined}
+              className={`flex h-10 items-center justify-center rounded-md ${isSignup ? "bg-brand-600 text-white" : "text-brand-600 hover:bg-brand-50"}`}
+              href={`/login?mode=signup&next=${encodeURIComponent(next)}`}
+            >
+              สมัครสมาชิก
+            </Link>
           </div>
-        </div>
 
-        <div className="mt-6 grid grid-cols-2 rounded-md border border-[#e6e2ee] bg-white p-1 text-sm font-semibold">
-          <Link className={`flex h-10 items-center justify-center rounded-md ${!isSignup ? "bg-[#722257] text-white" : "text-[#722257]"}`} href={`/login?mode=signin&next=${encodeURIComponent(next)}`}>
-            เข้าสู่ระบบ
-          </Link>
-          <Link className={`flex h-10 items-center justify-center rounded-md ${isSignup ? "bg-[#722257] text-white" : "text-[#722257]"}`} href={`/login?mode=signup&next=${encodeURIComponent(next)}`}>
-            สมัครสมาชิก
-          </Link>
-        </div>
+          {params.registered ? <StatusBanner className="mt-5" tone="success">สร้างบัญชีแล้ว กรุณาเข้าสู่ระบบ</StatusBanner> : null}
+          {params.signedOut ? <StatusBanner className="mt-5" tone="info">ออกจากระบบแล้ว</StatusBanner> : null}
+          {params.reset ? <StatusBanner className="mt-5" tone="success">ตั้งรหัสผ่านใหม่แล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่</StatusBanner> : null}
+          {errorMessage ? <StatusBanner className="mt-5" tone="error">{errorMessage}</StatusBanner> : null}
 
-        {params.registered ? <StatusBanner className="mt-5" tone="success">สร้างบัญชีแล้ว กรุณาเข้าสู่ระบบ</StatusBanner> : null}
-        {params.signedOut ? <StatusBanner className="mt-5" tone="info">ออกจากระบบแล้ว</StatusBanner> : null}
-        {params.reset ? <StatusBanner className="mt-5" tone="success">ตั้งรหัสผ่านใหม่แล้ว กรุณาเข้าสู่ระบบด้วยรหัสผ่านใหม่</StatusBanner> : null}
-        {errorMessage ? <StatusBanner className="mt-5" tone="error">{errorMessage}</StatusBanner> : null}
+          {!hasAuthConfig ? (
+            <StatusBanner className="mt-5" tone="warning">ยังเข้าสู่ระบบไม่ได้ กรุณาติดต่อผู้ดูแลชมรม</StatusBanner>
+          ) : null}
 
-        {!hasAuthConfig ? (
-          <div className="mt-5 rounded-md border border-[#d7a52c] bg-[#fff9ed] px-4 py-3 text-sm text-[#805300]">
-            ระบบยังไม่พร้อมรับการเข้าสู่ระบบ กรุณาติดต่อผู้ดูแลระบบ
-          </div>
-        ) : null}
-
-        {isSignup ? (
-          <>
-            <div className="mt-6 flex items-start gap-3 rounded-lg border border-[#e6e2ee] bg-white/70 p-4">
-              <ShieldCheck className="mt-0.5 size-5 shrink-0 text-[#722257]" aria-hidden="true" />
-              <p className="text-sm leading-6 text-[#3f3a48]">หลังสร้างบัญชี กรอกรหัสพนักงานเพื่อยืนยันตัวตนกับฐานสมาชิกสมาคม</p>
-            </div>
-            <form action={signUpWithPassword} className="mt-5 space-y-4">
+          {isSignup ? (
+            <>
+              <div className="mt-6 flex items-start gap-3 rounded-lg border border-line bg-white p-4">
+                <ShieldCheck className="mt-0.5 size-5 shrink-0 text-brand-600" aria-hidden="true" />
+                <p className="text-sm text-ink-muted">ถ้ารหัสพนักงานและชื่อตรงกับฐานสมาชิกสมาคม ได้เลขสมาชิกทันที ถ้าไม่ตรง ผู้ดูแลชมรมจะตรวจให้</p>
+              </div>
+              <form action={signUpWithPassword} className="mt-5 space-y-4">
+                <label className="block">
+                  <span className={fieldLabel}>อีเมล</span>
+                  <input autoComplete="email" className={inputClass} name="email" placeholder="name@example.com" required type="email" />
+                </label>
+                <div>
+                  <label className={fieldLabel} htmlFor="signup-password">รหัสผ่าน</label>
+                  <PasswordInput autoComplete="new-password" className={inputClass} describedBy="signup-password-hint" id="signup-password" name="password" />
+                  <span className={fieldHint} id="signup-password-hint">อย่างน้อย 8 ตัวอักษร</span>
+                </div>
+                <div>
+                  <label className={fieldLabel} htmlFor="signup-confirm-password">ยืนยันรหัสผ่าน</label>
+                  <PasswordInput autoComplete="new-password" className={inputClass} id="signup-confirm-password" name="confirmPassword" />
+                </div>
+                <SubmitButton className={`${buttonClass("primary", "lg")} w-full`} disabled={!hasAuthConfig} pendingText="กำลังสร้างบัญชี...">
+                  <UserPlus className="size-4" aria-hidden="true" /> สมัครสมาชิก
+                </SubmitButton>
+              </form>
+            </>
+          ) : (
+            <form action={signInWithPassword} className="mt-6 space-y-4">
+              <input name="next" type="hidden" value={next} />
               <label className="block">
-                <span className="text-sm font-semibold text-[#3f3a48]">อีเมล</span>
-                <input className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" autoComplete="email" name="email" placeholder="name@example.com" required type="email" />
+                <span className={fieldLabel}>อีเมล</span>
+                <input autoComplete="username" className={inputClass} data-required-message="กรุณากรอกอีเมลที่ใช้สมัคร" name="email" placeholder="name@example.com" required type="email" />
               </label>
               <div>
-                <label className="text-sm font-semibold text-[#3f3a48]" htmlFor="signup-password">รหัสผ่าน</label>
-                <PasswordInput autoComplete="new-password" className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" describedBy="signup-password-hint" id="signup-password" name="password" />
-                <span className="mt-1 block text-xs text-[#6b6475]" id="signup-password-hint">อย่างน้อย 8 ตัวอักษร</span>
+                <div className="flex items-center justify-between gap-3">
+                  <label className={fieldLabel} htmlFor="signin-password">รหัสผ่าน</label>
+                  <Link className="text-sm font-medium text-brand-600 hover:underline" href="/forgot-password">ลืมรหัสผ่าน?</Link>
+                </div>
+                <PasswordInput autoComplete="current-password" className={inputClass} id="signin-password" name="password" />
               </div>
-              <div>
-                <label className="text-sm font-semibold text-[#3f3a48]" htmlFor="signup-confirm-password">ยืนยันรหัสผ่าน</label>
-                <PasswordInput autoComplete="new-password" className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" id="signup-confirm-password" name="confirmPassword" />
-              </div>
-              <SubmitButton className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white transition hover:bg-[#8b2d6b] disabled:cursor-wait disabled:bg-[#9a94a6]" disabled={!hasAuthConfig} pendingText="กำลังสร้างบัญชี...">
-                <UserPlus className="size-4" aria-hidden="true" /> สมัครสมาชิก
+              <SubmitButton className={`${buttonClass("primary", "lg")} w-full`} disabled={!hasAuthConfig} pendingText="กำลังเข้าสู่ระบบ...">
+                <KeyRound className="size-4" aria-hidden="true" /> เข้าสู่ระบบ
               </SubmitButton>
             </form>
-          </>
-        ) : (
-          <form action={signInWithPassword} className="mt-6 space-y-4">
-            <input name="next" type="hidden" value={next} />
-            <label className="block">
-              <span className="text-sm font-semibold text-[#3f3a48]">อีเมล</span>
-              <input className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" autoComplete="username" data-required-message="กรุณากรอกอีเมลที่ใช้สมัคร" name="email" placeholder="name@example.com" required type="email" />
-            </label>
-            <div>
-              <div className="flex items-center justify-between gap-3">
-                <label className="text-sm font-semibold text-[#3f3a48]" htmlFor="signin-password">รหัสผ่าน</label>
-                <Link className="text-xs font-semibold text-[#722257] hover:underline" href="/forgot-password">ลืมรหัสผ่าน?</Link>
-              </div>
-              <PasswordInput autoComplete="current-password" className="mt-2 h-12 w-full rounded-md border border-[#d9d3e6] bg-white px-4 outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10" id="signin-password" name="password" />
-            </div>
-            <SubmitButton className="flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white transition hover:bg-[#8b2d6b] disabled:cursor-wait disabled:bg-[#9a94a6]" disabled={!hasAuthConfig} pendingText="กำลังเข้าสู่ระบบ...">
-              <KeyRound className="size-4" aria-hidden="true" /> เข้าสู่ระบบ
-            </SubmitButton>
-          </form>
-        )}
+          )}
 
-        {googleEnabled ? (
-          <form action={signInWithGoogle} className="mt-3">
-            <input name="next" type="hidden" value={next} />
-            <button className="h-11 w-full rounded-md border border-[#d9d3e6] bg-white text-sm font-semibold text-[#722257]" type="submit">เข้าสู่ระบบด้วย Google</button>
-          </form>
-        ) : null}
-      </section>
+          {googleEnabled ? (
+            <form action={signInWithGoogle} className="mt-3">
+              <input name="next" type="hidden" value={next} />
+              <button className={`${buttonClass("secondary", "lg")} w-full`} type="submit">เข้าสู่ระบบด้วย Google</button>
+            </form>
+          ) : null}
+
+          <div className="mt-10 flex items-center gap-2 text-xs text-ink-subtle lg:hidden">
+            <PeaLogo height={20} />
+            การไฟฟ้าส่วนภูมิภาค
+          </div>
+        </section>
       </div>
     </main>
   );

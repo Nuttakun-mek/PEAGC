@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { needsNoSlipReason, paymentStage } from "./payments";
+import { needsNoSlipReason, paymentRecordStage, paymentStage } from "./payments";
 
 const slip = (status: string) => ({ slip_file_id: "file-1", status });
 const noSlip = (status: string) => ({ slip_file_id: null, status });
@@ -34,5 +34,15 @@ describe("needsNoSlipReason", () => {
     expect(needsNoSlipReason({ hasSlip: false, note: "รับเงินสดหน้างาน", status: "approved" })).toBe(false);
     expect(needsNoSlipReason({ hasSlip: true, note: "", status: "approved" })).toBe(false);
     expect(needsNoSlipReason({ hasSlip: false, note: "", status: "rejected" })).toBe(false);
+  });
+});
+
+describe("paymentRecordStage", () => {
+  it("derives the stage of a non-event payment from the record alone", () => {
+    expect(paymentRecordStage({ slip_file_id: "f", status: "review" })).toBe("awaiting_review");
+    expect(paymentRecordStage({ slip_file_id: null, status: "pending" })).toBe("awaiting_payment");
+    expect(paymentRecordStage({ slip_file_id: "f", status: "approved" })).toBe("approved");
+    expect(paymentRecordStage({ slip_file_id: "f", status: "rejected" })).toBe("rejected");
+    expect(paymentRecordStage({ slip_file_id: null, status: "refunded" })).toBe("refunded");
   });
 });

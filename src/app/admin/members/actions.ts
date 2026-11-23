@@ -1,5 +1,6 @@
 "use server";
 
+import { recordAudit } from "@/lib/audit";
 import { redirectAfterAction as redirect } from "@/lib/navigation";
 import { failureStatus, logDbError } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
@@ -559,4 +560,273 @@ export async function restoreMember(formData: FormData) {
   });
 
   redirectMembers("member-restored", memberId);
+}
+
+// ---------- membership lifecycle (phase 2) ----------
+
+const BULK_APPROVE_LIMIT = 100;
+
+/** Approve every ticked "รอตรวจ" member at once; the member number comes from the trigger. */
+export async function bulkApproveMembers(formData: FormData) {
+  const ids = [...new Set(formData.getAll("memberIds").map((value) => String(value).trim()).filter(Boolean))].slice(0, BULK_APPROVE_LIMIT);
+  if (!ids.length) {
+    redirectMembers("bulk-none-selected", undefined, "pending");
+  }
+
+  const { clubId, supabase, userId } = await requireAdminClub();
+  const { data: rows, error } = await supabase
+    .from("members")
+    .select("*")
+    .eq("club_id", clubId)
+    .eq("status", "pending_verification")
+    .is("archived_at", null)
+    .in("id", ids);
+  if (error) {
+    logDbError("members.bulk_approve.load", error);
+    redirectMembers(failureStatus("approve-failed", error), undefined, "pending");
+  }
+
+  const typeId = await defaultMemberTypeId(supabase, clubId);
+  const verifiedAt = new Date().toISOString();
+  let approved = 0;
+  let skipped = ids.length - (rows ?? []).length;
+
+  for (const before of rows ?? []) {
+    if (await findEmployeeCodeOwner(supabase, clubId, before.employee_code, before.id)) {
+      skipped += 1;
+      continue;
+    }
+    const update = {
+      member_type_id: before.member_type_id ?? typeId,
+      status: "active",
+      updated_by: userId,
+      verification_note: "อนุมัติพร้อมกันจากรายชื่อสมาชิก",
+      verified_at: verifiedAt,
+      verified_by: userId,
+    };
+    const { data: saved, error: saveError } = await supabase
+      .from("members")
+      .update(update)
+      .eq("club_id", clubId)
+      .eq("id", before.id)
+      .eq("status", "pending_verification")
+      .select("id, member_code")
+      .maybeSingle();
+    if (saveError || !saved) {
+      logDbError("members.bulk_approve", saveError);
+      skipped += 1;
+      continue;
+    }
+    approved += 1;
+    await recordAudit(supabase, {
+      action: "member.approved",
+      actorUserId: userId,
+      after: { ...update, member_code: saved.member_code },
+      before,
+      clubId,
+      entityId: before.id,
+      entityType: "members",
+      metadata: { bulk: true, source: "admin.members" },
+    });
+    await supabase.from("member_notifications").insert({
+      body: `บัญชีสมาชิกของคุณได้รับการอนุมัติแล้ว เลขสมาชิก ${saved.member_code ?? ""} จองเรียนและสมัครกิจกรรมได้เลย`.trim(),
+      channel: before.email ? "email" : "system",
+      club_id: clubId,
+      created_by: userId,
+      member_id: before.id,
+      metadata: { source: "admin.members", trigger: "member.approved", bulk: true },
+      notification_type: "member_approved",
+      recipient: before.email ?? null,
+      status: "queued",
+      subject: "อนุมัติสมาชิกเรียบร้อยแล้ว",
+      updated_by: userId,
+    });
+  }
+
+  redirectMembers(approved ? "bulk-approved" : "bulk-approve-failed", undefined, "pending", {
+    approved: String(approved),
+    skipped: String(skipped),
+  });
+}
+
+const lifecycleTargets: Record<string, { action: string; status: string }> = {
+  resign: { action: "member.resigned", status: "resigned" },
+  resume: { action: "member.resumed", status: "active" },
+  suspend: { action: "member.suspended", status: "suspended" },
+};
+
+/** ระงับ / คืนสิทธิ์ / พ้นสภาพ with a reason (stored on the member and in audit_logs). */
+export async function changeMemberLifecycle(formData: FormData) {
+  const memberId = getString(formData, "memberId");
+  const change = lifecycleTargets[getString(formData, "change")];
+  const reason = getString(formData, "reason").slice(0, 300);
+  if (!memberId || !change) {
+    redirectMembers("missing-required", memberId || undefined);
+  }
+  if (!reason) {
+    redirectMembers("lifecycle-needs-reason", memberId);
+  }
+
+  const { clubId, supabase, userId } = await requireAdminClub();
+  const { data: before } = await supabase
+    .from("members")
+    .select("id, status, status_reason, membership_expires_at, archived_at, full_name")
+    .eq("club_id", clubId)
+    .eq("id", memberId)
+    .maybeSingle();
+  if (!before || before.archived_at) {
+    redirectMembers("update-not-found", memberId);
+  }
+
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  // Resuming a member whose year has run out lands on "หมดอายุ" until they renew.
+  const status =
+    change.status === "active" && before.membership_expires_at && before.membership_expires_at < today ? "expired" : change.status;
+  const update = { status, status_reason: change.status === "active" ? null : reason, updated_by: userId };
+  const { data: saved, error } = await supabase
+    .from("members")
+    .update(update)
+    .eq("club_id", clubId)
+    .eq("id", memberId)
+    .select("id")
+    .maybeSingle();
+  if (error || !saved) {
+    logDbError("members.lifecycle", error);
+    // The old status check (before the migration) rejects the new values.
+    redirectMembers(error?.code === "23514" ? "db-outdated" : failureStatus("update-failed", error), memberId);
+  }
+
+  await recordAudit(supabase, {
+    action: change.action,
+    actorUserId: userId,
+    after: update,
+    before: { status: before.status, status_reason: before.status_reason },
+    clubId,
+    entityId: memberId,
+    entityType: "members",
+    metadata: { reason, source: "admin.members" },
+  });
+
+  redirectMembers(`lifecycle-${getString(formData, "change")}`, memberId);
+}
+
+/** Set the membership end date by hand (e.g. fee paid in cash), with a reason. */
+export async function setMembershipExpiry(formData: FormData) {
+  const memberId = getString(formData, "memberId");
+  const expiresAt = getString(formData, "membershipExpiresAt");
+  const reason = getString(formData, "reason").slice(0, 300);
+  if (!memberId) redirectMembers("missing-required");
+  if (expiresAt && !/^\d{4}-\d{2}-\d{2}$/.test(expiresAt)) redirectMembers("expiry-invalid", memberId);
+  if (!reason) redirectMembers("lifecycle-needs-reason", memberId);
+
+  const { clubId, supabase, userId } = await requireAdminClub();
+  const { data: before } = await supabase
+    .from("members")
+    .select("id, status, membership_expires_at")
+    .eq("club_id", clubId)
+    .eq("id", memberId)
+    .maybeSingle();
+  if (!before) redirectMembers("update-not-found", memberId);
+
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+  const update: Record<string, unknown> = { membership_expires_at: expiresAt || null, updated_by: userId };
+  // A new end date in the future reopens an expired membership.
+  if (before.status === "expired" && (!expiresAt || expiresAt >= today)) {
+    update.status = "active";
+    update.status_reason = null;
+  }
+  const { error } = await supabase.from("members").update(update).eq("club_id", clubId).eq("id", memberId);
+  if (error) {
+    logDbError("members.set_expiry", error);
+    redirectMembers(failureStatus("update-failed", error), memberId);
+  }
+  await recordAudit(supabase, {
+    action: "member.expiry_set",
+    actorUserId: userId,
+    after: update,
+    before: { membership_expires_at: before.membership_expires_at, status: before.status },
+    clubId,
+    entityId: memberId,
+    entityType: "members",
+    metadata: { reason, source: "admin.members" },
+  });
+  redirectMembers("expiry-saved", memberId);
+}
+
+/** PDPA deletion request: archive the member (and close the request) or decline with a note. */
+export async function resolveDataRequest(formData: FormData) {
+  const requestId = getString(formData, "requestId");
+  const decision = getString(formData, "decision");
+  const note = getString(formData, "note").slice(0, 500) || null;
+  if (!requestId || !["archive", "reject"].includes(decision)) {
+    redirectMembers("missing-required");
+  }
+
+  const { clubId, supabase, userId } = await requireAdminClub();
+  const { data: request } = await supabase
+    .from("member_data_requests")
+    .select("id, member_id, status")
+    .eq("club_id", clubId)
+    .eq("id", requestId)
+    .maybeSingle();
+  if (!request || request.status !== "open") {
+    redirectMembers("data-request-closed");
+  }
+
+  if (decision === "archive") {
+    const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Bangkok" }).format(new Date());
+    const [{ count: lessonCount }, { count: eventCount }] = await Promise.all([
+      supabase
+        .from("lesson_bookings")
+        .select("id, lesson_slots!inner(lesson_date)", { count: "exact", head: true })
+        .eq("member_id", request.member_id)
+        .eq("status", "booked")
+        .gte("lesson_slots.lesson_date", today),
+      supabase
+        .from("event_registrations")
+        .select("id, events!inner(event_date)", { count: "exact", head: true })
+        .eq("member_id", request.member_id)
+        .in("status", openRegistrationStatuses)
+        .gte("events.event_date", today),
+    ]);
+    if ((lessonCount ?? 0) > 0 || (eventCount ?? 0) > 0) {
+      redirectMembers("member-archive-blocked", request.member_id);
+    }
+    const { error } = await supabase
+      .from("members")
+      .update({ archived_at: new Date().toISOString(), status: "archived", status_reason: "data_deletion_request", updated_by: userId })
+      .eq("club_id", clubId)
+      .eq("id", request.member_id);
+    if (error) {
+      logDbError("members.archive_for_request", error);
+      redirectMembers(failureStatus("archive-failed", error), request.member_id);
+    }
+  }
+
+  const { error: closeError } = await supabase
+    .from("member_data_requests")
+    .update({
+      resolution_note: note,
+      resolved_at: new Date().toISOString(),
+      resolved_by: userId,
+      status: decision === "archive" ? "done" : "rejected",
+    })
+    .eq("id", requestId)
+    .eq("status", "open");
+  if (closeError) {
+    logDbError("member_data_requests.resolve", closeError);
+    redirectMembers(failureStatus("update-failed", closeError));
+  }
+
+  await recordAudit(supabase, {
+    action: decision === "archive" ? "member.archived_for_data_request" : "member.data_request_rejected",
+    actorUserId: userId,
+    after: { decision, note },
+    clubId,
+    entityId: request.member_id,
+    entityType: "members",
+    metadata: { request_id: requestId, source: "admin.members" },
+  });
+
+  redirectMembers(decision === "archive" ? "data-request-archived" : "data-request-rejected");
 }

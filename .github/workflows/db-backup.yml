@@ -1,0 +1,78 @@
+# Daily logical backup of the production Supabase database (schema + data) as a 14-day artifact.
+# Setup: add the repository secret SUPABASE_DB_URL (Supabase > Project Settings > Database,
+# Session pooler connection string, port 5432). Without the secret the job skips cleanly.
+# Restore: see docs/STAGING_AND_BACKUP.md.
+name: Database backup
+
+on:
+  schedule:
+    - cron: "30 19 * * *" # 02:30 Asia/Bangkok
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: db-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Check secret
+        id: check
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "SUPABASE_DB_URL is not set; skipping backup." >> "$GITHUB_STEP_SUMMARY"
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install PostgreSQL 17 client
+        if: steps.check.outputs.enabled == 'true'
+        run: |
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+          /usr/lib/postgresql/17/bin/pg_dump --version
+
+      - name: Dump database
+        if: steps.check.outputs.enabled == 'true'
+        id: dump
+        run: |
+          set -euo pipefail
+          stamp="$(TZ=Asia/Bangkok date +%Y%m%d-%H%M)"
+          file="peagc-${stamp}.dump"
+          dump() {
+            /usr/lib/postgresql/17/bin/pg_dump "$SUPABASE_DB_URL" \
+              --format=custom --compress=9 --no-owner --no-privileges "$@" --file="$file"
+          }
+          # App data (public) plus sign-in accounts (auth). If the auth schema cannot be read with
+          # this role, keep at least the app data instead of failing the whole backup.
+          if dump --schema=public --schema=auth; then
+            scope="public + auth"
+          else
+            echo "::warning::auth schema could not be dumped; backing up public only"
+            dump --schema=public
+            scope="public only"
+          fi
+          size="$(du -h "$file" | cut -f1)"
+          echo "file=$file" >> "$GITHUB_OUTPUT"
+          echo "Backup $file ($size, $scope)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact
+        if: steps.check.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_id }}
+          path: ${{ steps.dump.outputs.file }}
+          retention-days: 14
+          if-no-files-found: error
+          compression-level: 0

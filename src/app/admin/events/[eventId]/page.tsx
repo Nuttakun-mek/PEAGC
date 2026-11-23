@@ -1,44 +1,58 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ArrowLeft,
-  CalendarDays,
-  CheckCircle2,
-  Clock,
-  Download,
-  Flag,
-  MapPin,
-  Search,
-  Shuffle,
-  Trash2,
-  UserCheck,
-  UserX,
-  UsersRound,
-} from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, ChevronDown, Clock, Layers, MapPin, Printer, Shuffle, UserX } from "lucide-react";
 
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { EventsCopyLinkButton } from "@/components/events-copy-link-button";
 import { StatusBanner, toneForStatus } from "@/components/status-banner";
 import { SubmitButton } from "@/components/submit-button";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  buttonClass,
+  buttonPrimary,
+  buttonSecondary,
+  card,
+  fieldInput,
+  fieldInputClass,
+  fieldLabel,
+} from "@/components/ui/styles";
 import { resolveAccess } from "@/lib/auth/access";
+import { requireAdminArea } from "@/lib/auth/admin-area";
+import {
+  UNSET,
+  formatFee,
+  formatPhone,
+  formatThaiDateLong,
+  formatThaiDateTime,
+  formatThaiTime,
+  phoneHref,
+} from "@/lib/display";
+import { selectWithOptional } from "@/lib/events/db";
 import {
   holdsSeat,
   isConfirmed,
   registrationStatusLabels,
   summarizeRegistrations,
 } from "@/lib/events/pairing";
-import { formatBangkokDateTime, formatBangkokDay } from "@/lib/lessons/booking";
+import { appIcons } from "@/lib/icons";
+import { eventStatusLabels } from "@/lib/labels";
+import { loadClubHandicaps } from "@/lib/scoring/club-handicap";
+import { formatHandicap } from "@/lib/scoring/handicap";
+import { dbFailureMessages } from "@/lib/supabase/errors";
 import { createClient } from "@/lib/supabase/server";
 
 import {
   assignPlayerToGroup,
   autoAssignPairings,
+  autoFlightPairings,
   clearPairings,
   deletePairingGroup,
   generatePairingGroups,
   updateAttendance,
   updatePairingGroup,
 } from "./actions";
-import { UNSET, formatPhone, orUnset } from "@/lib/display";
+import { PrizesSection } from "./prizes-section";
 
 type PageProps = {
   params: Promise<{ eventId: string }>;
@@ -47,6 +61,7 @@ type PageProps = {
 
 type Group = {
   capacity: number;
+  flight?: string | null;
   group_no: number;
   id: string;
   note: string | null;
@@ -59,6 +74,7 @@ type Registration = {
   created_at: string;
   guest_name: string | null;
   id: string;
+  member_id: string | null;
   members: {
     full_name: string;
     handicap: number | null;
@@ -72,7 +88,22 @@ type Registration = {
 };
 
 const statusMessages: Record<string, string> = {
+  ...dbFailureMessages,
   "assign-failed": "จัดผู้เล่นเข้าก๊วนไม่สำเร็จ",
+  "flights-generated": "จัดไฟลท์และก๊วนตามแต้มต่อแล้ว ย้ายผู้เล่นได้ในแต่ละก๊วน",
+  "no-flight-ranges": "กติกาการแข่งขันยังไม่มีช่วงไฟลท์ เลือก “แบ่ง 3 ไฟลท์ A/B/C” หรือกำหนดไฟลท์ในหน้าสกอร์ก่อน",
+  "prize-deleted": "ลบรางวัลแล้ว",
+  "prize-duplicate": "มีรางวัลประเภทและอันดับนี้แล้ว",
+  "prize-failed": "บันทึกรางวัลไม่สำเร็จ",
+  "prize-invalid": "ประเภทรางวัลไม่ถูกต้อง",
+  "prize-no-competition": "ตั้งกติกาการแข่งขันในหน้าสกอร์ก่อน",
+  "prize-no-flight": "ใส่ชื่อไฟลท์สำหรับรางวัลชนะเลิศไฟลท์",
+  "prize-no-winner": "เลือกผู้เล่นหรือใส่ชื่อแขกที่ได้รางวัล",
+  "prize-nothing-verified": "ยังไม่มีการ์ดที่ยืนยันแล้ว จึงยังเติมผู้ชนะไม่ได้",
+  "prize-saved": "บันทึกรางวัลแล้ว",
+  "prize-winner-mismatch": "ผู้ได้รางวัลไม่ได้อยู่ในกิจกรรมนี้",
+  "prizes-suggested": "เติมผู้ชนะจากตารางคะแนนแล้ว",
+  "text-corrupted": "ข้อความภาษาไทยเสียหาย (แสดงเป็น ???) พิมพ์ใหม่ก่อนบันทึก",
   "attendance-failed": "บันทึกการเช็กอินไม่สำเร็จ",
   "check-in-undone": "ยกเลิกการเช็กอินแล้ว",
   "checked-in": "เช็กอินแล้ว",
@@ -86,18 +117,18 @@ const statusMessages: Record<string, string> = {
   "invalid-group-size": "จำนวนผู้เล่นต่อก๊วนต้องอยู่ระหว่าง 1-8 คน",
   "invalid-interval": "ระยะห่างเวลาออกตัวต้องอยู่ระหว่าง 1-60 นาที",
   "invalid-status": "คำสั่งไม่ถูกต้อง",
-  "invalid-tee-time": "รูปแบบเวลาไม่ถูกต้อง ใช้ HH:MM",
+  "invalid-tee-time": "เวลาไม่ถูกต้อง ใส่แบบ 07:30",
   "missing-registration": "ไม่พบรายการสมัคร",
   "no-groups": "ยังไม่มีก๊วน สร้างก๊วนก่อนจัดผู้เล่นอัตโนมัติ",
   "no-players": "ยังไม่มีผู้สมัครที่มีสิทธิ์ลงเล่น",
-  "no-show-marked": "บันทึกว่าไม่มาแสดงตัวแล้ว",
-  "no-show-undone": "ยกเลิกสถานะไม่มาแสดงตัวแล้ว",
+  "no-show-marked": "บันทึกว่าไม่มาแล้ว",
+  "no-show-undone": "ยกเลิกสถานะไม่มาแล้ว",
   "not-pairable": "รายการนี้อยู่ในสถานะที่ทำรายการไม่ได้",
   "pairings-cleared": "นำผู้เล่นออกจากทุกก๊วนแล้ว",
   "player-moved": "ย้ายผู้เล่นแล้ว",
-  "players-assigned": "จัดผู้เล่นเข้าก๊วนอัตโนมัติแล้ว",
-  "players-assigned-partial": "จัดผู้เล่นแล้วบางส่วน ที่ว่างในก๊วนไม่พอ เพิ่มก๊วนแล้วจัดอีกครั้ง",
-  "registration-cancelled": "ยกเลิกการสมัครแล้ว ระบบเลื่อนรายชื่อสำรองคนถัดไปให้อัตโนมัติ",
+  "players-assigned": "จัดผู้เล่นเข้าก๊วนแล้ว",
+  "players-assigned-partial": "จัดผู้เล่นได้บางส่วน ที่ว่างในก๊วนไม่พอ เพิ่มก๊วนแล้วจัดอีกครั้ง",
+  "registration-cancelled": "ยกเลิกการสมัครแล้ว ถ้ามีคิวสำรอง คนถัดไปได้ที่นั่งแทน",
   "too-many-groups": "จำนวนก๊วนเกินกำหนด (สูงสุด 60 ก๊วน หรือ 36 ก๊วนสำหรับ Shotgun)",
 };
 
@@ -105,23 +136,17 @@ const views = [
   { key: "seated", label: "ผู้เล่น" },
   { key: "unchecked", label: "ยังไม่เช็กอิน" },
   { key: "unpaid", label: "ค้างชำระ" },
-  { key: "waitlist", label: "สำรอง" },
+  { key: "waitlist", label: "คิวสำรอง" },
   { key: "all", label: "ทั้งหมด" },
 ] as const;
 
-const inputClass =
-  "h-10 w-full rounded-md border border-[#d9d3e6] bg-white px-3 text-sm outline-none focus:border-[#722257] focus:ring-4 focus:ring-[#722257]/10";
-const primaryButton =
-  "flex h-10 items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white transition hover:bg-[#8b2d6b] disabled:cursor-not-allowed disabled:bg-[#9a94a6]";
-const outlineButton =
-  "flex h-10 items-center justify-center gap-2 rounded-md border border-[#d9d3e6] bg-white px-3 text-sm font-semibold text-[#722257] transition hover:bg-[#f8edf4]";
+/** Registration list columns from xl up (below that each row stacks with small labels). */
+const rowGrid = "xl:grid-cols-[minmax(0,1.7fr)_8.5rem_minmax(0,1.4fr)_minmax(0,1.3fr)_auto]";
 
-function chipClass(status: string) {
-  if (status === "paid" || status === "registered" || status === "checked_in") return "bg-[#edf9f3] text-[#16794b]";
-  if (status === "pending_payment" || status === "payment_review") return "bg-[#fff5d8] text-[#805300]";
-  if (status === "waitlist") return "bg-[#eef2ff] text-[#3538cd]";
-  if (status === "cancelled" || status === "no_show") return "bg-[#fdecec] text-[#9f1d1d]";
-  return "bg-[#f1f3ef] text-[#6b6475]";
+/** 15-minute steps unless the stored time is off the quarter hour (the browser would refuse to submit it). */
+function teeTimeStep(value: string | null | undefined) {
+  const match = value ? /^(\d{1,2}):(\d{2})/.exec(value) : null;
+  return !match || Number(match[2]) % 15 === 0 ? 900 : 60;
 }
 
 function playerName(row: Registration) {
@@ -145,6 +170,17 @@ function matchesView(row: Registration, view: string) {
   }
 }
 
+function PhoneLink({ phone }: { phone: string | null | undefined }) {
+  const href = phoneHref(phone);
+  return href ? (
+    <a className="text-brand-600 hover:underline" href={href}>
+      {formatPhone(phone)}
+    </a>
+  ) : (
+    <span className="text-ink-muted">{formatPhone(phone)}</span>
+  );
+}
+
 export default async function EventOperationsPage({ params, searchParams }: PageProps) {
   const [{ eventId }, query] = await Promise.all([params, searchParams]);
   const access = await resolveAccess({
@@ -153,17 +189,18 @@ export default async function EventOperationsPage({ params, searchParams }: Page
     requiredRole: "admin",
     searchParams: query,
   });
+  await requireAdminArea("events", access);
 
   if (access.isBypass || !access.clubId) {
     return (
-      <main className="px-4 py-6">
+      <main className="px-4 py-6 sm:px-6">
         <section className="mx-auto max-w-3xl">
           <StatusBanner tone="warning">
-            หน้าจัดการผู้สมัคร จัดก๊วน และเช็กอิน ต้องเข้าสู่ระบบด้วยบัญชีผู้ดูแลจริง
+            หน้าผู้สมัคร จัดก๊วน และเช็กอิน ต้องเข้าสู่ระบบด้วยบัญชีผู้ดูแลจริง
           </StatusBanner>
-          <Link className={`${outlineButton} mt-4 w-fit`} href="/admin/events?bypass=admin">
+          <Link className={`${buttonSecondary} mt-4 w-fit`} href="/admin/events?bypass=admin">
             <ArrowLeft className="size-4" aria-hidden="true" />
-            กลับหน้ากิจกรรม
+            กลับไปกิจกรรมออกรอบ
           </Link>
         </section>
       </main>
@@ -171,24 +208,26 @@ export default async function EventOperationsPage({ params, searchParams }: Page
   }
 
   const supabase = await createClient();
+  const clubId = access.clubId;
   const [{ data: event }, { data: groupData }, { data: registrationData }] = await Promise.all([
     supabase
       .from("events")
       .select("id, name, venue, event_date, tee_off_time, capacity, member_price, status")
-      .eq("club_id", access.clubId)
+      .eq("club_id", clubId)
       .eq("id", eventId)
       .maybeSingle(),
-    supabase
-      .from("event_pairing_groups")
-      .select("id, group_no, tee_time, start_hole, capacity, note")
-      .eq("event_id", eventId)
-      .order("group_no"),
+    selectWithOptional<Group[]>(
+      (columns) => supabase.from("event_pairing_groups").select(columns).eq("event_id", eventId).order("group_no"),
+      "id, group_no, tee_time, start_hole, capacity, note, flight",
+      "id, group_no, tee_time, start_hole, capacity, note",
+      "admin.event groups",
+    ),
     supabase
       .from("event_registrations")
       .select(
-        "id, status, guest_name, created_at, checked_in_at, pairing_group_id, promoted_at, members(full_name, nickname, member_code, phone, handicap)",
+        "id, status, guest_name, created_at, checked_in_at, pairing_group_id, promoted_at, member_id, members(full_name, nickname, member_code, phone, handicap)",
       )
-      .eq("club_id", access.clubId)
+      .eq("club_id", clubId)
       .eq("event_id", eventId)
       .order("created_at", { ascending: true })
       .limit(2000),
@@ -200,6 +239,18 @@ export default async function EventOperationsPage({ params, searchParams }: Page
 
   const groups = (groupData ?? []) as Group[];
   const registrations = (registrationData ?? []) as unknown as Registration[];
+  // แต้มต่อชมรม as of this event (falls back to the handicap the club entered).
+  const clubHandicaps = await loadClubHandicaps(
+    supabase,
+    clubId,
+    registrations.flatMap((row) => (row.member_id && holdsSeat(row.status) ? [{ id: row.member_id, manual: row.members?.handicap ?? null }] : [])),
+    { before: event.event_date },
+  );
+  const handicapOf = (row: Registration) => {
+    const club = row.member_id ? clubHandicaps.get(row.member_id)?.index : null;
+    return club ?? row.members?.handicap ?? null;
+  };
+  const handicapText = (row: Registration) => formatHandicap(handicapOf(row), UNSET);
   const summary = summarizeRegistrations(registrations);
   const view = views.some((item) => item.key === query.view) ? query.view! : "seated";
   const q = query.q?.trim().toLowerCase() ?? "";
@@ -217,6 +268,7 @@ export default async function EventOperationsPage({ params, searchParams }: Page
   }
   const unpaired = registrations.filter((row) => holdsSeat(row.status) && !row.pairing_group_id);
   const openGroups = groups.filter((group) => (playersByGroup.get(group.id)?.length ?? 0) < group.capacity);
+  const freeSeats = openGroups.reduce((sum, group) => sum + group.capacity - (playersByGroup.get(group.id)?.length ?? 0), 0);
   const visible = registrations.filter((row) => {
     if (!matchesView(row, view)) return false;
     if (!q) return true;
@@ -227,56 +279,77 @@ export default async function EventOperationsPage({ params, searchParams }: Page
       .includes(q);
   });
 
+  const viewCounts: Record<string, number> = {
+    all: registrations.length,
+    seated: summary.seats,
+    unchecked: summary.seats - summary.checkedIn,
+    unpaid: summary.unpaid,
+    waitlist: summary.waitlist,
+  };
+
   const stats = [
     { label: "ผู้เล่น", value: event.capacity ? `${summary.seats}/${event.capacity}` : String(summary.seats) },
     { label: "ยืนยันแล้ว", value: String(summary.confirmed) },
     { label: "ค้างชำระ", value: String(summary.unpaid) },
-    { label: "สำรอง", value: String(summary.waitlist) },
+    { label: "คิวสำรอง", value: String(summary.waitlist) },
     { label: "เช็กอิน", value: `${summary.checkedIn}/${summary.seats}` },
     { label: "ยังไม่จัดก๊วน", value: String(summary.unpaired) },
   ];
 
+  const ScoresIcon = appIcons.scores;
+  const CheckInIcon = appIcons.checkIn;
+  const DownloadIcon = appIcons.download;
+  const MembersIcon = appIcons.members;
+  const AddIcon = appIcons.add;
+  const EditIcon = appIcons.edit;
+  const SaveIcon = appIcons.save;
+  const DeleteIcon = appIcons.delete;
+  const SearchIcon = appIcons.search;
+  const exportHref = (type: string) => `/admin/events/${event.id}/export?type=${type}`;
+  const eventStatus = eventStatusLabels[event.status] ?? event.status;
+
   return (
-    <main className="min-h-screen px-4 py-6 text-[#2f3137]">
+    <main className="min-h-screen px-4 py-6 text-ink sm:px-6">
       <section className="mx-auto w-full max-w-7xl">
-        <div className="flex flex-col gap-4 border-b border-[#e6e2ee] pb-5 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <Link className="inline-flex items-center gap-1 text-sm font-semibold text-[#8b5b7a] hover:text-[#722257]" href={`/admin/events?event=${event.id}`}>
-              <ArrowLeft className="size-4" aria-hidden="true" />
-              กิจกรรมทั้งหมด
-            </Link>
-            <h1 className="mt-2 text-2xl font-semibold text-[#722257] sm:text-3xl">{event.name}</h1>
-            <p className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[#6b6475]">
-              <span className="inline-flex items-center gap-1">
-                <CalendarDays className="size-4" aria-hidden="true" />
-                {formatBangkokDay(event.event_date)}
+        <Link
+          className="inline-flex items-center gap-1 text-sm font-medium text-ink-muted hover:text-brand-600"
+          href={`/admin/events?event=${event.id}#event-${event.id}`}
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          กิจกรรมออกรอบ
+        </Link>
+        <div className="mt-2">
+          <PageHeader
+            actions={
+              <>
+                <EventsCopyLinkButton path={`/events/${event.id}`} title={event.name} />
+                <Link className={buttonPrimary} href={`/admin/events/${event.id}/scoring`}>
+                  <ScoresIcon className="size-4" aria-hidden="true" />
+                  สกอร์และสกอร์การ์ด
+                </Link>
+              </>
+            }
+            description={
+              <span className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-ink-muted">
+                <StatusBadge kind="event" status={event.status}>{eventStatus}</StatusBadge>
+                <span className="inline-flex items-center gap-1.5">
+                  <CalendarDays className="size-4 text-ink-subtle" aria-hidden="true" />
+                  {formatThaiDateLong(event.event_date)}
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="size-4 text-ink-subtle" aria-hidden="true" />
+                  ออกรอบ <span className="tabular-nums">{formatThaiTime(event.tee_off_time)}</span>
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <MapPin className="size-4 text-ink-subtle" aria-hidden="true" />
+                  {event.venue?.trim() || "รอแจ้งสนาม"}
+                </span>
+                <span className="tabular-nums">ค่าสมัคร {formatFee(event.member_price)}</span>
+                <span className="tabular-nums">{event.capacity ? `รับ ${event.capacity} คน` : "ไม่จำกัดจำนวน"}</span>
               </span>
-              <span className="inline-flex items-center gap-1">
-                <Clock className="size-4" aria-hidden="true" />
-                {event.tee_off_time ? `${event.tee_off_time.slice(0, 5)} น.` : UNSET}
-              </span>
-              <span className="inline-flex items-center gap-1">
-                <MapPin className="size-4" aria-hidden="true" />
-                {event.venue ?? "ยังไม่ระบุสนาม"}
-              </span>
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link className={primaryButton} href={`/admin/events/${event.id}/scoring`}>
-              <Flag className="size-4" aria-hidden="true" />
-              คะแนนและสแกนการ์ด
-            </Link>
-            {[
-              { href: "participants", label: "รายชื่อทั้งหมด" },
-              { href: "unpaid", label: "ค้างชำระ" },
-              { href: "pairing", label: "ใบจัดก๊วน" },
-            ].map((item) => (
-              <a className={outlineButton} href={`/admin/events/${event.id}/export?type=${item.href}`} key={item.href}>
-                <Download className="size-4" aria-hidden="true" />
-                {item.label}
-              </a>
-            ))}
-          </div>
+            }
+            title={event.name}
+          />
         </div>
 
         {statusMessage ? (
@@ -285,84 +358,131 @@ export default async function EventOperationsPage({ params, searchParams }: Page
           </StatusBanner>
         ) : null}
 
-        <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {stats.map((item) => (
-            <article className="rounded-lg border border-[#e6e2ee] bg-white p-4 shadow-[0_12px_30px_rgba(114,34,87,0.06)]" key={item.label}>
-              <p className="text-xs font-semibold text-[#6b6475]">{item.label}</p>
-              <p className="mt-1 text-2xl font-semibold text-[#722257]">{item.value}</p>
+            <article className="rounded-xl border border-line bg-white p-4 shadow-card" key={item.label}>
+              <p className="text-sm font-medium text-ink-muted">{item.label}</p>
+              <p className="mt-1 text-kpi font-semibold tabular-nums text-ink">{item.value}</p>
             </article>
           ))}
         </div>
 
         {/* ---------- participants & check-in ---------- */}
-        <section className="mt-6 rounded-lg border border-[#e6e2ee] bg-white shadow-[0_18px_45px_rgba(114,34,87,0.08)]" id="participants">
-          <div className="flex flex-col gap-3 border-b border-[#e6e2ee] p-4 lg:flex-row lg:items-center lg:justify-between">
-            <h2 className="flex items-center gap-2 text-lg font-semibold text-[#722257]">
-              <UserCheck className="size-5" aria-hidden="true" />
+        <section className="mt-6 scroll-mt-20 rounded-xl border border-line bg-white shadow-card" id="participants">
+          <div className="flex flex-col gap-3 border-b border-line p-5 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="flex items-center gap-2 text-h2 font-semibold text-ink">
+              <CheckInIcon className="size-5 text-ink-subtle" aria-hidden="true" />
               ผู้สมัครและเช็กอิน
             </h2>
-            <form className="flex flex-col gap-2 sm:flex-row" action={`/admin/events/${event.id}#participants`}>
+            <div className="flex flex-wrap gap-2">
+              <a className={buttonClass("secondary", "sm")} href={exportHref("participants")}>
+                <DownloadIcon className="size-4" aria-hidden="true" />
+                รายชื่อทั้งหมด
+              </a>
+              <a className={buttonClass("secondary", "sm")} href={exportHref("unpaid")}>
+                <DownloadIcon className="size-4" aria-hidden="true" />
+                รายชื่อค้างชำระ
+              </a>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3 border-b border-line px-5 py-4 lg:flex-row lg:items-end lg:justify-between">
+            <nav aria-label="มุมมองรายชื่อ" className="flex gap-2 overflow-x-auto">
+              {views.map((item) => (
+                <Link
+                  aria-current={view === item.key ? "page" : undefined}
+                  className={`inline-flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold transition ${view === item.key ? "bg-brand-600 text-white" : "bg-canvas text-ink-muted hover:bg-brand-50 hover:text-brand-600"}`}
+                  href={`/admin/events/${event.id}?view=${item.key}${q ? `&q=${encodeURIComponent(q)}` : ""}#participants`}
+                  key={item.key}
+                >
+                  {item.label}
+                  <span className={`tabular-nums ${view === item.key ? "text-white/80" : "text-ink-subtle"}`}>{viewCounts[item.key]}</span>
+                </Link>
+              ))}
+            </nav>
+            <form action={`/admin/events/${event.id}#participants`} className="flex items-end gap-2">
               <input name="view" type="hidden" value={view} />
-              <label className="relative block">
-                <Search className="pointer-events-none absolute left-3 top-3 size-4 text-[#6b6475]" aria-hidden="true" />
-                <input className={`${inputClass} pl-9 sm:w-72`} defaultValue={query.q ?? ""} name="q" placeholder="ค้นหาชื่อ เลขสมาชิก หรือเบอร์โทร" />
+              <label className="block min-w-0 flex-1 lg:w-72 lg:flex-none">
+                <span className={fieldLabel}>ค้นหาผู้สมัคร</span>
+                <input
+                  className={fieldInputClass("sm")}
+                  defaultValue={query.q ?? ""}
+                  name="q"
+                  placeholder="ชื่อ เลขสมาชิก หรือเบอร์โทร"
+                  type="search"
+                />
               </label>
-              <button className={primaryButton} type="submit">ค้นหา</button>
+              <button className={buttonSecondary} type="submit">
+                <SearchIcon className="size-4" aria-hidden="true" />
+                ค้นหา
+              </button>
             </form>
           </div>
 
-          <nav aria-label="มุมมองรายชื่อ" className="flex gap-2 overflow-x-auto border-b border-[#e6e2ee] px-4 py-3">
-            {views.map((item) => (
-              <Link
-                aria-current={view === item.key ? "page" : undefined}
-                className={`shrink-0 rounded-full px-3 py-1.5 text-sm font-semibold ${view === item.key ? "bg-[#722257] text-white" : "bg-[#f8f7fa] text-[#6b6475] hover:text-[#722257]"}`}
-                href={`/admin/events/${event.id}?view=${item.key}${q ? `&q=${encodeURIComponent(q)}` : ""}#participants`}
-                key={item.key}
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+          {visible.length ? (
+            <div aria-hidden="true" className={`hidden gap-4 border-b border-line bg-canvas px-5 py-2 text-xs font-medium text-ink-subtle xl:grid ${rowGrid}`}>
+              <span>ผู้สมัคร</span>
+              <span>โทร</span>
+              <span>สถานะ</span>
+              <span>ก๊วน</span>
+              <span className="text-right">ทำรายการ</span>
+            </div>
+          ) : null}
 
-          <ul className="divide-y divide-[#efebf3]">
+          <ul className="divide-y divide-line">
             {visible.length ? (
               visible.map((row) => {
                 const group = row.pairing_group_id ? groupById.get(row.pairing_group_id) : null;
                 const seated = holdsSeat(row.status);
 
                 return (
-                  <li className="flex flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between" id={`reg-${row.id}`} key={row.id}>
+                  <li className={`grid scroll-mt-20 gap-2 px-5 py-3 xl:items-center xl:gap-4 ${rowGrid}`} id={`reg-${row.id}`} key={row.id}>
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="font-semibold text-[#3f3a48]">{playerName(row)}</p>
-                        <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${chipClass(row.status)}`}>
-                          {registrationStatusLabels[row.status] ?? row.status}
-                          {row.status === "waitlist" ? ` #${waitlistOrder.get(row.id)}` : ""}
-                        </span>
-                        {row.checked_in_at ? (
-                          <span className="inline-flex items-center gap-1 rounded-md bg-[#edf9f3] px-2 py-0.5 text-xs font-semibold text-[#16794b]">
-                            <CheckCircle2 className="size-3" aria-hidden="true" />
-                            เช็กอิน {formatBangkokDateTime(row.checked_in_at)}
-                          </span>
-                        ) : null}
-                        {row.promoted_at ? (
-                          <span className="rounded-md bg-[#eef2ff] px-2 py-0.5 text-xs font-semibold text-[#3538cd]">เลื่อนจากสำรอง</span>
-                        ) : null}
-                      </div>
-                      <p className="mt-1 text-xs text-[#6b6475]">
-                        {row.members?.member_code ?? "ไม่มีเลขสมาชิก"} · HC {orUnset(row.members?.handicap)} · {formatPhone(row.members?.phone)}
-                        {group ? ` · ก๊วน ${group.group_no} (${group.tee_time ? `${group.tee_time.slice(0, 5)} น.` : "ยังไม่ระบุเวลา"} หลุม ${group.start_hole})` : seated ? " · ยังไม่จัดก๊วน" : ""}
+                      <p className="font-semibold text-ink">{playerName(row)}</p>
+                      <p className="mt-0.5 text-xs text-ink-subtle">
+                        เลขสมาชิก <span className="tabular-nums">{row.members?.member_code ?? UNSET}</span> · แต้มต่อ{" "}
+                        <span className="tabular-nums">{handicapText(row)}</span>
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
+                    {/* Phone, status and group: one wrapped line under the name; from xl up each is its own column. */}
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm xl:contents">
+                      <div className="tabular-nums">
+                        <span className="text-xs text-ink-subtle xl:hidden">โทร </span>
+                        <PhoneLink phone={row.members?.phone} />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <StatusBadge kind="registration" status={row.status}>
+                          {registrationStatusLabels[row.status] ?? row.status}
+                          {row.status === "waitlist" ? <span className="tabular-nums"> ลำดับ {waitlistOrder.get(row.id)}</span> : null}
+                        </StatusBadge>
+                        {row.promoted_at ? <StatusBadge tone="info">เลื่อนจากคิวสำรอง</StatusBadge> : null}
+                        {row.checked_in_at ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                            <CheckCircle2 className="size-3.5" aria-hidden="true" />
+                            เช็กอิน <span className="tabular-nums">{formatThaiDateTime(row.checked_in_at)}</span>
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="tabular-nums text-ink-muted">
+                        {group ? (
+                          <>
+                            ก๊วน {group.group_no} · {formatThaiTime(group.tee_time, "ยังไม่กำหนดเวลา")} · หลุม {group.start_hole}
+                          </>
+                        ) : seated ? (
+                          <span className="text-warning">ยังไม่จัดก๊วน</span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 xl:justify-end">
                       {seated && !row.checked_in_at ? (
                         <form action={updateAttendance}>
                           <input name="eventId" type="hidden" value={event.id} />
                           <input name="registrationId" type="hidden" value={row.id} />
                           <input name="attendance" type="hidden" value="check_in" />
-                          <SubmitButton className={`${primaryButton} min-w-28`} pendingText="กำลังเช็กอิน...">
-                            <UserCheck className="size-4" aria-hidden="true" />
+                          <SubmitButton className={`${buttonClass("primary", "sm")} min-w-28`} pendingText="กำลังเช็กอิน...">
+                            <CheckInIcon className="size-4" aria-hidden="true" />
                             เช็กอิน
                           </SubmitButton>
                         </form>
@@ -372,7 +492,7 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                           <input name="eventId" type="hidden" value={event.id} />
                           <input name="registrationId" type="hidden" value={row.id} />
                           <input name="attendance" type="hidden" value="undo_check_in" />
-                          <SubmitButton className={outlineButton}>ยกเลิกเช็กอิน</SubmitButton>
+                          <SubmitButton className={buttonClass("secondary", "sm")}>ยกเลิกเช็กอิน</SubmitButton>
                         </form>
                       ) : null}
                       {seated && !row.checked_in_at ? (
@@ -380,7 +500,11 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                           <input name="eventId" type="hidden" value={event.id} />
                           <input name="registrationId" type="hidden" value={row.id} />
                           <input name="attendance" type="hidden" value="no_show" />
-                          <ConfirmSubmitButton className={outlineButton} message={`บันทึกว่า ${playerName(row)} ไม่มาแสดงตัว?`}>
+                          <ConfirmSubmitButton
+                            className={buttonClass("secondary", "sm")}
+                            confirmLabel="บันทึกว่าไม่มา"
+                            message={`บันทึกว่า ${playerName(row)} ไม่มา?`}
+                          >
                             <UserX className="size-4" aria-hidden="true" />
                             ไม่มา
                           </ConfirmSubmitButton>
@@ -391,7 +515,7 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                           <input name="eventId" type="hidden" value={event.id} />
                           <input name="registrationId" type="hidden" value={row.id} />
                           <input name="attendance" type="hidden" value="undo_no_show" />
-                          <SubmitButton className={outlineButton}>คืนสถานะ</SubmitButton>
+                          <SubmitButton className={buttonClass("secondary", "sm")}>คืนสถานะ</SubmitButton>
                         </form>
                       ) : null}
                       {!["cancelled", "no_show", "checked_in"].includes(row.status) && !row.checked_in_at ? (
@@ -400,10 +524,11 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                           <input name="registrationId" type="hidden" value={row.id} />
                           <input name="attendance" type="hidden" value="cancel" />
                           <ConfirmSubmitButton
-                            className="flex h-10 items-center justify-center rounded-md px-3 text-sm font-semibold text-[#9f1d1d] hover:bg-[#fdecec]"
-                            message={`ยกเลิกการสมัครของ ${playerName(row)}? ที่นั่งจะถูกมอบให้รายชื่อสำรองคนถัดไป`}
+                            className={buttonClass("danger", "sm")}
+                            confirmLabel="ยกเลิกการสมัคร"
+                            message={`ยกเลิกการสมัครของ ${playerName(row)}? ที่นั่งจะไปที่คิวสำรองคนถัดไป`}
                           >
-                            ยกเลิก
+                            ยกเลิกการสมัคร
                           </ConfirmSubmitButton>
                         </form>
                       ) : null}
@@ -412,51 +537,165 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                 );
               })
             ) : (
-              <li className="px-4 py-10 text-center text-sm text-[#6b6475]">ไม่มีรายชื่อในมุมมองนี้</li>
+              <li className="flex flex-col items-center gap-3 px-5 py-10 text-center">
+                <p className="text-sm text-ink-muted">
+                  {q
+                    ? `ไม่พบผู้สมัครที่ตรงกับ “${query.q?.trim()}”`
+                    : registrations.length
+                      ? "ไม่มีรายชื่อในมุมมองนี้"
+                      : "ยังไม่มีคนสมัครกิจกรรมนี้"}
+                </p>
+                {q || (registrations.length && view !== "all") ? (
+                  <Link className={buttonClass("secondary", "sm")} href={`/admin/events/${event.id}?view=all#participants`}>
+                    ดูรายชื่อทั้งหมด
+                  </Link>
+                ) : null}
+              </li>
             )}
           </ul>
         </section>
 
         {/* ---------- pairing ---------- */}
-        <section className="mt-6 grid gap-4" id="pairing">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-[#722257]">
-            <UsersRound className="size-5" aria-hidden="true" />
-            จัดก๊วนและเวลาออกตัว
-          </h2>
+        <section className="mt-8 grid scroll-mt-20 gap-4" id="pairing">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-h2 font-semibold text-ink">
+              <MembersIcon className="size-5 text-ink-subtle" aria-hidden="true" />
+              จัดก๊วนและเวลาออกตัว
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              <Link className={buttonClass("secondary", "sm")} href={`/admin/events/${event.id}/tee-sheet`}>
+                <Printer className="size-4" aria-hidden="true" />
+                พิมพ์ใบออกตัว
+              </Link>
+              <a className={buttonClass("secondary", "sm")} href={exportHref("pairing")}>
+                <DownloadIcon className="size-4" aria-hidden="true" />
+                ใบจัดก๊วน (CSV)
+              </a>
+            </div>
+          </div>
+
+          <form action={autoFlightPairings} className={`${card} grid gap-4`}>
+            <input name="eventId" type="hidden" value={event.id} />
+            <div>
+              <h3 className="flex items-center gap-2 text-h3 font-semibold text-ink">
+                <Layers className="size-4 text-ink-subtle" aria-hidden="true" />
+                จัดกลุ่มอัตโนมัติตามแต้มต่อ
+              </h3>
+              <p className="mt-1 text-sm text-ink-muted">
+                เรียงผู้เล่น <span className="font-semibold tabular-nums text-ink">{summary.seats}</span> คนตามแต้มต่อ แบ่งไฟลท์ แล้วจัดก๊วนละไม่เกินจำนวนที่กำหนดพร้อมเวลาออกตัว ก๊วนเดิมจะถูกแทนที่ ย้ายผู้เล่นได้ภายหลัง
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+              <label className="block sm:col-span-1 lg:col-span-2">
+                <span className={fieldLabel}>แบ่งไฟลท์</span>
+                <select className={fieldInput} defaultValue="thirds" name="flightMode">
+                  <option value="thirds">3 ไฟลท์ A/B/C เท่าๆ กัน</option>
+                  <option value="ranges">ตามช่วงไฟลท์ในกติกา</option>
+                  <option value="single">ไม่แบ่งไฟลท์</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>รูปแบบ</span>
+                <select className={fieldInput} defaultValue="tee_times" name="mode">
+                  <option value="tee_times">ทีออฟเรียงเวลา</option>
+                  <option value="shotgun">Shotgun</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>
+                  เวลาแรก
+                  <span aria-hidden="true" className="ml-0.5 text-danger">*</span>
+                </span>
+                <input
+                  className={fieldInput}
+                  defaultValue={event.tee_off_time?.slice(0, 5) ?? "07:00"}
+                  name="firstTeeTime"
+                  required
+                  step={teeTimeStep(event.tee_off_time)}
+                  type="time"
+                />
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>ห่างกัน (นาที)</span>
+                <input className={`${fieldInput} tabular-nums`} defaultValue={8} inputMode="numeric" max={60} min={1} name="intervalMinutes" type="number" />
+              </label>
+              <label className="block">
+                <span className={fieldLabel}>คนต่อก๊วน</span>
+                <input className={`${fieldInput} tabular-nums`} defaultValue={4} inputMode="numeric" max={8} min={1} name="groupSize" type="number" />
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-ink">
+              <label className="inline-flex items-center gap-2">
+                <input name="splitTee" type="checkbox" />
+                ออกตัวพร้อมกันหลุม 1 และ 10
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input name="confirmedOnly" type="checkbox" />
+                เฉพาะคนที่ยืนยันหรือชำระเงินแล้ว
+              </label>
+              <ConfirmSubmitButton
+                className={`${buttonPrimary} sm:ml-auto`}
+                confirmLabel="จัดกลุ่มใหม่"
+                message={`จัดไฟลท์และก๊วนใหม่ทั้งหมดตามแต้มต่อ? ก๊วนเดิม ${groups.length} ก๊วนจะถูกแทนที่`}
+                title="จัดกลุ่มอัตโนมัติตามแต้มต่อ"
+                tone="primary"
+              >
+                <Layers className="size-4" aria-hidden="true" />
+                จัดกลุ่มตามแต้มต่อ
+              </ConfirmSubmitButton>
+            </div>
+          </form>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <form action={generatePairingGroups} className="grid gap-3 rounded-lg border border-[#e6e2ee] bg-white p-4">
+            <form action={generatePairingGroups} className={`${card} grid content-start gap-4`}>
               <input name="eventId" type="hidden" value={event.id} />
-              <h3 className="flex items-center gap-2 font-semibold text-[#3f3a48]">
-                <Flag className="size-4 text-[#722257]" aria-hidden="true" />
+              <h3 className="flex items-center gap-2 text-h3 font-semibold text-ink">
+                <AddIcon className="size-4 text-ink-subtle" aria-hidden="true" />
                 สร้างก๊วน
               </h3>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <label className="block text-sm">
-                  <span className="font-semibold text-[#3f3a48]">รูปแบบ</span>
-                  <select className={`${inputClass} mt-1`} defaultValue="tee_times" name="mode">
+                <label className="block">
+                  <span className={fieldLabel}>รูปแบบ</span>
+                  <select className={fieldInput} defaultValue="tee_times" name="mode">
                     <option value="tee_times">ทีออฟเรียงเวลา</option>
                     <option value="shotgun">Shotgun</option>
                   </select>
                 </label>
-                <label className="block text-sm">
-                  <span className="font-semibold text-[#3f3a48]">เวลาแรก</span>
-                  <input className={`${inputClass} mt-1`} defaultValue={event.tee_off_time?.slice(0, 5) ?? "07:00"} name="firstTeeTime" required type="time" />
+                <label className="block">
+                  <span className={fieldLabel}>
+                    เวลาแรก
+                    <span aria-hidden="true" className="ml-0.5 text-danger">*</span>
+                  </span>
+                  <input
+                    className={fieldInput}
+                    defaultValue={event.tee_off_time?.slice(0, 5) ?? "07:00"}
+                    name="firstTeeTime"
+                    required
+                    step={teeTimeStep(event.tee_off_time)}
+                    type="time"
+                  />
                 </label>
-                <label className="block text-sm">
-                  <span className="font-semibold text-[#3f3a48]">ห่างกัน (นาที)</span>
-                  <input className={`${inputClass} mt-1`} defaultValue={8} max={60} min={1} name="intervalMinutes" type="number" />
+                <label className="block">
+                  <span className={fieldLabel}>ห่างกัน (นาที)</span>
+                  <input className={`${fieldInput} tabular-nums`} defaultValue={8} inputMode="numeric" max={60} min={1} name="intervalMinutes" type="number" />
                 </label>
-                <label className="block text-sm">
-                  <span className="font-semibold text-[#3f3a48]">คน/ก๊วน</span>
-                  <input className={`${inputClass} mt-1`} defaultValue={4} max={8} min={1} name="groupSize" type="number" />
+                <label className="block">
+                  <span className={fieldLabel}>คนต่อก๊วน</span>
+                  <input className={`${fieldInput} tabular-nums`} defaultValue={4} inputMode="numeric" max={8} min={1} name="groupSize" type="number" />
                 </label>
               </div>
-              <label className="block text-sm">
-                <span className="font-semibold text-[#3f3a48]">จำนวนผู้เล่นที่จะรองรับ</span>
-                <input className={`${inputClass} mt-1`} min={1} name="playerCount" placeholder={`เว้นว่าง = ผู้เล่นปัจจุบัน ${summary.seats} คน`} type="number" />
+              <label className="block">
+                <span className={fieldLabel}>จำนวนผู้เล่นที่จะรองรับ</span>
+                <input
+                  className={`${fieldInput} tabular-nums`}
+                  inputMode="numeric"
+                  min={1}
+                  name="playerCount"
+                  placeholder={`เว้นว่าง = ผู้เล่นตอนนี้ ${summary.seats} คน`}
+                  type="number"
+                />
               </label>
-              <div className="flex flex-wrap gap-4 text-sm text-[#3f3a48]">
+              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-ink">
                 <label className="inline-flex items-center gap-2">
                   <input name="splitTee" type="checkbox" />
                   ออกตัวพร้อมกันหลุม 1 และ 10
@@ -466,36 +705,47 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                   ลบก๊วนเดิมทั้งหมดก่อนสร้าง
                 </label>
               </div>
-              <SubmitButton className={`${primaryButton} w-fit`} pendingText="กำลังสร้าง...">สร้างก๊วน</SubmitButton>
+              <SubmitButton className={`${buttonPrimary} w-fit`} pendingText="กำลังสร้าง...">
+                <AddIcon className="size-4" aria-hidden="true" />
+                สร้างก๊วน
+              </SubmitButton>
             </form>
 
-            <div className="grid content-start gap-3 rounded-lg border border-[#e6e2ee] bg-white p-4">
-              <h3 className="flex items-center gap-2 font-semibold text-[#3f3a48]">
-                <Shuffle className="size-4 text-[#722257]" aria-hidden="true" />
+            <div className={`${card} grid content-start gap-4`}>
+              <h3 className="flex items-center gap-2 text-h3 font-semibold text-ink">
+                <Shuffle className="size-4 text-ink-subtle" aria-hidden="true" />
                 จัดผู้เล่นอัตโนมัติ
               </h3>
-              <p className="text-sm text-[#6b6475]">
-                จัดเฉพาะผู้เล่นที่ยังไม่มีก๊วน {unpaired.length} คน ลงที่ว่าง {openGroups.reduce((sum, group) => sum + group.capacity - (playersByGroup.get(group.id)?.length ?? 0), 0)} ที่ ผู้เล่นที่จัดไว้แล้วจะไม่ถูกย้าย
+              <p className="text-sm text-ink-muted">
+                จัดเฉพาะคนที่ยังไม่มีก๊วน <span className="font-semibold tabular-nums text-ink">{unpaired.length}</span> คน ลงที่ว่าง{" "}
+                <span className="font-semibold tabular-nums text-ink">{freeSeats}</span> ที่ คนที่จัดไว้แล้วไม่ถูกย้าย
               </p>
-              <form action={autoAssignPairings} className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+              <form action={autoAssignPairings} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
                 <input name="eventId" type="hidden" value={event.id} />
-                <label className="block text-sm">
-                  <span className="font-semibold text-[#3f3a48]">วิธีจัด</span>
-                  <select className={`${inputClass} mt-1`} defaultValue="balanced" name="strategy">
-                    <option value="balanced">คละฝีมือ (แฮนดิแคปเฉลี่ยใกล้กัน)</option>
-                    <option value="handicap">ฝีมือใกล้เคียงกันอยู่ก๊วนเดียวกัน</option>
+                <label className="block">
+                  <span className={fieldLabel}>วิธีจัด</span>
+                  <select className={fieldInput} defaultValue="balanced" name="strategy">
+                    <option value="balanced">คละฝีมือ (แต้มต่อเฉลี่ยใกล้กัน)</option>
+                    <option value="handicap">ฝีมือใกล้กันอยู่ก๊วนเดียวกัน</option>
                     <option value="registration">ตามลำดับการสมัคร</option>
                   </select>
                 </label>
-                <SubmitButton className={primaryButton} pendingText="กำลังจัด...">จัดอัตโนมัติ</SubmitButton>
-                <label className="inline-flex items-center gap-2 text-sm text-[#3f3a48] sm:col-span-2">
+                <SubmitButton className={buttonPrimary} pendingText="กำลังจัด...">
+                  <Shuffle className="size-4" aria-hidden="true" />
+                  จัดอัตโนมัติ
+                </SubmitButton>
+                <label className="inline-flex items-center gap-2 text-sm text-ink sm:col-span-2">
                   <input name="confirmedOnly" type="checkbox" />
-                  เฉพาะผู้ที่ยืนยัน/ชำระเงินแล้ว
+                  เฉพาะคนที่ยืนยันหรือชำระเงินแล้ว
                 </label>
               </form>
-              <form action={clearPairings}>
+              <form action={clearPairings} className="border-t border-line pt-4">
                 <input name="eventId" type="hidden" value={event.id} />
-                <ConfirmSubmitButton className={`${outlineButton} w-fit`} message="นำผู้เล่นออกจากทุกก๊วน? (ก๊วนและเวลาออกตัวยังอยู่)">
+                <ConfirmSubmitButton
+                  className={`${buttonClass("danger", "sm")} w-fit`}
+                  confirmLabel="ล้างการจัดก๊วน"
+                  message="นำผู้เล่นออกจากทุกก๊วน? ก๊วนและเวลาออกตัวยังอยู่"
+                >
                   ล้างการจัดก๊วนทั้งหมด
                 </ConfirmSubmitButton>
               </form>
@@ -503,13 +753,15 @@ export default async function EventOperationsPage({ params, searchParams }: Page
           </div>
 
           {unpaired.length ? (
-            <div className="rounded-lg border border-[#efd9a6] bg-[#fff9ed] p-4">
-              <p className="text-sm font-semibold text-[#805300]">ยังไม่จัดก๊วน {unpaired.length} คน</p>
+            <div className="rounded-xl border border-warning/20 bg-warning-bg p-4">
+              <p className="text-sm font-semibold text-warning">
+                ยังไม่จัดก๊วน <span className="tabular-nums">{unpaired.length}</span> คน
+              </p>
               <ul className="mt-2 flex flex-wrap gap-2">
                 {unpaired.map((row) => (
-                  <li className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-[#3f3a48]" key={row.id}>
-                    {playerName(row)} · HC {orUnset(row.members?.handicap)}
-                    {!isConfirmed(row.status) ? " · ค้างชำระ" : ""}
+                  <li className="rounded-md bg-white px-2.5 py-1 text-sm text-ink" key={row.id}>
+                    {playerName(row)} <span className="text-ink-subtle">· แต้มต่อ <span className="tabular-nums">{handicapText(row)}</span></span>
+                    {!isConfirmed(row.status) ? <span className="text-warning"> · ค้างชำระ</span> : null}
                   </li>
                 ))}
               </ul>
@@ -521,41 +773,53 @@ export default async function EventOperationsPage({ params, searchParams }: Page
               {groups.map((group) => {
                 const players = playersByGroup.get(group.id) ?? [];
                 const full = players.length >= group.capacity;
-                const handicaps = players.map((p) => p.members?.handicap).filter((h): h is number => typeof h === "number");
+                const handicaps = players.map((p) => handicapOf(p)).filter((h): h is number => typeof h === "number");
                 const average = handicaps.length ? (handicaps.reduce((a, b) => a + b, 0) / handicaps.length).toFixed(1) : UNSET;
 
                 return (
-                  <article className="flex flex-col rounded-lg border border-[#e6e2ee] bg-white" id={`group-${group.id}`} key={group.id}>
-                    <header className="flex items-center justify-between gap-2 border-b border-[#efebf3] px-4 py-3">
+                  <article className="flex scroll-mt-20 flex-col rounded-xl border border-line bg-white shadow-card" id={`group-${group.id}`} key={group.id}>
+                    <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
                       <div>
-                        <p className="font-semibold text-[#722257]">ก๊วน {group.group_no}</p>
-                        <p className="text-xs text-[#6b6475]">
-                          {group.tee_time?.slice(0, 5) ?? "ยังไม่กำหนดเวลา"} · หลุม {group.start_hole} · HC เฉลี่ย {average}
+                        <p className="flex items-center gap-2 font-semibold text-ink">
+                          ก๊วน {group.group_no}
+                          {group.flight ? <span className="rounded-md bg-brand-50 px-1.5 text-xs font-medium text-brand-600">ไฟลท์ {group.flight}</span> : null}
+                        </p>
+                        <p className="text-xs text-ink-subtle">
+                          <span className="tabular-nums">{formatThaiTime(group.tee_time, "ยังไม่กำหนดเวลา")}</span> · หลุม{" "}
+                          <span className="tabular-nums">{group.start_hole}</span> · แต้มต่อเฉลี่ย <span className="tabular-nums">{average}</span>
                         </p>
                       </div>
-                      <span className={`rounded-md px-2 py-1 text-xs font-semibold ${full ? "bg-[#edf9f3] text-[#16794b]" : "bg-[#f8f7fa] text-[#6b6475]"}`}>
-                        {players.length}/{group.capacity}
-                      </span>
+                      <StatusBadge tone={full ? "success" : "neutral"}>
+                        <span className="tabular-nums">
+                          {players.length}/{group.capacity}
+                        </span>{" "}
+                        คน
+                      </StatusBadge>
                     </header>
 
-                    <ul className="flex-1 divide-y divide-[#f3f0f6] px-4">
+                    <ul className="flex-1 divide-y divide-line px-4">
                       {players.map((row) => (
                         <li className="flex items-center justify-between gap-2 py-2" key={row.id}>
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[#3f3a48]">
-                              {row.checked_in_at ? <CheckCircle2 className="mr-1 inline size-3.5 text-[#16794b]" aria-label="เช็กอินแล้ว" /> : null}
-                              {playerName(row)}
+                            <p className="flex items-center gap-1 truncate text-sm font-semibold text-ink">
+                              {row.checked_in_at ? (
+                                <>
+                                  <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden="true" />
+                                  <span className="sr-only">เช็กอินแล้ว: </span>
+                                </>
+                              ) : null}
+                              <span className="truncate">{playerName(row)}</span>
                             </p>
-                            <p className="text-xs text-[#6b6475]">
-                              HC {orUnset(row.members?.handicap)}
-                              {!isConfirmed(row.status) ? " · ค้างชำระ" : ""}
+                            <p className="text-xs text-ink-subtle">
+                              แต้มต่อ <span className="tabular-nums">{handicapText(row)}</span>
+                              {!isConfirmed(row.status) ? <span className="text-warning"> · ค้างชำระ</span> : null}
                             </p>
                           </div>
                           <form action={assignPlayerToGroup} className="flex shrink-0 items-center gap-1">
                             <input name="eventId" type="hidden" value={event.id} />
                             <input name="registrationId" type="hidden" value={row.id} />
-                            <label className="sr-only" htmlFor={`move-${row.id}`}>ย้ายไปก๊วน</label>
-                            <select className="h-8 rounded-md border border-[#d9d3e6] bg-white px-1 text-xs" defaultValue="" id={`move-${row.id}`} name="groupId">
+                            <label className="sr-only" htmlFor={`move-${row.id}`}>ย้าย {playerName(row)} ไปก๊วน</label>
+                            <select className="h-9 rounded-lg border border-line bg-white px-2 text-ink outline-none focus:border-brand-600" defaultValue="" id={`move-${row.id}`} name="groupId">
                               <option value="">นำออก</option>
                               {openGroups
                                 .filter((target) => target.id !== group.id)
@@ -565,62 +829,84 @@ export default async function EventOperationsPage({ params, searchParams }: Page
                                   </option>
                                 ))}
                             </select>
-                            <button className="h-8 rounded-md border border-[#d9d3e6] px-2 text-xs font-semibold text-[#722257] hover:bg-[#f8edf4]" type="submit">
+                            <button className={buttonClass("secondary", "sm")} type="submit">
                               ย้าย
                             </button>
                           </form>
                         </li>
                       ))}
-                      {!players.length ? <li className="py-4 text-center text-xs text-[#98a2b3]">ยังไม่มีผู้เล่น</li> : null}
+                      {!players.length ? <li className="py-4 text-center text-sm text-ink-subtle">ยังไม่มีผู้เล่น</li> : null}
                     </ul>
 
                     {!full && unpaired.length ? (
-                      <form action={assignPlayerToGroup} className="flex gap-2 border-t border-[#efebf3] px-4 py-3">
+                      <form action={assignPlayerToGroup} className="border-t border-line px-4 py-3">
                         <input name="eventId" type="hidden" value={event.id} />
                         <input name="groupId" type="hidden" value={group.id} />
-                        <label className="sr-only" htmlFor={`add-${group.id}`}>เพิ่มผู้เล่น</label>
-                        <select className={`${inputClass} h-9`} id={`add-${group.id}`} name="registrationId" required>
-                          {unpaired.map((row) => (
-                            <option key={row.id} value={row.id}>
-                              {playerName(row)} · HC {orUnset(row.members?.handicap)}
-                            </option>
-                          ))}
-                        </select>
-                        <button className={`${primaryButton} h-9`} type="submit">เพิ่ม</button>
+                        <label className={fieldLabel} htmlFor={`add-${group.id}`}>เพิ่มผู้เล่นที่ยังไม่มีก๊วน</label>
+                        <div className="mt-1.5 flex gap-2">
+                          <select className={`${fieldInputClass("sm", { margin: false })} min-w-0`} id={`add-${group.id}`} name="registrationId" required>
+                            {unpaired.map((row) => (
+                              <option key={row.id} value={row.id}>
+                                {playerName(row)} · แต้มต่อ {handicapText(row)}
+                              </option>
+                            ))}
+                          </select>
+                          <button className={`${buttonPrimary} shrink-0`} type="submit">
+                            <AddIcon className="size-4" aria-hidden="true" />
+                            เพิ่ม
+                          </button>
+                        </div>
                       </form>
                     ) : null}
 
-                    <details className="border-t border-[#efebf3] px-4 py-3">
-                      <summary className="cursor-pointer text-xs font-semibold text-[#8b5b7a]">แก้ไขเวลา / หลุม / จำนวนคน</summary>
+                    <details className="group/edit border-t border-line px-4 py-3">
+                      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-brand-600">
+                        <EditIcon className="size-4" aria-hidden="true" />
+                        แก้ไขเวลา หลุม จำนวนคน
+                        <ChevronDown className="size-4 transition group-open/edit:rotate-180" aria-hidden="true" />
+                      </summary>
                       <form action={updatePairingGroup} className="mt-3 grid grid-cols-3 gap-2">
                         <input name="eventId" type="hidden" value={event.id} />
                         <input name="groupId" type="hidden" value={group.id} />
-                        <label className="text-xs">
-                          เวลา
-                          <input className={`${inputClass} mt-1 h-9`} defaultValue={group.tee_time?.slice(0, 5) ?? ""} name="teeTime" type="time" />
+                        <label className="block">
+                          <span className={fieldLabel}>เวลา</span>
+                          {/* No 15-minute step here: generated tee times run every few minutes (07:08, 07:16 …). */}
+                          <input className={fieldInputClass("sm")} defaultValue={group.tee_time?.slice(0, 5) ?? ""} name="teeTime" type="time" />
                         </label>
-                        <label className="text-xs">
-                          หลุมเริ่ม
-                          <input className={`${inputClass} mt-1 h-9`} defaultValue={group.start_hole} max={18} min={1} name="startHole" type="number" />
+                        <label className="block">
+                          <span className={fieldLabel}>หลุมเริ่ม</span>
+                          <input className={`${fieldInputClass("sm")} tabular-nums`} defaultValue={group.start_hole} inputMode="numeric" max={18} min={1} name="startHole" type="number" />
                         </label>
-                        <label className="text-xs">
-                          จำนวนคน
-                          <input className={`${inputClass} mt-1 h-9`} defaultValue={group.capacity} max={8} min={Math.max(1, players.length)} name="capacity" type="number" />
+                        <label className="block">
+                          <span className={fieldLabel}>จำนวนคน</span>
+                          <input
+                            className={`${fieldInputClass("sm")} tabular-nums`}
+                            defaultValue={group.capacity}
+                            inputMode="numeric"
+                            max={8}
+                            min={Math.max(1, players.length)}
+                            name="capacity"
+                            type="number"
+                          />
                         </label>
-                        <label className="col-span-3 text-xs">
-                          หมายเหตุ
-                          <input className={`${inputClass} mt-1 h-9`} defaultValue={group.note ?? ""} name="note" placeholder="เช่น แคดดี้ / รถกอล์ฟ" />
+                        <label className="col-span-3 block">
+                          <span className={fieldLabel}>หมายเหตุ</span>
+                          <input className={fieldInputClass("sm")} defaultValue={group.note ?? ""} name="note" placeholder="เช่น แคดดี้ / รถกอล์ฟ" />
                         </label>
-                        <button className={`${primaryButton} col-span-2 h-9`} type="submit">บันทึก</button>
+                        <button className={`${buttonClass("primary", "sm")} col-span-3 w-fit`} type="submit">
+                          <SaveIcon className="size-4" aria-hidden="true" />
+                          บันทึก
+                        </button>
                       </form>
-                      <form action={deletePairingGroup} className="mt-2">
+                      <form action={deletePairingGroup} className="mt-3 border-t border-line pt-3">
                         <input name="eventId" type="hidden" value={event.id} />
                         <input name="groupId" type="hidden" value={group.id} />
                         <ConfirmSubmitButton
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-[#9f1d1d]"
+                          className={buttonClass("danger", "sm")}
+                          confirmLabel="ลบก๊วน"
                           message={`ลบก๊วน ${group.group_no}? ผู้เล่นจะกลับไปอยู่ในรายชื่อที่ยังไม่จัด`}
                         >
-                          <Trash2 className="size-3.5" aria-hidden="true" />
+                          <DeleteIcon className="size-4" aria-hidden="true" />
                           ลบก๊วนนี้
                         </ConfirmSubmitButton>
                       </form>
@@ -630,11 +916,18 @@ export default async function EventOperationsPage({ params, searchParams }: Page
               })}
             </div>
           ) : (
-            <p className="rounded-lg border border-dashed border-[#d9d3e6] bg-white px-4 py-8 text-center text-sm text-[#6b6475]">
-              ยังไม่มีก๊วน ใช้แบบฟอร์ม “สร้างก๊วน” ด้านบนเพื่อสร้างก๊วนและเวลาออกตัว
+            <p className="rounded-xl border border-line bg-white px-4 py-8 text-center text-sm text-ink-muted shadow-card">
+              ยังไม่มีก๊วน กด “จัดกลุ่มตามแต้มต่อ” หรือกรอก “สร้างก๊วน” ด้านบน
             </p>
           )}
         </section>
+
+        <PrizesSection
+          eventId={event.id}
+          flights={[...new Set(groups.map((group) => group.flight).filter((flight): flight is string => Boolean(flight)))]}
+          players={registrations.filter((row) => holdsSeat(row.status)).map((row) => ({ id: row.id, name: playerName(row) }))}
+          supabase={supabase}
+        />
       </section>
     </main>
   );

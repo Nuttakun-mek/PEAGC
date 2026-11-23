@@ -7,9 +7,22 @@ import { redirectAfterAction as redirect } from "@/lib/navigation";
 import { requireStaffClub } from "@/lib/auth/staff";
 import { isOcrConfigured, readScorecard } from "@/lib/ocr/claude";
 import { interpretRow, matchRows } from "@/lib/ocr/notation";
+import { checkCard, describeCheck } from "@/lib/ocr/validate";
 import { loadScoringData, parseCardInputs, scoringRoles, verifiedPlayerInputs } from "@/lib/scoring/data";
-import { type CompetitionRules, type Flight, type ScoringFormat, HOLES, computeLeaderboard, validateRules } from "@/lib/scoring/engine";
+import {
+  type CompetitionRules,
+  type Flight,
+  type HandicapSource,
+  type ScoringFormat,
+  HOLES,
+  computeLeaderboard,
+  defaultPeoriaHoles,
+  handicapSources,
+  selectableFormats,
+  validateRules,
+} from "@/lib/scoring/engine";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { classifyDbError, logDbError } from "@/lib/supabase/errors";
 
 const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 const PHOTO_TYPES = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" } as const;
@@ -65,22 +78,89 @@ function parseFlights(text: string): Flight[] | null {
   return flights;
 }
 
+function optionalNumber(formData: FormData, key: string) {
+  const value = str(formData, key);
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : Number.NaN;
+}
+
+/** "2, 4, 5 7" -> [2, 4, 5, 7] */
+function parseHoleList(text: string) {
+  return text
+    .split(/[\s,]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .map(Number);
+}
+
+type TeeRow = {
+  course_rating: number | null;
+  golf_courses: { name: string } | null;
+  id: string;
+  name: string;
+  par: number[];
+  slope_rating: number | null;
+  stroke_index: number[];
+};
+
 export async function saveCompetitionRules(formData: FormData) {
   const eventId = str(formData, "eventId");
   const scorer = await requireScorer(eventId);
   const flights = parseFlights(str(formData, "flights"));
   if (!flights) back(eventId, "invalid-flights", "setup");
 
-  const format = str(formData, "format") as ScoringFormat;
+  const rawSource = str(formData, "handicapSource") as HandicapSource;
+  const handicapSource: HandicapSource = handicapSources.includes(rawSource) ? rawSource : "club";
+  const rawFormat = str(formData, "format") as ScoringFormat;
+  const chosenFormat: ScoringFormat = [...selectableFormats, "system36"].includes(rawFormat) ? rawFormat : "stroke_net";
+  // System 36 and Double Peoria are net stroke play with a handicap worked out from the card.
+  const format: ScoringFormat =
+    handicapSource === "system36" ? "system36" : handicapSource === "double_peoria" || chosenFormat === "system36" ? "stroke_net" : chosenFormat;
+
+  // A tee from the course list supplies pars, SI and ratings; otherwise the typed grid is used.
+  const teeId = str(formData, "courseTeeId");
+  let tee: TeeRow | null = null;
+  if (teeId) {
+    const { data, error } = await scorer.supabase
+      .from("golf_course_tees")
+      .select("id, name, course_rating, slope_rating, par, stroke_index, golf_courses(name)")
+      .eq("club_id", scorer.clubId)
+      .eq("id", teeId)
+      .maybeSingle();
+    if (error) logDbError("scoring.rules tee", error);
+    if (!data) back(eventId, error && classifyDbError(error) === "schema-outdated" ? "db-outdated" : "tee-missing", "setup");
+    tee = data as unknown as TeeRow;
+  }
+
+  const pars = tee ? tee.par.map(Number) : Array.from({ length: HOLES }, (_, i) => Number(str(formData, `par${i + 1}`)));
+  const strokeIndex = tee ? tee.stroke_index.map(Number) : Array.from({ length: HOLES }, (_, i) => Number(str(formData, `si${i + 1}`)));
+  const courseRating = tee ? (tee.course_rating === null ? null : Number(tee.course_rating)) : optionalNumber(formData, "courseRating");
+  const slopeRating = tee ? tee.slope_rating : optionalNumber(formData, "slopeRating");
+  if (Number.isNaN(courseRating) || Number.isNaN(slopeRating) || (courseRating === null) !== (slopeRating === null)) {
+    back(eventId, "invalid-rating", "setup");
+  }
+  const peoriaText = str(formData, "peoriaHoles");
+
   const rules: CompetitionRules = {
     countback: formData.get("countback") === "on",
+    courseName: tee?.golf_courses?.name ?? null,
+    courseRating,
+    courseTeeId: tee?.id ?? null,
     flights,
     format,
     handicapAllowance: Number(str(formData, "allowance") || 100),
-    pars: Array.from({ length: HOLES }, (_, i) => Number(str(formData, `par${i + 1}`))),
-    strokeIndex: Array.from({ length: HOLES }, (_, i) => Number(str(formData, `si${i + 1}`))),
+    handicapSource,
+    pars,
+    peoriaHoles: peoriaText ? parseHoleList(peoriaText) : defaultPeoriaHoles(pars),
+    peoriaMaxHandicap: optionalNumber(formData, "peoriaMax") ?? 36,
+    slopeRating,
+    strokeIndex,
+    teeName: tee?.name ?? null,
   };
   const errors = validateRules(rules);
+  if (errors.some((error) => error.startsWith("Double Peoria") || error.startsWith("แต้มต่อสูงสุด"))) back(eventId, "invalid-peoria", "setup");
+  if (errors.some((error) => error.startsWith("Course rating") || error.startsWith("Slope"))) back(eventId, "invalid-rating", "setup");
   if (errors.length) back(eventId, "invalid-rules", "setup");
 
   const existing = scorer.data.competition;
@@ -257,6 +337,7 @@ export async function uploadScorecard(formData: FormData) {
       const interpreted = reading.players.map((row) => ({
         name: row.name,
         nameConfidence: row.nameConfidence,
+        printedTotals: row.totals ?? null,
         ...interpretRow(row, rules.pars, reading.notation),
       }));
       const matches = matchRows(
@@ -312,8 +393,16 @@ export async function confirmOcrJob(formData: FormData) {
   if (!job || job.status === "confirmed" || job.status === "discarded") redirect(`${reviewPath}?status=job-closed`);
 
   const suggested = ((job.extracted as { rows?: { cells: { strokes: number | null }[] }[] } | null)?.rows ?? []);
+  const acceptIssues = formData.get("acceptIssues") === "on";
   const seen = new Set<string>();
-  const rows: { card: ReturnType<typeof parseCardInputs>; corrected: number; registrationId: string }[] = [];
+  const rows: {
+    card: ReturnType<typeof parseCardInputs>;
+    confirmMarker: boolean;
+    confirmPlayer: boolean;
+    corrected: number;
+    note: string;
+    registrationId: string;
+  }[] = [];
 
   for (let r = 0; r < rowCount; r += 1) {
     const registrationId = str(formData, `player${r}`);
@@ -321,17 +410,42 @@ export async function confirmOcrJob(formData: FormData) {
     if (seen.has(registrationId)) redirect(`${reviewPath}?status=duplicate-player`);
     if (!scorer.data.players.some((player) => player.registrationId === registrationId)) redirect(`${reviewPath}?status=missing-player`);
     seen.add(registrationId);
-    const card = parseCardInputs(Array.from({ length: HOLES }, (_, i) => str(formData, `r${r}h${i + 1}`)));
+    const typed = Array.from({ length: HOLES }, (_, i) => str(formData, `r${r}h${i + 1}`));
+    const card = parseCardInputs(typed);
     if (card.invalid) redirect(`${reviewPath}?status=invalid-strokes`);
+    // Fixed rules (audit step 4): every hole 1-15 or X, sums equal OUT / IN / TOTAL on the card.
+    const check = checkCard(typed, { in: str(formData, `r${r}in`), out: str(formData, `r${r}out`), total: str(formData, `r${r}total`) });
+    if (!check.ok && !acceptIssues) redirect(`${reviewPath}?status=check-failed`);
     const corrected = card.strokes.filter((value, i) => value !== (suggested[r]?.cells[i]?.strokes ?? null)).length;
-    rows.push({ card, corrected, registrationId });
+    const problems = describeCheck(check);
+    rows.push({
+      card,
+      confirmMarker: formData.get(`r${r}marker`) === "on",
+      confirmPlayer: formData.get(`r${r}player`) === "on",
+      corrected,
+      note: problems.length ? `บันทึกทั้งที่ไม่ผ่านการตรวจ: ${problems.slice(0, 4).join(" · ")}` : "ผลรวมตรงกับการ์ด",
+      registrationId,
+    });
   }
   if (!rows.length) redirect(`${reviewPath}?status=no-rows`);
 
+  let confirmFailed = false;
   for (const row of rows) {
-    const { data: entry, error } = await insertEntry(scorer, competition.id, row.registrationId, row.card, "ocr", { ocrJobId: jobId });
+    const { data: entry, error } = await insertEntry(scorer, competition.id, row.registrationId, row.card, "ocr", { note: row.note, ocrJobId: jobId });
     if (error || !entry) redirect(`${reviewPath}?status=entry-failed`);
-    if (verifyNow) await markVerified(scorer, competition.id, row.registrationId, entry.id);
+    if (verifyNow) {
+      await markVerified(scorer, competition.id, row.registrationId, entry.id);
+    } else {
+      // Player first, then marker (recorded by staff on their behalf); both = verified.
+      if (row.confirmPlayer || row.confirmMarker) {
+        const player = await scorer.supabase.rpc("confirm_score_entry", { p_entry_id: entry.id, p_role: "player" });
+        if (player.error) confirmFailed = true;
+        if (!player.error && row.confirmMarker) {
+          const marker = await scorer.supabase.rpc("confirm_score_entry", { p_entry_id: entry.id, p_role: "marker" });
+          if (marker.error) confirmFailed = true;
+        }
+      }
+    }
   }
 
   await scorer.supabase
@@ -341,11 +455,12 @@ export async function confirmOcrJob(formData: FormData) {
 
   // corrections = cells the reviewer changed vs. what OCR suggested (OCR accuracy history)
   await audit(scorer, "scorecard.confirmed", "scorecard_ocr_jobs", jobId, {
+    accepted_issues: acceptIssues,
     corrected_cells: rows.reduce((sum, row) => sum + row.corrected, 0),
     players: rows.map((row) => row.registrationId),
     verified: verifyNow,
   });
-  back(eventId, verifyNow ? "ocr-confirmed-verified" : "ocr-confirmed", "cards");
+  back(eventId, confirmFailed ? "ocr-confirm-partial" : verifyNow ? "ocr-confirmed-verified" : "ocr-confirmed", "cards");
 }
 
 export async function discardOcrJob(formData: FormData) {
@@ -361,6 +476,54 @@ export async function discardOcrJob(formData: FormData) {
     .neq("status", "confirmed");
   await audit(scorer, "scorecard.discarded", "scorecard_ocr_jobs", jobId, {});
   back(eventId, "ocr-discarded", "ocr");
+}
+
+// ---------- player / marker confirmation recorded by staff ----------
+
+const confirmErrorStatus: Record<string, string> = {
+  COMPETITION_LOCKED: "competition-locked",
+  ENTRY_NOT_FOUND: "missing-entry",
+  ENTRY_SUPERSEDED: "entry-superseded",
+  NOT_ALLOWED: "permission-denied",
+  PLAYER_NOT_CONFIRMED: "player-first",
+};
+
+export async function confirmEntryAsStaff(formData: FormData) {
+  const eventId = str(formData, "eventId");
+  const entryId = str(formData, "entryId");
+  const role = str(formData, "role") === "marker" ? "marker" : "player";
+  const scorer = await requireScorer(eventId);
+  requireCompetition(scorer, eventId);
+  const entry = scorer.data.entryById.get(entryId);
+  if (!entry) back(eventId, "missing-entry", "cards");
+
+  const { data, error } = await scorer.supabase.rpc("confirm_score_entry", { p_entry_id: entryId, p_role: role });
+  if (error) {
+    logDbError("scoring.confirm", error);
+    const code = (error.message ?? "").match(/[A-Z_]{6,}/)?.[0];
+    back(eventId, classifyDbError(error) === "schema-outdated" ? "db-outdated" : (code && confirmErrorStatus[code]) || "confirm-failed", `card-${entry.event_registration_id}`);
+  }
+  const verified = Boolean((data as { verified?: boolean } | null)?.verified);
+  back(eventId, verified ? "entry-verified" : role === "player" ? "player-confirmed" : "marker-confirmed", `card-${entry.event_registration_id}`);
+}
+
+// ---------- official handicap index (Handicap Index ทางการ) ----------
+
+export async function setOfficialHandicap(formData: FormData) {
+  const eventId = str(formData, "eventId");
+  const memberId = str(formData, "memberId");
+  const raw = str(formData, "officialIndex").replace(/^\+/, "-");
+  const scorer = await requireScorer(eventId);
+  if (!scorer.data.players.some((player) => player.memberId === memberId)) back(eventId, "missing-player", "handicaps");
+  const value = raw ? Number(raw) : null;
+  if (value !== null && (!Number.isFinite(value) || value < -10 || value > 54)) back(eventId, "invalid-official-index", "handicaps");
+
+  const { error } = await scorer.supabase.rpc("set_official_handicap_index", { p_index: value, p_member_id: memberId });
+  if (error) {
+    logDbError("scoring.official_index", error);
+    back(eventId, classifyDbError(error) === "schema-outdated" ? "db-outdated" : "official-index-failed", "handicaps");
+  }
+  back(eventId, "official-index-saved", "handicaps");
 }
 
 // ---------- publish & prizes ----------

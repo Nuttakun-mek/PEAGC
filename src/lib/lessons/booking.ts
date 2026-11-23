@@ -1,6 +1,9 @@
 // Pure helpers for the lesson booking flow (FCFS queue, waitlist, booking window).
 // Shared by the member portal, admin pages, and server actions. No I/O here.
 
+// Relative import: vitest has no "@/" alias configured.
+import { formatThaiDateTime } from "../display";
+
 export const BANGKOK_TZ = "Asia/Bangkok";
 export const BANGKOK_OFFSET = "+07:00";
 
@@ -165,10 +168,16 @@ export const lessonRpcStatus: Record<string, string> = {
   NOT_OPEN: "lesson-not-open",
   NOT_TARGETED: "lesson-closed",
   NO_BOOKING: "lesson-cancel-closed",
+  NO_CREDIT: "lesson-no-credit",
+  NO_OFFER: "lesson-offer-gone",
   NO_SESSION: "lesson-closed",
+  NO_SHOW_BLOCKED: "lesson-no-show-blocked",
+  OFFER_EXPIRED: "lesson-offer-expired",
   OVERLAP: "lesson-overlap",
+  PRIORITY_WINDOW: "lesson-priority-window",
   SESSION_CLOSED: "lesson-closed",
   STARTED: "lesson-started",
+  WEEK_LIMIT: "lesson-week-limit",
   lesson_slot_full: "lesson-full",
 };
 
@@ -231,18 +240,12 @@ export function fromBangkokInputValue(value: string | null | undefined) {
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
+/**
+ * Timestamp in Bangkok time, "16 พ.ย. 69 · 10:21 น." (UNSET "ยังไม่ระบุ" when empty). Kept as an
+ * alias of formatThaiDateTime so older callers show the same format as the rest of the app.
+ */
 export function formatBangkokDateTime(iso: string | null | undefined) {
-  if (!iso) {
-    return "-";
-  }
-  return `${new Date(iso).toLocaleString("th-TH", {
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "short",
-    timeZone: BANGKOK_TZ,
-    year: "2-digit",
-  })} น.`;
+  return formatThaiDateTime(iso);
 }
 
 export function formatBangkokDay(date: string) {

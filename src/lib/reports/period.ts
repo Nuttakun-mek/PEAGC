@@ -21,13 +21,34 @@ function shiftDays(date: string, days: number) {
   return value.toISOString().slice(0, 10);
 }
 
+/** Last day of a month (1-12) as "YYYY-MM-DD". */
+function lastDayOfMonth(year: number, month: number) {
+  return new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+}
+
+/** Calendar quarter holding `today`: Jan–Mar, Apr–Jun, Jul–Sep or Oct–Dec. */
+export function quarterRange(today = bangkokDate()) {
+  const year = Number(today.slice(0, 4));
+  const first = Math.floor((Number(today.slice(5, 7)) - 1) / 3) * 3 + 1;
+  return { from: `${year}-${String(first).padStart(2, "0")}-01`, to: lastDayOfMonth(year, first + 2) };
+}
+
+/** Thai fiscal year holding `today`: 1 Oct – 30 Sep (ปีงบประมาณ 2570 = 1 Oct 2026 – 30 Sep 2027). */
+export function fiscalYearRange(today = bangkokDate()) {
+  const year = Number(today.slice(0, 4));
+  const startYear = Number(today.slice(5, 7)) >= 10 ? year : year - 1;
+  return { from: `${startYear}-10-01`, to: `${startYear + 1}-09-30` };
+}
+
 /** Quick ranges offered above the report (past and future). */
 export function reportPresets(today = bangkokDate()) {
   const year = Number(today.slice(0, 4));
   const month = today.slice(0, 7);
-  const monthEnd = new Date(Date.UTC(year, Number(today.slice(5, 7)), 0)).toISOString().slice(0, 10);
+  const monthEnd = lastDayOfMonth(year, Number(today.slice(5, 7)));
   return [
     { from: `${month}-01`, label: "เดือนนี้", to: monthEnd },
+    { ...quarterRange(today), label: "ไตรมาสนี้" },
+    { ...fiscalYearRange(today), label: "ปีงบประมาณนี้" },
     { from: today, label: "30 วันข้างหน้า", to: shiftDays(today, 30) },
     { from: shiftDays(today, -30), label: "30 วันที่ผ่านมา", to: today },
     { from: `${year}-01-01`, label: "ปีนี้", to: `${year}-12-31` },

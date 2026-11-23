@@ -45,7 +45,11 @@ const statusLabels: Record<string, string> = {
   attended: "เข้าเรียนแล้ว",
   booked: "จองแล้ว",
   cancelled: "ยกเลิก",
+  closed: "ชมรมงดเรียน",
+  late_cancelled: "ยกเลิกช้า",
   no_show: "ไม่มาเรียน",
+  offered: "รอยืนยันที่ว่าง",
+  waitlist: "คิวสำรอง",
 };
 
 const header = [
@@ -104,7 +108,7 @@ export async function GET(request: Request) {
 
     let position: number | "" = "";
     let seat = "";
-    if (row.status !== "cancelled") {
+    if (!["cancelled", "late_cancelled", "closed"].includes(row.status)) {
       position = (positionBySlot.get(row.slot_id) ?? 0) + 1;
       positionBySlot.set(row.slot_id, position);
       seat = queueStatusLabel(position, slot.capacity);

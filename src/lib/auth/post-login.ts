@@ -1,13 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-const adminRoles = [
-  "platform_owner",
-  "club_admin",
-  "committee",
-  "finance_officer",
-  "tournament_director",
-  "scoring_officer",
-];
+import { staffHomeFor } from "@/lib/auth/roles";
 
 /**
  * Decide where a freshly signed-in user should land.
@@ -34,12 +27,11 @@ export async function resolvePostLoginPath(
     supabase.from("user_roles").select("role_key").eq("user_id", userId),
   ]);
 
-  const hasAdminRole = Boolean(
-    roles?.some((item) => adminRoles.includes(item.role_key)),
-  );
-
-  if (hasAdminRole) {
-    return "/admin";
+  // Admin roles land on the first admin page they may open (auditor → reports); a coach without
+  // an admin role goes to the coach portal.
+  const staffHome = staffHomeFor((roles ?? []).map((item) => item.role_key as string));
+  if (staffHome) {
+    return staffHome;
   }
 
   if (!profile?.display_name || !profile?.phone || !member) {

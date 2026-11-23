@@ -100,9 +100,34 @@ Open [http://localhost:3555](http://localhost:3555).
 - `src/app/setup` - one-time club admin bootstrap
 - `docs/PROJECT_KICKOFF_PLAN.md` - project kickoff plan from the source PRD
 - `docs/SUPABASE_SETUP.md` - Supabase environment and migration workflow
+- `docs/STAGING_AND_BACKUP.md` - UAT/staging setup, test data scripts, daily database backup (Thai)
 - `docs/DATABASE_FOUNDATION_DRAFT.sql` - Supabase foundation schema draft
 - `supabase/migrations` - versioned Supabase database migrations
 - `.env.example` - required environment variable template
+
+## Design System
+
+Follows the UX/UI audit of 23 Nov 2026. Reuse these instead of per-page hex colours, icons and date code:
+
+- Brand marks: `public/brand/peagc-crest.png` (club crest, used for the sidebar, login, member card, favicon, app icons and share preview) and `public/brand/pea-logo.png` (PEA corporate mark, used only where the organisation is meant). Render them with `ClubCrest` / `PeaLogo` from `src/components/brand.tsx`. App icons live in `src/app/icon.png`, `apple-icon.png`, `favicon.ico`, `opengraph-image.png` and `public/icons/` (manifest in `src/app/manifest.ts`).
+- Tokens: `src/app/globals.css` `@theme` — `brand-*`, `gold-500` (decoration / dark text only), `gold-700` (gold button with white text), `ink`, `ink-muted`, `ink-subtle`, `line`, `canvas`, status `success|warning|danger|info|neutral` (+ `-bg`), and the type scale (`text-xs` 13px is the smallest; inputs are 16px). Only Sarabun 400/500/600 are loaded.
+- Status colours: `src/lib/status.ts` + `StatusBadge` (`src/components/ui/status-badge.tsx`). Plum is for buttons and the crest, never for status.
+- Page chrome: `PageHeader`, button/field class strings in `src/components/ui/styles.ts`, collapsible create forms in `CreatePanel`.
+- Formatting: `src/lib/display.ts` — `formatThaiDateShort` (lists), `formatThaiDateLong` (detail pages), `formatThaiDateTime`, `formatThaiTime`, `formatFee` (0 → "ฟรี"), `formatBaht`, `formatPhone` / `phoneHref`.
+- Icons: one Lucide icon per meaning in `src/lib/icons.ts`. Admin menu groups and badges: `src/lib/nav.ts`.
+
+## Phase 2–3 (audit 23 Nov 2026)
+
+Built from the UX/UI audit's phases 2–3 (LINE login/notifications were dropped by the club for now).
+
+- **Lessons v2** (`20261123093000_lessons_v2.sql`, `src/lib/lessons/**`): coaches (login = `coach` role), venues and bays, packages + append-only credit ledger, credit taken in the same transaction as the seat, refund before the cutoff / late cancel keeps the credit, waitlist offers that must be confirmed (2 h, instant within 3 h), QR check-in, automatic no-show, "งดเรียนทั้งวัน" with refunds, coach notes. Admin: `/admin/lessons` (ปฏิทิน · คอร์สและแพ็กเกจ · ผู้สอนและสถานที่ · กติกา · ประกาศ, slot drawer, creation wizard with conflict preview, printable QR). Coach portal: `/coach`. Members: `/member/lessons`, `/member/check-in?token=`.
+- **Membership and แต้มสะสม** (`20261123094000_membership_points.sql`): auto-approve when the employee code and name match an active association row, lifecycle (ใช้งาน / ใกล้หมดอายุ / หมดอายุ / ระงับ / ลาออก), optional annual fee (`membership_terms`, PromptPay + slip), PDPA consent + data export/deletion request (`/privacy`, `/member/membership`), points ledger awarded by triggers, rewards and redemptions (`/admin/points`).
+- **Payments and files** (`20261123091000_phase2_foundation.sql`, `20261123095000_payments_files.sql`): `payment_records.purpose` (event / lesson_package / membership_fee), PromptPay QR with the amount (`src/lib/promptpay.ts`), client-side image compression, magic-byte checks, duplicate-slip blocking (sha256 + bank reference), optional SlipOK auto-check (`SLIPOK_BRANCH_ID`, `SLIPOK_API_KEY`), receipts `/receipts/[paymentId]` (RC2569-000123), slip retention.
+- **Platform** (`20261123092000_platform.sql`): role-based admin menus and page guards (`src/lib/auth/roles.ts`, `requireAdminArea`), Ctrl+K palette, member 360 `/admin/members/[memberId]`, edit log `/admin/audit` (`recordAudit` in `src/lib/audit.ts`), directory import preview, monthly revenue chart, UAT badge (`NEXT_PUBLIC_APP_ENV`), `docs/STAGING_AND_BACKUP.md`, daily DB backup workflow.
+- **Events and scoring** (`20261123097000_golf_courses_handicap.sql`): courses and tees (par / SI / rating / slope), แต้มต่อชมรม (WHS-style) + Handicap Index ทางการ, auto flights, tee sheet, public event page with share image `/events/[eventId]`, live leaderboard, prizes, keypad score entry, player → marker confirmation, OCR sum checks.
+- **Fixes**: `20261123090000_fix_directory_replace_flags.sql` (replace imports no longer flag members who were never linked to the directory), `20261123098000_scope_club_read_policies.sql` (coaches and `member`-role rows can no longer read every member, registration, notification or file).
+- **Crons** (`vercel.json`, all need `CRON_SECRET`): `/api/cron/lessons` (offers, no-shows, credit expiry), `/api/cron/membership` (expiry, reminders, directory grace, points expiry), `/api/cron/payments` (slip retention).
+- **Applying the migrations**: `npx supabase db push --db-url "$MIGRATION_DATABASE_URL"`, or paste `supabase/snippets/uat-apply-2026-11-23.sql` (all eight in one transaction, records the versions) into the SQL Editor. Until then the new screens show "ฐานข้อมูลยังไม่ได้อัปเดต" and the old flows keep working.
 
 ## Notes
 

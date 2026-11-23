@@ -42,7 +42,7 @@ export function PasswordInput({
       <button
         aria-label={visible ? "ซ่อนรหัสผ่าน" : "แสดงรหัสผ่าน"}
         aria-pressed={visible}
-        className="absolute right-1.5 top-1/2 mt-1 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-[#6b6475] transition hover:bg-[#f6f4f8] hover:text-[#722257]"
+        className="absolute right-1.5 top-1/2 mt-1 flex size-9 -translate-y-1/2 items-center justify-center rounded-md text-ink-subtle transition hover:bg-brand-50 hover:text-brand-600"
         onClick={() => setVisible((value) => !value)}
         type="button"
       >

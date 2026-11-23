@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { eventAttendance, financeByEvent, lessonUsageByProgram, percent } from "./aggregate";
+import { NO_DATA, eventAttendance, financeByEvent, lessonUsageByProgram, percent } from "./aggregate";
 
 describe("financeByEvent", () => {
   it("does not count a pending record without the member's slip as money to review", () => {
@@ -48,6 +48,20 @@ describe("lessonUsageByProgram", () => {
       { attended: 1, booked: 3, noShow: 1, programId: "p1", programName: "Basic", seats: 6, slots: 2, utilization: 0.5, waitlisted: 1 },
     ]);
   });
+
+  it("does not count late cancels or closures as seats and counts v2 waitlist rows", () => {
+    const [usage] = lessonUsageByProgram(
+      [{ capacity: 2, id: "s1", lesson_date: "2026-11-01", program_id: "p1", program_name: "Basic", status: "open" }],
+      [
+        { slot_id: "s1", status: "booked" },
+        { slot_id: "s1", status: "offered" },
+        { slot_id: "s1", status: "late_cancelled" },
+        { slot_id: "s1", status: "closed" },
+        { slot_id: "s1", status: "waitlist" },
+      ],
+    );
+    expect(usage).toMatchObject({ booked: 2, utilization: 1, waitlisted: 1 });
+  });
 });
 
 describe("eventAttendance", () => {
@@ -64,5 +78,15 @@ describe("eventAttendance", () => {
     );
     expect(row).toMatchObject({ checkedIn: 1, fill: 0.5, noShow: 1, seats: 2, waitlist: 1 });
     expect(percent(row.noShowRate)).toBe("33%");
+  });
+});
+
+describe("percent", () => {
+  it("shows the shared no-data text instead of a dash", () => {
+    expect(percent(null)).toBe(NO_DATA);
+    expect(percent(undefined)).toBe(NO_DATA);
+    expect(percent(Number.NaN)).toBe(NO_DATA);
+    expect(percent(0)).toBe("0%");
+    expect(percent(0.125)).toBe("13%");
   });
 });

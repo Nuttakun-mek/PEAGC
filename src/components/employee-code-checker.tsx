@@ -56,17 +56,17 @@ export function EmployeeCodeChecker({
   let feedback: React.ReactNode = null;
   if (effective.kind === "loading") {
     feedback = (
-      <p className="flex items-center gap-2 text-xs text-[#6b6475]"><Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> กำลังตรวจสอบ...</p>
+      <p className="flex items-center gap-2 text-sm text-ink-subtle"><Loader2 className="size-4 animate-spin" aria-hidden="true" /> กำลังตรวจสอบ...</p>
     );
   } else if (effective.kind === "error") {
-    feedback = <p className="flex items-center gap-2 text-xs text-[#805300]"><CircleDashed className="size-3.5" aria-hidden="true" /> ตรวจสอบอัตโนมัติไม่ได้ในขณะนี้ จะตรวจอีกครั้งเมื่อบันทึก</p>;
+    feedback = <p className="flex items-center gap-2 text-sm text-warning"><CircleDashed className="size-4" aria-hidden="true" /> ตรวจรหัสตอนนี้ไม่ได้ จะตรวจอีกครั้งเมื่อกดบันทึก</p>;
   } else if (effective.kind === "done" && effective.result.found) {
     const active = effective.result.membershipStatus === "active";
     feedback = (
-      <div className={`flex items-start gap-2 rounded-md px-3 py-2 text-xs ${active ? "bg-[#edf9f3] text-[#16794b]" : "bg-[#fff9ed] text-[#805300]"}`}>
+      <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${active ? "bg-success-bg text-success" : "bg-warning-bg text-warning"}`}>
         {active ? <BadgeCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" /> : <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />}
         <span>
-          พบข้อมูล <b>{effective.result.maskedName}</b>
+          พบข้อมูล <span className="font-semibold">{effective.result.maskedName}</span>
           {effective.result.unit ? ` · ${effective.result.unit}` : ""}
           {effective.result.memberType ? ` · ประเภท ${effective.result.memberType}` : ""}
           <span className="block">{membershipLabel[effective.result.membershipStatus] ?? effective.result.membershipStatus}{active ? "" : " · สมัครได้ แต่รอผู้ดูแลตรวจสอบ"}</span>
@@ -75,7 +75,7 @@ export function EmployeeCodeChecker({
     );
   } else if (effective.kind === "done" && !effective.result.found) {
     feedback = (
-      <div className="flex items-start gap-2 rounded-md bg-[#fff9ed] px-3 py-2 text-xs text-[#805300]">
+      <div className="flex items-start gap-2 rounded-lg bg-warning-bg px-3 py-2 text-sm text-warning">
         <SearchX className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
         <span>
           ไม่พบรหัสนี้ในฐานสมาชิกสมาคม ตรวจสอบรหัสอีกครั้ง หรือสมัครต่อแล้วรอผู้ดูแลตรวจสอบ
@@ -85,7 +85,7 @@ export function EmployeeCodeChecker({
   }
 
   return (
-    <div className="grid gap-2">
+    <div className="grid">
       <input
         autoCapitalize="characters"
         autoComplete="off"
@@ -99,7 +99,10 @@ export function EmployeeCodeChecker({
         spellCheck={false}
         value={code}
       />
-      {feedback}
+      {/* Announced to screen readers; spacing only when there is something to show. */}
+      <div aria-live="polite" className={feedback ? "mt-2" : undefined}>
+        {feedback}
+      </div>
     </div>
   );
 }

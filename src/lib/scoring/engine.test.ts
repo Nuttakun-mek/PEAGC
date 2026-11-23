@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import {
   type CompetitionRules,
   computeLeaderboard,
+  defaultPeoriaHoles,
   defaultRules,
+  doublePeoriaHandicap,
   parseRules,
   playingHandicap,
   sanitizeStrokes,
@@ -139,7 +141,7 @@ describe("leaderboard", () => {
     expect(board.flights.map((f) => [f.name, f.players.map((p) => [p.id, p.flightRank])])).toEqual([
       ["A", [["a2", 1], ["a1", 2]]],
       ["B", [["b1", 1]]],
-      ["ไม่มีแฮนดิแคป", [["none", 1]]],
+      ["ไม่มีแต้มต่อ", [["none", 1]]],
       ["นอกไฟลท์", [["out", 1]]],
     ]);
     expect(board.overall.find((p) => p.id === "b1")?.flight).toBe("B");
@@ -171,5 +173,49 @@ describe("rules", () => {
     const result = sanitizeStrokes(["4", "", null, "0", "21", 5]);
     expect(result.slice(0, 6)).toEqual([4, null, null, Number.NaN, Number.NaN, 5]);
     expect(result).toHaveLength(18);
+  });
+});
+
+describe("handicap sources", () => {
+  it("old rules default to the club handicap; a system36 format means the System 36 method", () => {
+    expect(parseRules({ format: "stroke_net" }).handicapSource).toBe("club");
+    expect(parseRules({ format: "system36" }).handicapSource).toBe("system36");
+    expect(parseRules({ format: "stroke_net", handicapSource: "system36" }).format).toBe("system36");
+  });
+
+  it("turns an index into a course handicap when the tee is rated", () => {
+    const rated = rules({ courseRating: 70.1, slopeRating: 130 });
+    // 18.0 x 130 / 113 + (70.1 - 72) = 18.81 -> 19
+    expect(scorePlayer(rated, { handicapIndex: 18, id: "a", name: "A", strokes: plus({}, 1) }).playingHandicap).toBe(19);
+    expect(scorePlayer(rules(), { handicapIndex: 18, id: "a", name: "A", strokes: plus({}, 1) }).playingHandicap).toBe(18);
+  });
+
+  it("none: net equals gross", () => {
+    const result = scorePlayer(rules({ handicapSource: "none" }), { handicapIndex: 18, id: "a", name: "A", strokes: plus({}, 1) });
+    expect(result.playingHandicap).toBe(0);
+    expect(result.net).toBe(90);
+  });
+
+  it("double peoria: (hidden x 1.5 - par) x 0.8, capped per hole at double par and overall at the max", () => {
+    const hidden = defaultPeoriaHoles(defaultRules.pars);
+    expect(hidden).toHaveLength(12);
+    // bogey on every hole: hidden 12 holes = par 48 + 12 = 60 -> (90 - 72) x 0.8 = 14.4
+    expect(doublePeoriaHandicap(plus({}, 1), [], defaultRules.pars, hidden)).toBe(14.4);
+    // a 12 on a hidden par 4 counts as 8
+    const blowUp = plus({}, 1);
+    blowUp[hidden[0] - 1] = 12;
+    const capped = defaultRules.pars[hidden[0] - 1] * 2;
+    expect(doublePeoriaHandicap(blowUp, [], defaultRules.pars, hidden)).toBe(Math.round(((60 - (defaultRules.pars[hidden[0] - 1] + 1) + capped) * 1.5 - 72) * 0.8 * 10) / 10);
+    expect(doublePeoriaHandicap(plus({}, 4), [], defaultRules.pars, hidden, 36)).toBe(36);
+    expect(doublePeoriaHandicap(plus({}, -1), [], defaultRules.pars, hidden)).toBe(0);
+
+    const result = scorePlayer(rules({ handicapSource: "double_peoria", peoriaHoles: hidden }), { handicapIndex: 30, id: "a", name: "A", strokes: plus({}, 1) });
+    expect(result.cardHandicap).toBe(14.4);
+    expect(result.net).toBe(75.6);
+    expect(result.playingHandicap).toBe(0);
+  });
+
+  it("validates hidden holes", () => {
+    expect(validateRules(rules({ handicapSource: "double_peoria", peoriaHoles: [1, 2, 3] }))).toContain("Double Peoria ต้องเลือกหลุมซ่อน 12 หลุม ไม่ซ้ำกัน");
   });
 });

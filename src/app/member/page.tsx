@@ -1,55 +1,58 @@
 import Link from "next/link";
-import {
-  CalendarDays,
-  Award,
-  Bell,
-  CalendarPlus,
-  ChevronRight,
-  CheckCircle2,
-  Clock,
-  ClipboardCheck,
-  GraduationCap,
-  LogOut,
-  MailCheck,
-  MapPin,
-  Pencil,
-  ShieldAlert,
-  Trophy,
-  Upload,
-  Newspaper,
-} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Check, ListTodo, LogOut, MapPin, ShieldAlert, UserPlus, UsersRound } from "lucide-react";
 
 import { signOut } from "@/app/actions/auth";
-import { UNSET, formatThaiDate, orUnset } from "@/lib/display";
-import { MemberAvatar } from "@/components/member-avatar";
-import { MemberCard } from "@/components/member-card";
+import { AuthCard } from "@/components/auth-card";
+import { CLUB_NAME, ClubCrest } from "@/components/brand";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { EventsMemberHandicap } from "@/components/events-member-handicap";
+import { EventsRegistrationExtras } from "@/components/events-member-registration-extras";
+import { EventsMemberScoreCards } from "@/components/events-member-score-cards";
+import { LessonsMemberSummary } from "@/components/lessons-member-summary";
+import { MembershipMemberCard } from "@/components/membership-member-card";
+import { MemberSection, memberCard } from "@/components/member-section";
+import { EnvBadge } from "@/components/env-badge";
+import { MemberTabBar } from "@/components/member-tab-bar";
+import { PaymentSlipInput } from "@/components/payment-slip-input";
+import { MemberPaymentHistory } from "@/components/payments-member-history";
+import { PointsMemberSection } from "@/components/points-member-section";
+import { PromptPayPaymentCard } from "@/components/promptpay-payment-card";
 import { StatusBanner, toneForStatus } from "@/components/status-banner";
-import { InteractiveSlotBoard } from "@/components/interactive-slot-board";
+import { SubmitButton } from "@/components/submit-button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { type ControlSize, buttonClass, fieldInputClass, fieldLabel } from "@/components/ui/styles";
+import {
+  UNSET,
+  formatBaht,
+  formatFee,
+  formatThaiDate,
+  formatThaiDateLong,
+  formatThaiDateShort,
+  formatThaiDateTime,
+  formatThaiTime,
+  orUnset,
+} from "@/lib/display";
+import { appIcons } from "@/lib/icons";
 import {
   type LessonBookingSettings,
   bangkokDate,
+  cancelDeadline,
   defaultLessonBookingSettings,
-  formatBangkokDateTime,
-  googleCalendarUrl,
-  getBookingPhase,
-  hasLessonAnnouncement,
+  lessonStartAt,
   needsAnnouncementAck,
-  queueStatusLabel,
 } from "@/lib/lessons/booking";
 import { resolveAccess } from "@/lib/auth/access";
 import { type ModuleState, defaultModuleState } from "@/lib/modules";
 import { getClubModules } from "@/lib/modules-server";
+import { loadPaymentSettings } from "@/lib/payments/settings";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 import {
-  acknowledgeLessonAnnouncement,
   markNotificationsRead,
-  bookLessonSlot,
   cancelEventRegistration,
   cancelLessonBooking,
-  changeLessonSlot,
   registerForEvent,
   uploadEventPaymentProof,
 } from "./actions";
@@ -57,6 +60,23 @@ import {
 type MemberPageProps = {
   searchParams: Promise<{ bypass?: string; rank?: string; status?: string }>;
 };
+
+const AwardIcon = appIcons.awards;
+const CalendarIcon = appIcons.calendar;
+const CoachIcon = appIcons.coach;
+const EditIcon = appIcons.edit;
+const EventsIcon = appIcons.events;
+const LessonsIcon = appIcons.lessons;
+const NewsIcon = appIcons.news;
+const NotificationsIcon = appIcons.notifications;
+const PaymentsIcon = appIcons.payments;
+const RescheduleIcon = appIcons.reschedule;
+const ScoresIcon = appIcons.scores;
+const UploadIcon = appIcons.upload;
+const WaitlistIcon = appIcons.waitlist;
+
+/** Shown wherever an event or lesson has no venue yet. */
+const NO_VENUE = "รอแจ้งสนาม";
 
 const statusMessages: Record<string, string> = {
   "admin-required": "บัญชีนี้ไม่มีสิทธิ์ผู้ดูแล",
@@ -83,20 +103,30 @@ const statusMessages: Record<string, string> = {
   "lesson-changed": "เปลี่ยนรอบแล้ว",
   "lesson-closed": "รอบนี้ปิดรับแล้ว",
   "lesson-full": "รอบนี้เต็มแล้ว",
+  "lesson-late-cancelled": "ยกเลิกแล้ว (เลยกำหนด ไม่คืนเครดิต)",
+  "lesson-no-credit": "เครดิตเรียนไม่พอ ซื้อแพ็กเกจก่อนจอง",
+  "lesson-no-show-blocked": "ขาดเรียนเกินกำหนด งดจองชั่วคราว",
+  "lesson-offer-expired": "หมดเวลายืนยันที่ว่างแล้ว",
+  "lesson-offer-gone": "รายการนี้ไม่ได้รอการยืนยันแล้ว",
+  "lesson-priority-window": "ช่วงนี้เปิดให้พนักงาน กฟภ. จองก่อน",
+  "lesson-week-limit": "จองครบจำนวนต่อสัปดาห์แล้ว",
   "lesson-use-change": "มีรอบของคอร์สนี้ในวันเดียวกันแล้ว",
   "member-not-approved": "รอผู้ดูแลอนุมัติก่อนใช้งาน",
   "pending-review": "ส่งข้อมูลแล้ว รอผู้ดูแลตรวจสอบ",
   "profile-approved": "ยืนยันตัวตนสำเร็จ ใช้งานได้ทันที",
   "profile-saved": "บันทึกข้อมูลแล้ว",
   registered: "สมัครกิจกรรมแล้ว",
-  "registered-payment-required": "สมัครแล้ว แนบหลักฐานการชำระเงินในรายการของฉัน",
-  "module-disabled": "ระบบนี้ยังไม่เปิดให้บริการ ติดตามประกาศจากชมรม",
+  "registered-payment-required": "สมัครแล้ว แนบสลิปโอนเงินในหัวข้อ “สิ่งที่ต้องทำ”",
+  "module-disabled": "ส่วนนี้ยังไม่เปิดให้บริการ ติดตามประกาศจากชมรม",
   "notifications-read": "อ่านการแจ้งเตือนทั้งหมดแล้ว",
-  "registration-waitlisted": "กิจกรรมเต็มแล้ว คุณอยู่ในรายชื่อสำรอง ระบบจะเลื่อนสิทธิ์ให้อัตโนมัติเมื่อมีที่ว่าง",
-  "payment-proof-closed": "รายการนี้แนบหลักฐานไม่ได้แล้ว",
-  "payment-proof-invalid": "ไฟล์ต้องเป็น JPG, PNG, WebP หรือ PDF ไม่เกิน 8 MB",
-  "payment-proof-save-failed": "บันทึกหลักฐานไม่สำเร็จ ลองอีกครั้ง",
-  "payment-proof-submitted": "ส่งหลักฐานแล้ว รอผู้ดูแลตรวจสอบ",
+  "registration-waitlisted": "กิจกรรมเต็มแล้ว คุณอยู่ในคิวสำรอง มีที่ว่างจะเลื่อนให้และแจ้งให้ทราบ",
+  "payment-proof-closed": "รายการนี้แนบสลิปไม่ได้แล้ว",
+  "payment-proof-approved": "ตรวจสลิปผ่านแล้ว ชำระเรียบร้อย",
+  "payment-proof-duplicate": "สลิปนี้เคยใช้ชำระรายการอื่นแล้ว แนบสลิปของการโอนครั้งนี้",
+  "payment-proof-invalid": "ไฟล์ต้องเป็นรูป JPG, PNG, WebP หรือ PDF",
+  "payment-proof-too-large": "ไฟล์ใหญ่เกิน 10 MB",
+  "payment-proof-save-failed": "บันทึกสลิปไม่สำเร็จ ลองอีกครั้ง",
+  "payment-proof-submitted": "ส่งสลิปแล้ว รอผู้ดูแลตรวจสอบ",
   "payment-proof-upload-failed": "อัปโหลดไม่สำเร็จ ลองอีกครั้ง",
   "registration-cancel-closed": "ยกเลิกไม่ได้ เนื่องจากชำระเงินแล้ว",
   "registration-cancel-failed": "ยกเลิกไม่สำเร็จ ลองอีกครั้ง",
@@ -104,22 +134,36 @@ const statusMessages: Record<string, string> = {
   "registration-closed": "กิจกรรมนี้ปิดรับสมัครแล้ว",
   "registration-failed": "สมัครไม่สำเร็จ ลองอีกครั้ง",
   "registration-full": "กิจกรรมนี้เต็มแล้ว",
+  "handicap-failed": "บันทึก Handicap Index ทางการไม่สำเร็จ ลองอีกครั้ง",
+  "handicap-invalid": "Handicap Index ต้องอยู่ระหว่าง +10 ถึง 54",
+  "handicap-saved": "บันทึก Handicap Index ทางการแล้ว",
+  "score-confirm-closed": "การแข่งขันนี้ปิดแล้ว ยืนยันการ์ดไม่ได้",
+  "score-confirm-denied": "ยืนยันการ์ดใบนี้ไม่ได้ ยืนยันได้เฉพาะการ์ดของตัวเองหรือของคนในก๊วน",
+  "score-confirm-failed": "ยืนยันสกอร์ไม่สำเร็จ ลองอีกครั้ง",
+  "score-confirm-player-first": "รอเจ้าของการ์ดยืนยันก่อน แล้ว marker จึงยืนยันได้",
+  "score-confirm-superseded": "การ์ดนี้มีการแก้ไขแล้ว ตรวจการ์ดใบใหม่อีกครั้ง",
+  "score-confirmed": "ยืนยันสกอร์แล้ว รอ marker ในก๊วนยืนยันอีกคน",
+  "score-marked": "ยืนยันในฐานะ marker แล้ว",
+  "score-verified": "ยืนยันครบแล้ว สกอร์นำไปจัดอันดับแล้ว",
 };
 
 const eventRegistrationStatusLabels: Record<string, string> = {
   checked_in: "ลงทะเบียนหน้างานแล้ว",
   paid: "ชำระเงินแล้ว",
-  payment_review: "กำลังตรวจสอบการชำระเงิน",
+  payment_review: "รอตรวจสลิป",
   pending_payment: "รอชำระเงิน",
   registered: "สมัครแล้ว",
-  waitlist: "รายชื่อสำรอง",
+  waitlist: "คิวสำรอง",
 };
 
-const lessonBookingStatusLabels: Record<string, string> = {
-  attended: "เข้าเรียนแล้ว",
-  booked: "จองแล้ว",
-  no_show: "ไม่ได้เข้าเรียน",
+const skillLevelLabels: Record<string, string> = {
+  advanced: "ชำนาญ",
+  beginner: "เริ่มต้น",
+  intermediate: "ปานกลาง",
 };
+
+/** Registration states the member may still cancel themselves (same list the server action accepts). */
+const cancellableRegistration = ["registered", "pending_payment", "payment_review", "waitlist"];
 
 const sampleOpenEvents = [
   {
@@ -135,31 +179,6 @@ const sampleOpenEvents = [
     target_work_lines: [],
     tee_off_time: "11:30",
     venue: "สนามกอล์ฟรอยัล",
-  },
-];
-
-const sampleLessonSlots = [
-  {
-    allow_member_reschedule: true,
-    booked_count: 2,
-    capacity: 6,
-    coach_name: "ผู้ฝึกสอน กฟภ.",
-    end_time: "18:30",
-    id: "sample-slot-1",
-    status: "open",
-    waitlist_capacity: 2,
-    program_id: "sample-program-1",
-    lesson_date: "2026-08-20",
-    lesson_programs: { coach_name: null, description: null, id: "sample-program-1", level: "beginner", name: "พื้นฐานกอล์ฟ", price: 1200 },
-    reschedule_cutoff_hours: 12,
-    start_time: "17:00",
-    target_bureaus: [],
-    target_departments: [],
-    target_divisions: [],
-    target_sections: [],
-    target_work_lines: [],
-    title: "ฝึกวงสวิงรอบเย็น",
-    venue: "สนามฝึกซ้อม เอ",
   },
 ];
 
@@ -267,6 +286,107 @@ function getScoreStatusLabel(status: string | null | undefined) {
   return "ยังไม่ลงคะแนน";
 }
 
+type PairingGroup = { group_no?: number | null; start_hole?: number | null; tee_time?: string | null };
+
+/** "17:00:00", "18:30:00" → "17:00–18:30 น.". */
+function formatTimeRange(start: string | null | undefined, end: string | null | undefined) {
+  if (!start) return UNSET;
+  if (!end) return formatThaiTime(start);
+  return `${formatThaiTime(start).replace(/ น\.$/, "")}–${formatThaiTime(end)}`;
+}
+
+/** A lesson is still ahead until it ends (Bangkok wall clock). */
+function lessonNotOver(date: string | null | undefined, endTime: string | null | undefined) {
+  return Boolean(date) && lessonStartAt(date as string, endTime || "23:59").getTime() > Date.now();
+}
+
+function isPastCancelCutoff(deadline: Date) {
+  return Date.now() > deadline.getTime();
+}
+
+/** Upcoming items soonest first, then past items newest first. */
+function upcomingThenPast<T>(items: T[], isUpcoming: (item: T) => boolean, sortKey: (item: T) => string) {
+  const upcoming = items.filter(isUpcoming).sort((a, b) => sortKey(a).localeCompare(sortKey(b)));
+  const past = items.filter((item) => !isUpcoming(item)).sort((a, b) => sortKey(b).localeCompare(sortKey(a)));
+  return [...upcoming, ...past];
+}
+
+function groupText(group: PairingGroup) {
+  return [
+    `ก๊วน ${group.group_no ?? UNSET}`,
+    group.tee_time ? `ออกตัว ${formatThaiTime(group.tee_time)}` : null,
+    group.start_hole ? `หลุม ${group.start_hole}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+/** Icon + one line of detail (date, venue, coach …). `label` names the icon for screen readers. */
+function Meta({ children, icon: Icon, label }: { children: React.ReactNode; icon: LucideIcon; label?: string }) {
+  return (
+    <p className="flex items-start gap-2">
+      <Icon className="mt-1 size-4 shrink-0 text-ink-subtle" aria-hidden="true" />
+      <span className="min-w-0">
+        {label ? <span className="sr-only">{label}: </span> : null}
+        {children}
+      </span>
+    </p>
+  );
+}
+
+function EmptyNote({ children }: { children: React.ReactNode }) {
+  return <p className="rounded-lg bg-canvas px-4 py-4 text-sm text-ink-muted">{children}</p>;
+}
+
+function CancelRegistrationForm({
+  className = "",
+  eventName,
+  registrationId,
+  size = "md",
+}: {
+  className?: string;
+  eventName: string;
+  registrationId: string;
+  size?: ControlSize;
+}) {
+  return (
+    <form action={cancelEventRegistration} className={className}>
+      <input name="registrationId" type="hidden" value={registrationId} />
+      <ConfirmSubmitButton
+        className={`${buttonClass("danger", size)} w-full`}
+        confirmLabel="ยกเลิกการสมัคร"
+        message={`ยกเลิกการสมัคร “${eventName}” ใช่หรือไม่`}
+        title="ยกเลิกการสมัครกิจกรรม"
+      >
+        ยกเลิกการสมัคร
+      </ConfirmSubmitButton>
+    </form>
+  );
+}
+
+/** One thing the member has to do, with the button or form that does it. */
+function TodoItem({
+  children,
+  icon: Icon,
+  title,
+}: {
+  children?: React.ReactNode;
+  icon: LucideIcon;
+  title: React.ReactNode;
+}) {
+  return (
+    <li className="flex gap-3 py-4 first:pt-0 last:pb-0">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-warning-bg text-warning">
+        <Icon className="size-4" aria-hidden="true" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-base font-semibold text-ink">{title}</p>
+        {children ? <div className="mt-1 text-sm text-ink-muted">{children}</div> : null}
+      </div>
+    </li>
+  );
+}
+
 export default async function MemberPage({ searchParams }: MemberPageProps) {
   const params = await searchParams;
   const access = await resolveAccess({
@@ -320,7 +440,9 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
   // One name everywhere: the member's full name (the same name admins see).
   const displayName = currentMember?.full_name || access.displayName;
   const profileHref = access.isBypass ? "/profile?bypass=member" : "/profile";
+  const lessonsHref = access.isBypass ? "/member/lessons?bypass=member" : "/member/lessons";
   const isPending = currentMember?.status === "pending_verification";
+  const isActive = currentMember?.status === "active";
   // Admin on/off switches per module (see /admin/settings). Demo mode shows everything.
   const modules: ModuleState = access.isBypass
     ? { events: true, lessons: true, news: true, scores: true }
@@ -331,29 +453,20 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
 
   if (!currentMember && !access.isBypass) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-transparent px-4 py-8 text-[#2f3137]">
-        <section className="golf-visual w-full max-w-xl rounded-lg border border-[#e6e2ee] bg-white/95 p-6 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-[#8b5b7a]">PEA Golf Club</p>
-              <h1 className="mt-2 text-3xl font-semibold text-[#722257]">สมัครสมาชิก</h1>
-            </div>
-            <MemberAvatar displayName={access.displayName} />
-          </div>
-          <p className="mt-4 text-sm leading-7 text-[#6b6475]">
-            บัญชีนี้ยังไม่ได้สมัครสมาชิก กรอกรหัสพนักงานและข้อมูลติดต่อเพื่อเริ่มใช้งาน
-          </p>
-          <Link className="mt-6 flex h-12 w-full items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white" href="/profile">
-            <Pencil className="size-4" aria-hidden="true" />
-            สมัครสมาชิก
-          </Link>
-          <form action={signOut} className="mt-3">
-            <button className="flex h-11 w-full items-center justify-center gap-2 rounded-md border border-[#d9d3e6] bg-white text-sm font-semibold text-[#722257]" type="submit">
-              <LogOut className="size-4" aria-hidden="true" /> ออกจากระบบ
-            </button>
-          </form>
-        </section>
-      </main>
+      <AuthCard
+        description="บัญชีนี้ยังไม่ได้สมัครสมาชิกชมรม กรอกรหัสพนักงานและเบอร์โทรเพื่อเริ่มใช้งาน"
+        title="สมัครสมาชิก"
+      >
+        <Link className={`${buttonClass("primary", "lg")} mt-6 w-full`} href="/profile">
+          <EditIcon className="size-4" aria-hidden="true" />
+          กรอกข้อมูลสมาชิก
+        </Link>
+        <form action={signOut} className="mt-3">
+          <button className={`${buttonClass("secondary", "lg")} w-full`} type="submit">
+            <LogOut className="size-4" aria-hidden="true" /> ออกจากระบบ
+          </button>
+        </form>
+      </AuthCard>
     );
   }
   // ---- data: two parallel batches instead of ~15 sequential round-trips ----
@@ -363,7 +476,6 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
   const [
     { data: openEvents },
     { data: registrations },
-    { data: lessonSlots },
     { data: lessonBookings },
     { data: lessonSettingsRow },
     { data: myQueue },
@@ -394,30 +506,14 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
           .order("created_at", { ascending: false })
           .limit(20)
       : { data: [] },
-    supabase
-      ? !modules.lessons
-        ? { data: [] }
-        : supabase
-            .from("lesson_slots")
-            .select(
-              "id, program_id, title, coach_name, venue, lesson_date, start_time, end_time, capacity, waitlist_capacity, status, booked_count, allow_member_reschedule, reschedule_cutoff_hours, target_work_lines, target_bureaus, target_divisions, target_departments, target_sections, lesson_programs(id, name, price, level, coach_name, description)",
-            )
-            .eq("status", "open")
-            .is("archived_at", null)
-            // Past slots that admins never closed must not crowd out upcoming ones.
-            .gte("lesson_date", bangkokDate())
-            .order("lesson_date", { ascending: true })
-            .order("start_time", { ascending: true })
-            .limit(300)
-      : { data: sampleLessonSlots },
     supabase && memberId && modules.lessons
       ? supabase
           .from("lesson_bookings")
           .select(
-            "id, slot_id, status, booked_at, lesson_slots(program_id, title, lesson_date, start_time, end_time, venue, status, capacity, allow_member_reschedule, lesson_programs(name))",
+            "id, slot_id, status, booked_at, lesson_slots(program_id, title, coach_name, lesson_date, start_time, end_time, venue, status, capacity, allow_member_reschedule, lesson_programs(name, coach_name))",
           )
           .eq("member_id", memberId)
-          .not("status", "in", "(cancelled)")
+          .not("status", "in", "(cancelled,late_cancelled,closed)")
           .order("booked_at", { ascending: false })
           .limit(20)
       : { data: [] },
@@ -458,8 +554,6 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
 
   const visibleOpenEvents =
     openEvents?.filter((event) => isVisibleForMember(event, currentMember)) ?? [];
-  const visibleLessonSlots =
-    lessonSlots?.filter((slot) => isVisibleForMember(slot, currentMember)) ?? [];
   const latestScoredRegistration = scoreHistory?.find((score) => score.score_status !== "not_entered");
 
   // Second batch: queries that depend on the first.
@@ -494,769 +588,844 @@ export default async function MemberPage({ searchParams }: MemberPageProps) {
   const seatsByEvent = new Map(
     ((seatCountRows ?? []) as { event_id: string; seats: number; waitlist: number }[]).map((row) => [row.event_id, row]),
   );
-  const lessonBookingBySlot = new Map(
-    lessonBookings?.map((item) => [item.slot_id, item]) ?? [],
-  );
   const lessonSettings: LessonBookingSettings = lessonSettingsRow
     ? { ...defaultLessonBookingSettings, ...lessonSettingsRow }
     : access.isBypass
       ? { ...defaultLessonBookingSettings, booking_open_at: "2026-01-01T00:00:00.000Z" }
       : { ...defaultLessonBookingSettings, booking_open_at: null };
-  const bookingPhase = getBookingPhase(lessonSettings);
   const queueByBooking = new Map<string, number>(
     ((myQueue ?? []) as QueueRow[]).map((item) => [item.booking_id, item.queue_position]),
   );
   const mustAckAnnouncement =
     !access.isBypass && needsAnnouncementAck(lessonSettings, currentMember?.lesson_announcement_ack_version);
   const canRegister = !access.isBypass && currentMember?.status === "active";
-  const memberSlotTableItems = visibleLessonSlots.map((slot) => {
-    const booking = lessonBookingBySlot.get(slot.id);
-    const program = firstRelated(slot.lesson_programs);
-
-    return {
-      // booked_count is maintained by a DB trigger on lesson_bookings
-      bookedCount: slot.booked_count ?? 0,
-      capacity: slot.capacity,
-      coach: slot.coach_name ?? null,
-      date: slot.lesson_date,
-      endTime: slot.end_time,
-      id: slot.id,
-      myBookingId: booking?.id ?? null,
-      myPosition: booking ? (queueByBooking.get(booking.id) ?? 1) : null,
-      program: program?.name ?? "คอร์สเรียนกอล์ฟ",
-      programId: slot.program_id ?? null,
-      startTime: slot.start_time,
-      status: slot.status ?? "open",
-      title: slot.title,
-      venue: slot.venue,
-      waitlistCapacity: slot.waitlist_capacity ?? 0,
-    };
-  });
-  const lessonCourses = [
-    ...new Map(
-      visibleLessonSlots.flatMap((slot) => {
-        const program = firstRelated(slot.lesson_programs) as
-          | { coach_name?: string | null; description?: string | null; id?: string; level?: string; name: string; price: number }
-          | null;
-        if (!slot.program_id || !program) return [];
-        return [[slot.program_id, {
-          coach: program.coach_name ?? null,
-          description: program.description ?? null,
-          id: slot.program_id,
-          level: program.level ?? "all",
-          name: program.name,
-          price: Number(program.price ?? 0),
-        }] as const];
-      }),
-    ).values(),
-  ];
-  const currentLessonBooking = lessonBookings?.find((booking) => booking.status === "booked");
   const unreadCount = notifications?.filter((item) => !item.read_at).length ?? 0;
   const latestHoleScores = holeScores ?? [];
+  const today = bangkokDate();
+
+  // ---- the member's own lessons and events: upcoming soonest first, then past ----
+  const myLessons = (lessonBookings ?? []).flatMap((booking) => {
+    const slot = firstRelated(booking.lesson_slots);
+    if (!slot) return [];
+    const position = queueByBooking.get(booking.id);
+    return [
+      {
+        booking,
+        position,
+        program: firstRelated(slot.lesson_programs),
+        slot,
+        // Booked, but behind the last seat: on the waitlist.
+        waitlisted:
+          booking.status === "waitlist" ||
+          booking.status === "offered" ||
+          (booking.status === "booked" && position !== undefined && position > slot.capacity),
+      },
+    ];
+  });
+  type MyLesson = (typeof myLessons)[number];
+  const lessonIsAhead = (item: MyLesson) =>
+    ["booked", "waitlist", "offered"].includes(item.booking.status) &&
+    item.slot.status !== "cancelled" &&
+    lessonNotOver(item.slot.lesson_date, item.slot.end_time);
+  const sortedLessons = upcomingThenPast(myLessons, lessonIsAhead, (item) => `${item.slot.lesson_date} ${item.slot.start_time}`);
+  const nextLesson = sortedLessons.find((item) => lessonIsAhead(item) && !item.waitlisted);
+  // Seats offered from the waitlist (lessons v2) wait for the member's yes: a to-do item.
+  const lessonOffers = modules.lessons ? myLessons.filter((item) => item.booking.status === "offered" && lessonIsAhead(item)) : [];
+
+  const myRegistrations = (registrations ?? []).map((registration) => ({
+    event: firstRelated(registration.events),
+    group: firstRelated(registration.event_pairing_groups) as PairingGroup | null,
+    registration,
+  }));
+  type MyRegistration = (typeof myRegistrations)[number];
+  const eventIsAhead = ({ event }: MyRegistration) =>
+    Boolean(event?.event_date && event.event_date >= today && event.status !== "cancelled");
+  const sortedRegistrations = upcomingThenPast(
+    myRegistrations,
+    eventIsAhead,
+    (item) => `${item.event?.event_date ?? ""} ${item.event?.tee_off_time ?? ""}`,
+  );
+  const nextEvent = sortedRegistrations.find((item) => eventIsAhead(item) && item.registration.status !== "waitlist");
+  const pendingSlips = sortedRegistrations.filter(
+    (item) => item.registration.status === "pending_payment" && Number(item.event?.member_price ?? 0) > 0,
+  );
+  const paymentSettings = pendingSlips.length && supabase ? await loadPaymentSettings(supabase, clubId) : null;
+  // Open events not signed up for yet; signed-up ones are listed under "ที่สมัครไว้".
+  const signUpEvents = visibleOpenEvents.filter((event) => !registrationByEvent.has(event.id));
+
+  // ---- สิ่งที่ต้องทำ ----
+  const needsProfile = !access.isBypass && !access.isProfileComplete;
+  const blockedOther = !access.isBypass && Boolean(currentMember) && !isActive && !isPending;
+  const needsAck = modules.lessons && mustAckAnnouncement;
+  const todoCount =
+    pendingSlips.length +
+    [isPending, blockedOther, needsProfile, needsAck, lessonOffers.length > 0, unreadCount > 0].filter(Boolean).length;
+  // Activation steps: only shown until the member is active.
+  const showPipeline = !isActive;
   const memberPipeline = [
     { done: true, label: "บัญชี" },
     { done: Boolean(currentMember), label: "ประวัติ" },
-    {
-      done: currentMember?.status === "active",
-      label: currentMember?.status === "pending_verification" ? "รอตรวจสอบ" : "ยืนยันตัวตน",
-    },
-    { done: currentMember?.status === "active", label: "พร้อมใช้งาน" },
+    { done: isActive, label: isPending ? "รอตรวจสอบ" : "ยืนยันตัวตน" },
+    { done: isActive, label: "พร้อมใช้งาน" },
   ];
+  const currentStep = memberPipeline.findIndex((step) => !step.done);
+
+  // ---- นัดครั้งถัดไป: the next lesson and the next event, soonest first ----
+  const nextItems: { key: string; node: React.ReactNode; sortKey: string }[] = [];
+  if (nextLesson) {
+    const { booking, program, slot } = nextLesson;
+    const deadline = cancelDeadline(slot.lesson_date, slot.start_time, lessonSettings.cancel_cutoff_hours);
+    const cancelLocked = isPastCancelCutoff(deadline);
+    const coach = slot.coach_name ?? program?.coach_name ?? null;
+    const canMove = modules.lessons && canRegister && slot.allow_member_reschedule !== false;
+    const timeRange = formatTimeRange(slot.start_time, slot.end_time);
+    nextItems.push({
+      key: `lesson-${booking.id}`,
+      sortKey: `${slot.lesson_date} ${slot.start_time}`,
+      node: (
+        <>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="flex min-w-0 items-start gap-1.5 text-sm font-medium text-ink-muted">
+              <LessonsIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              {[program?.name, slot.title].filter(Boolean).join(" · ") || "คลาสเรียน"}
+            </p>
+            <StatusBadge kind="booking" status="booked">ได้ที่นั่งแล้ว</StatusBadge>
+          </div>
+          <p className="mt-2 text-h3 font-semibold text-ink">{formatThaiDateLong(slot.lesson_date)}</p>
+          <p className="text-h3 font-semibold tabular-nums text-brand-600">{timeRange}</p>
+          <div className="mt-2 grid gap-1 text-base text-ink-muted">
+            <Meta icon={MapPin} label="สถานที่">{slot.venue || NO_VENUE}</Meta>
+            {coach ? <Meta icon={CoachIcon}>ผู้สอน {coach}</Meta> : null}
+          </div>
+          {canMove || !cancelLocked ? (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {canMove ? (
+                <a className={`${buttonClass("secondary", "lg")} flex-1 sm:flex-none`} href={`/member/lessons?move=${booking.id}#slots`}>
+                  <RescheduleIcon className="size-4" aria-hidden="true" />
+                  เปลี่ยนรอบ
+                </a>
+              ) : null}
+              {cancelLocked ? null : (
+                <form action={cancelLessonBooking} className="flex-1 sm:flex-none">
+                  <input name="bookingId" type="hidden" value={booking.id} />
+                  <ConfirmSubmitButton
+                    className={`${buttonClass("danger", "lg")} w-full`}
+                    confirmLabel="ยกเลิกการจอง"
+                    message={`ยกเลิกรอบเรียน ${formatThaiDateShort(slot.lesson_date)} ${timeRange} ใช่หรือไม่`}
+                    title="ยกเลิกการจองรอบเรียน"
+                  >
+                    ยกเลิกการจอง
+                  </ConfirmSubmitButton>
+                </form>
+              )}
+            </div>
+          ) : null}
+          <p className="mt-2 text-sm text-ink-subtle">
+            {cancelLocked
+              ? "เลยกำหนดยกเลิกแล้ว ถ้ามาไม่ได้ให้แจ้งผู้ดูแล"
+              : `ยกเลิกได้ถึง ${formatThaiDateTime(deadline.toISOString())}`}
+          </p>
+        </>
+      ),
+    });
+  }
+  if (nextEvent?.event) {
+    const event = nextEvent.event;
+    const { group, registration } = nextEvent;
+    const needsSlip = registration.status === "pending_payment" && Number(event.member_price ?? 0) > 0;
+    nextItems.push({
+      key: `event-${registration.id}`,
+      sortKey: `${event.event_date} ${event.tee_off_time ?? ""}`,
+      node: (
+        <>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <p className="flex min-w-0 items-start gap-1.5 text-sm font-medium text-ink-muted">
+              <EventsIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              {event.name ?? "กิจกรรมออกรอบ"}
+            </p>
+            <StatusBadge kind="registration" status={registration.status}>
+              {eventRegistrationStatusLabels[registration.status] ?? registration.status}
+            </StatusBadge>
+          </div>
+          <p className="mt-2 text-h3 font-semibold text-ink">{formatThaiDateLong(event.event_date)}</p>
+          {event.tee_off_time ? (
+            <p className="text-h3 font-semibold tabular-nums text-brand-600">ออกรอบ {formatThaiTime(event.tee_off_time)}</p>
+          ) : null}
+          <div className="mt-2 grid gap-1 text-base text-ink-muted">
+            <Meta icon={MapPin} label="สนาม">{event.venue || NO_VENUE}</Meta>
+            {group ? <Meta icon={UsersRound} label="ก๊วน">{groupText(group)}</Meta> : null}
+          </div>
+          {needsSlip ? (
+            <p className="mt-2 text-sm font-medium text-warning">
+              ยังไม่ได้แนบสลิป{" "}
+              <a className="font-semibold text-brand-600 underline underline-offset-4" href="#todo">
+                แนบสลิป
+              </a>
+            </p>
+          ) : null}
+          {event.status === "open" && cancellableRegistration.includes(registration.status) ? (
+            <CancelRegistrationForm
+              className="mt-4 sm:w-fit"
+              eventName={event.name ?? "กิจกรรม"}
+              registrationId={registration.id}
+              size="lg"
+            />
+          ) : null}
+        </>
+      ),
+    });
+  }
+  nextItems.sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+  const nextEmptyText = modules.lessons && modules.events
+    ? "ยังไม่มีรอบเรียนหรือกิจกรรมที่จองไว้"
+    : modules.lessons
+      ? "ยังไม่มีรอบเรียนที่จองไว้"
+      : "ยังไม่มีกิจกรรมที่สมัครไว้";
+
+  const latestScoreEvent = latestScoredRegistration ? firstRelated(latestScoredRegistration.events) : null;
+  const holeByNumber = new Map(latestHoleScores.map((hole) => [hole.hole_number, hole]));
+  const holes = Array.from({ length: 18 }, (_, index) => index + 1);
+  const todoLink = `${buttonClass("secondary", "md")} mt-3`;
 
   return (
-    <main className="min-h-screen bg-transparent px-4 py-6 text-[#2f3137]">
-      <div className="mx-auto grid w-full max-w-[1500px] grid-cols-1 gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <section className="rounded-lg border border-[#e2e8ef] bg-white/95 p-5 shadow-[0_8px_24px_rgba(30,41,59,0.05)]">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-[#8b5b7a]">PEA Golf Club</p>
-              <h1 className="mt-1 text-2xl font-semibold text-[#722257]">สวัสดี {displayName}</h1>
-            </div>
-            <form action={signOut}>
-              <button
-                aria-label="ออกจากระบบ"
-                className="flex size-10 items-center justify-center rounded-lg border border-[#d9d3e6] bg-white text-[#722257] transition hover:border-[#722257]"
-                title="ออกจากระบบ"
-                type="submit"
+    <main className="min-h-screen bg-canvas px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-5 text-ink sm:px-6 lg:pb-10 lg:pt-8">
+      <div className="mx-auto grid w-full max-w-7xl gap-5 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start xl:gap-6">
+        <div className="grid min-w-0 gap-5">
+          <div className="grid gap-4" id="top">
+            <header className="flex items-center gap-3">
+              <a className="skip-link" href="#member-content">ข้ามไปยังเนื้อหา</a>
+              <ClubCrest priority size={44} />
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-ink-subtle">{CLUB_NAME}</p>
+                <h1 className="text-h2 font-semibold text-brand-600 sm:text-display">สวัสดี {displayName}</h1>
+              </div>
+              <EnvBadge className="ml-auto self-start" />
+            </header>
+            <span className="sr-only" id="member-content" tabIndex={-1} />
+
+            {params.status && statusMessages[params.status] ? (
+              <StatusBanner floating tone={toneForStatus(params.status)}>
+                {statusMessages[params.status]}
+                {params.rank && /^\d+$/.test(params.rank) ? ` (สำรองลำดับ ${params.rank})` : ""}
+              </StatusBanner>
+            ) : null}
+
+            {access.isBypass ? (
+              <StatusBanner tone="warning">โหมดทดลอง ข้อมูลในหน้านี้เป็นตัวอย่าง</StatusBanner>
+            ) : null}
+
+            {nothingOpen ? (
+              <div className={memberCard}>
+                <p className="text-h3 font-semibold text-ink">ยังไม่เปิดจองเรียนและสมัครกิจกรรม</p>
+                <p className="mt-1 text-sm text-ink-muted">ชมรมกำลังเตรียมข้อมูล ติดตามประกาศจากชมรม</p>
+              </div>
+            ) : null}
+
+            {modules.lessons || modules.events ? (
+              <MemberSection icon={CalendarIcon} id="next-session" title="นัดครั้งถัดไป">
+                {nextItems.length ? (
+                  <ul className="divide-y divide-line">
+                    {nextItems.map((item) => (
+                      <li className="py-4 first:pt-0 last:pb-0" key={item.key}>
+                        {item.node}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-base text-ink-muted">
+                    {nextEmptyText}{" "}
+                    <a
+                      className="font-semibold text-brand-600 underline underline-offset-4"
+                      href={modules.lessons ? lessonsHref : "#events"}
+                    >
+                      {modules.lessons ? "ดูรอบเรียนที่เปิดจอง" : "ดูกิจกรรมที่เปิดรับสมัคร"}
+                    </a>
+                  </p>
+                )}
+              </MemberSection>
+            ) : null}
+
+            {showPipeline || todoCount ? (
+              <MemberSection
+                description={todoCount ? `${todoCount} รายการ` : undefined}
+                icon={ListTodo}
+                id="todo"
+                title="สิ่งที่ต้องทำ"
               >
-                <LogOut className="size-4" aria-hidden="true" />
-              </button>
-            </form>
-          </div>
-
-          <div className="mt-4">
-            <MemberCard displayName={displayName} member={currentMember} />
-          </div>
-
-          {params.status && statusMessages[params.status] ? (
-            <StatusBanner className="mt-4" floating tone={toneForStatus(params.status)}>
-              {statusMessages[params.status]}
-              {params.rank && /^\d+$/.test(params.rank) ? ` (สำรองลำดับ ${params.rank})` : ""}
-            </StatusBanner>
-          ) : null}
-
-          <ol aria-label="สถานะการเปิดใช้งานสมาชิก" className="mt-4 grid grid-cols-4 gap-1 rounded-lg border border-[#e6e2ee] bg-white/70 p-3">
-            {memberPipeline.map((step, index) => (
-              <li className="flex flex-col items-center gap-1.5 text-center" key={step.label}>
-                <span className={`flex size-7 items-center justify-center rounded-full text-[11px] font-bold ${step.done ? "bg-[#722257] text-white" : "border-2 border-[#e6e2ee] bg-white text-[#9a94a6]"}`}>
-                  {step.done ? "✓" : index + 1}
-                </span>
-                <span className={`text-[11px] leading-tight ${step.done ? "font-semibold text-[#3f3a48]" : "text-[#8b8490]"}`}>{step.label}</span>
-              </li>
-            ))}
-          </ol>
-
-          {isPending ? (
-            <div className="mt-5 grid gap-3 rounded-md border border-[#d7a52c] bg-[#fff9ed] px-4 py-3 text-sm text-[#805300]">
-              <div className="flex items-start gap-3">
-                <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                <span>
-                  สถานะสมาชิก: รอการตรวจสอบจากผู้ดูแลก่อน จึงจะจองเรียนหรือสมัครกิจกรรมได้
-                </span>
-              </div>
-              <div className="flex items-start gap-3">
-                <MailCheck className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-                <span>
-                  เมื่อผู้ดูแลอนุมัติ ระบบจะสร้างรายการแจ้งเตือนอีเมลเพื่อแจ้งว่าสมาชิกใช้งานได้แล้ว
-                </span>
-              </div>
-            </div>
-          ) : access.isBypass ? (
-            <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
-              <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              <span>โหมดทดลอง ไม่ได้ดึงข้อมูลจริงจากบัญชีผู้ใช้</span>
-            </div>
-          ) : !access.isProfileComplete ? (
-            <div className="mt-5 flex items-start gap-3 rounded-md bg-[#fff5d8] px-4 py-3 text-sm text-[#805300]">
-              <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
-              <span>กรุณากรอกข้อมูลส่วนตัวให้ครบก่อนสมัครกิจกรรม</span>
-            </div>
-          ) : null}
-
-          <dl className="mt-4 grid grid-cols-2 gap-3 rounded-lg border border-[#e6e2ee] bg-white/70 p-4 text-sm">
-            {[
-              ["แต้มต่อ", orUnset(currentMember?.handicap)],
-              ["ระดับฝีมือ", currentMember?.skill_level === "beginner" ? "เริ่มต้น" : currentMember?.skill_level === "intermediate" ? "ปานกลาง" : currentMember?.skill_level === "advanced" ? "ชำนาญ" : UNSET],
-              ["หน่วยงาน", orUnset(currentMember?.department ?? currentMember?.organization)],
-              ["ตำแหน่ง", orUnset(currentMember?.position ?? currentMember?.affiliation)],
-            ].map(([label, value]) => (
-              <div key={String(label)}>
-                <dt className="text-xs text-[#6b6475]">{label}</dt>
-                <dd className="mt-0.5 font-semibold text-[#3f3a48]">{value}</dd>
-              </div>
-            ))}
-          </dl>
-
-          <Link
-            className="mt-4 flex h-12 items-center justify-center gap-2 rounded-lg border border-[#d9d3e6] bg-white px-4 text-sm font-semibold text-[#722257] transition hover:border-[#722257]"
-            href={profileHref}
-          >
-            <Pencil className="size-4" aria-hidden="true" />
-            แก้ไขข้อมูลส่วนตัว
-          </Link>
-
-          {notifications?.length ? (
-            <section aria-labelledby="inbox-title" className="mt-4 rounded-lg border border-[#e6e2ee] bg-white/70 p-4" id="inbox">
-              <div className="flex items-center justify-between gap-2">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-[#722257]" id="inbox-title">
-                  <Bell className="size-4" aria-hidden="true" />
-                  การแจ้งเตือน
-                  {unreadCount ? (
-                    <span className="rounded-full bg-[#c69214] px-2 py-0.5 text-[11px] font-bold text-white">{unreadCount} ใหม่</span>
-                  ) : null}
-                </h2>
-                {unreadCount ? (
-                  <form action={markNotificationsRead}>
-                    <button className="text-xs font-semibold text-[#8b5b7a] hover:text-[#722257]" type="submit">
-                      อ่านทั้งหมด
-                    </button>
-                  </form>
+                {showPipeline ? (
+                  <ol aria-label="ขั้นตอนเปิดใช้งานสมาชิก" className={`grid grid-cols-4 gap-1 rounded-lg bg-canvas p-3 ${todoCount ? "mb-4" : ""}`}>
+                    {memberPipeline.map((step, index) => {
+                      const current = index === currentStep;
+                      return (
+                        <li
+                          aria-current={current ? "step" : undefined}
+                          className="flex flex-col items-center gap-1.5 text-center"
+                          key={step.label}
+                        >
+                          <span
+                            className={`flex size-8 items-center justify-center rounded-full text-sm font-semibold ${
+                              step.done
+                                ? "bg-brand-600 text-white"
+                                : current
+                                  ? "border-2 border-gold-500 bg-white text-gold-ink"
+                                  : "border-2 border-line bg-white text-ink-subtle"
+                            }`}
+                          >
+                            {step.done ? <Check className="size-4" aria-hidden="true" /> : index + 1}
+                          </span>
+                          <span className={`text-xs ${step.done || current ? "font-semibold text-ink" : "font-medium text-ink-subtle"}`}>
+                            {step.label}
+                            {step.done ? <span className="sr-only"> (เสร็จแล้ว)</span> : null}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ol>
                 ) : null}
-              </div>
-              <ul className="mt-3 grid gap-2">
-                {notifications.map((item) => (
-                  <li
-                    className={`rounded-md px-3 py-2 text-xs leading-5 ${item.read_at ? "bg-white text-[#6b6475]" : "border-l-4 border-[#c69214] bg-[#fffaf0] text-[#3f3a48]"}`}
-                    key={item.id}
-                  >
-                    <p className="font-semibold">{item.subject}</p>
-                    <p className="mt-0.5">{item.body}</p>
-                    <p className="mt-1 text-[11px] text-[#98a2b3]">{formatBangkokDateTime(item.created_at)}</p>
+
+                {todoCount ? (
+                  <ul className="divide-y divide-line">
+                    {isPending ? (
+                      <TodoItem icon={ShieldAlert} title="รอผู้ดูแลตรวจสอบข้อมูลสมาชิก">
+                        <p>ตรวจแล้วจึงจองเรียนและสมัครกิจกรรมได้ อนุมัติแล้วจะแจ้งทางอีเมล</p>
+                        <Link className={todoLink} href={profileHref}>
+                          ตรวจข้อมูลของฉัน
+                        </Link>
+                      </TodoItem>
+                    ) : null}
+                    {blockedOther ? (
+                      <TodoItem icon={ShieldAlert} title="บัญชียังจองเรียนและสมัครกิจกรรมไม่ได้">
+                        ติดต่อผู้ดูแลชมรมเพื่อเปิดใช้งาน
+                      </TodoItem>
+                    ) : null}
+                    {needsProfile ? (
+                      <TodoItem icon={EditIcon} title="กรอกข้อมูลส่วนตัวให้ครบ">
+                        <p>ต้องมีชื่อและเบอร์โทรก่อนสมัครกิจกรรม</p>
+                        <Link className={todoLink} href={profileHref}>
+                          กรอกข้อมูล
+                        </Link>
+                      </TodoItem>
+                    ) : null}
+                    {needsAck ? (
+                      <TodoItem icon={LessonsIcon} title="อ่านประกาศคลาสเรียน">
+                        <p>กดรับทราบก่อนจองรอบเรียน</p>
+                        <a className={todoLink} href={`${lessonsHref}#slots`}>
+                          อ่านประกาศ
+                        </a>
+                      </TodoItem>
+                    ) : null}
+                    {lessonOffers.length ? (
+                      <TodoItem icon={WaitlistIcon} title={`มีที่ว่างรอคุณยืนยัน ${lessonOffers.length} รอบ`}>
+                        <p>ยืนยันก่อนหมดเวลา ไม่อย่างนั้นที่นั่งจะส่งต่อให้คนถัดไป</p>
+                        <a className={todoLink} href="#lessons">
+                          ไปยืนยัน
+                        </a>
+                      </TodoItem>
+                    ) : null}
+                    {pendingSlips.map(({ event, registration }) => {
+                      const payment = paymentByRegistration.get(registration.id);
+                      return (
+                        <TodoItem icon={PaymentsIcon} key={registration.id} title={`แนบสลิปค่าสมัคร ${event?.name ?? "กิจกรรม"}`}>
+                          <p>
+                            ยอดโอน <span className="font-semibold tabular-nums text-ink">{formatBaht(event?.member_price)}</span>
+                            {" · "}
+                            {formatThaiDateShort(event?.event_date)}
+                          </p>
+                          {payment?.status === "rejected" ? (
+                            <p className="mt-1 font-medium text-danger">สลิปเดิมไม่ผ่านการตรวจ ส่งใหม่อีกครั้ง</p>
+                          ) : null}
+                          <PromptPayPaymentCard
+                            amount={Number(event?.member_price ?? 0)}
+                            className="mt-3"
+                            description={`ค่าสมัคร ${event?.name ?? "กิจกรรม"}`}
+                            settings={paymentSettings}
+                          />
+                          <form action={uploadEventPaymentProof} className="mt-3 grid gap-3 sm:grid-cols-2 sm:items-start">
+                            <input name="registrationId" type="hidden" value={registration.id} />
+                            <PaymentSlipInput name="paymentProof" required />
+                            <div>
+                              <label className={fieldLabel} htmlFor={`slip-at-${registration.id}`}>
+                                วันและเวลาที่โอน
+                              </label>
+                              <input
+                                className={fieldInputClass("lg")}
+                                id={`slip-at-${registration.id}`}
+                                name="transferredAt"
+                                type="datetime-local"
+                              />
+                            </div>
+                            <SubmitButton
+                              className={`${buttonClass("primary", "lg")} w-full sm:col-span-2 sm:w-fit`}
+                              pendingText="กำลังส่งสลิป..."
+                            >
+                              <UploadIcon className="size-4" aria-hidden="true" /> ส่งสลิป
+                            </SubmitButton>
+                          </form>
+                        </TodoItem>
+                      );
+                    })}
+                    {unreadCount ? (
+                      <TodoItem icon={NotificationsIcon} title={`แจ้งเตือนใหม่ ${unreadCount} รายการ`}>
+                        <a className={todoLink} href="#inbox">
+                          อ่านแจ้งเตือน
+                        </a>
+                      </TodoItem>
+                    ) : null}
+                  </ul>
+                ) : null}
+              </MemberSection>
+            ) : null}
+          </div>
+
+          {modules.lessons ? (
+            <LessonsMemberSummary
+              announcementAckVersion={currentMember?.lesson_announcement_ack_version}
+              canBook={canRegister}
+              clubId={clubId}
+              isBypass={access.isBypass}
+              memberId={memberId}
+            />
+          ) : null}
+
+          {modules.events ? (
+            <MemberSection
+              description={
+                access.isBypass
+                  ? "โหมดทดลอง สมัครจริงไม่ได้"
+                  : !canRegister
+                    ? "สมัครได้เมื่อสมาชิกได้รับการอนุมัติแล้ว"
+                    : undefined
+              }
+              icon={EventsIcon}
+              id="events"
+              title="กิจกรรมออกรอบ"
+            >
+              <h3 className="text-base font-semibold text-ink">เปิดรับสมัคร</h3>
+              {signUpEvents.length ? (
+                <ul className="mt-2 grid gap-3">
+                  {signUpEvents.map((event) => {
+                    const counts = seatsByEvent.get(event.id);
+                    const full = Boolean(event.capacity) && (counts?.seats ?? 0) >= event.capacity;
+                    const seatsLeft = counts && event.capacity ? event.capacity - counts.seats : null;
+                    const fee = Number(event.member_price ?? 0);
+                    const teeOff = event.tee_off_time ? ` · ออกรอบ ${formatThaiTime(event.tee_off_time)}` : "";
+                    return (
+                      <li className="rounded-lg border border-line p-4" key={event.id}>
+                        <p className="text-h3 font-semibold text-ink">{event.name}</p>
+                        <div className="mt-2 grid gap-1 text-sm text-ink-muted">
+                          <Meta icon={CalendarIcon} label="วันที่">
+                            {formatThaiDateShort(event.event_date)}
+                            {teeOff}
+                          </Meta>
+                          <Meta icon={MapPin} label="สนาม">{event.venue || NO_VENUE}</Meta>
+                          {event.capacity ? (
+                            <Meta icon={UsersRound} label="จำนวนที่รับ">
+                              <span className="tabular-nums">
+                                รับ {event.capacity} คน
+                                {seatsLeft === null
+                                  ? ""
+                                  : seatsLeft > 0
+                                    ? ` · เหลือ ${seatsLeft} ที่`
+                                    : ` · เต็มแล้ว (สำรอง ${counts?.waitlist ?? 0} คน)`}
+                              </span>
+                            </Meta>
+                          ) : null}
+                        </div>
+                        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <p className="text-base text-ink-muted">
+                            ค่าสมัคร <span className="font-semibold tabular-nums text-ink">{formatFee(event.member_price)}</span>
+                          </p>
+                          {canRegister ? (
+                            <form action={registerForEvent} className="w-full sm:w-auto">
+                              <input name="eventId" type="hidden" value={event.id} />
+                              <ConfirmSubmitButton
+                                className={`${buttonClass("primary", "lg")} w-full`}
+                                confirmLabel={full ? "ต่อคิวสำรอง" : "สมัคร"}
+                                details={
+                                  <>
+                                    <dl className="grid gap-1.5 rounded-lg bg-canvas p-3">
+                                      <div>
+                                        <dt className="sr-only">กิจกรรม</dt>
+                                        <dd className="font-semibold text-ink">{event.name}</dd>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <dt className="w-16 shrink-0 text-ink-subtle">วันที่</dt>
+                                        <dd>
+                                          {formatThaiDateLong(event.event_date)}
+                                          {teeOff}
+                                        </dd>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <dt className="w-16 shrink-0 text-ink-subtle">สนาม</dt>
+                                        <dd>{event.venue || NO_VENUE}</dd>
+                                      </div>
+                                      <div className="flex gap-2">
+                                        <dt className="w-16 shrink-0 text-ink-subtle">ค่าสมัคร</dt>
+                                        <dd className="font-semibold tabular-nums text-ink">{formatFee(event.member_price)}</dd>
+                                      </div>
+                                    </dl>
+                                    {fee > 0 && !full ? <p className="mt-2">หลังสมัคร แนบสลิปโอนเงินในหน้านี้</p> : null}
+                                  </>
+                                }
+                                message={
+                                  full
+                                    ? "กิจกรรมเต็มแล้ว จะได้อยู่ในคิวสำรอง มีที่ว่างจะเลื่อนให้และแจ้งให้ทราบ"
+                                    : "ตรวจรายละเอียดก่อนสมัคร"
+                                }
+                                title={full ? "ยืนยันต่อคิวสำรอง" : "ยืนยันสมัครกิจกรรม"}
+                                tone="primary"
+                              >
+                                {full ? (
+                                  <WaitlistIcon className="size-4" aria-hidden="true" />
+                                ) : (
+                                  <UserPlus className="size-4" aria-hidden="true" />
+                                )}
+                                {full ? "ต่อคิวสำรอง" : "สมัครกิจกรรม"}
+                              </ConfirmSubmitButton>
+                            </form>
+                          ) : null}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <div className="mt-2">
+                  <EmptyNote>
+                    {visibleOpenEvents.length
+                      ? "สมัครครบทุกกิจกรรมที่เปิดอยู่แล้ว"
+                      : "ยังไม่มีกิจกรรมที่เปิดรับสมัคร ติดตามประกาศจากชมรม"}
+                  </EmptyNote>
+                </div>
+              )}
+
+              {sortedRegistrations.length ? (
+                <div className="mt-6">
+                  <h3 className="text-base font-semibold text-ink">ที่สมัครไว้</h3>
+                  <ul className="mt-2 divide-y divide-line">
+                    {sortedRegistrations.map((item) => {
+                      const { event, group, registration } = item;
+                      return (
+                        <li className="py-3" key={registration.id}>
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <p className="min-w-0 font-semibold text-ink">{event?.name ?? "กิจกรรม"}</p>
+                            <StatusBadge kind="registration" status={registration.status}>
+                              {eventRegistrationStatusLabels[registration.status] ?? registration.status}
+                            </StatusBadge>
+                          </div>
+                          <div className="mt-1.5 grid gap-1 text-sm text-ink-muted sm:flex sm:flex-wrap sm:gap-x-4">
+                            <Meta icon={CalendarIcon} label="วันที่">
+                              {formatThaiDateShort(event?.event_date)}
+                              {event?.tee_off_time ? ` · ออกรอบ ${formatThaiTime(event.tee_off_time)}` : ""}
+                            </Meta>
+                            <Meta icon={MapPin} label="สนาม">{event?.venue || NO_VENUE}</Meta>
+                          </div>
+                          {group ? (
+                            <p className="mt-1.5 flex items-start gap-2 text-sm font-medium text-ink">
+                              <UsersRound className="mt-1 size-4 shrink-0 text-ink-subtle" aria-hidden="true" />
+                              {groupText(group)}
+                            </p>
+                          ) : eventIsAhead(item) && registration.status !== "waitlist" ? (
+                            <p className="mt-1.5 text-sm text-ink-subtle">ก๊วนและเวลาออกตัวจะแจ้งที่นี่เมื่อจัดก๊วนแล้ว</p>
+                          ) : null}
+                          {registration.checked_in_at && registration.status !== "checked_in" ? (
+                            <p className="mt-1.5 flex items-center gap-1.5 text-sm font-medium text-success">
+                              <Check className="size-4" aria-hidden="true" />
+                              เช็กอินแล้ว
+                            </p>
+                          ) : null}
+                          {registration.status === "waitlist" ? (
+                            <p className="mt-1.5 flex items-start gap-2 text-sm text-warning">
+                              <WaitlistIcon className="mt-1 size-4 shrink-0" aria-hidden="true" />
+                              มีที่ว่างจะเลื่อนให้และแจ้งให้ทราบ
+                            </p>
+                          ) : null}
+                          {registration.status === "pending_payment" && Number(event?.member_price ?? 0) > 0 ? (
+                            <p className="mt-1.5 text-sm font-medium text-warning">
+                              ยังไม่ได้แนบสลิป{" "}
+                              <a className="font-semibold text-brand-600 underline underline-offset-4" href="#todo">
+                                แนบสลิป
+                              </a>
+                            </p>
+                          ) : null}
+                          {registration.status === "payment_review" ? (
+                            <p className="mt-1.5 text-sm text-ink-muted">ได้รับสลิปแล้ว ผู้ดูแลกำลังตรวจ</p>
+                          ) : null}
+                          <EventsRegistrationExtras
+                            allEventIds={sortedRegistrations.map((entry) => entry.registration.event_id).join(",")}
+                            eventDate={event?.event_date}
+                            eventId={registration.event_id}
+                            isBypass={access.isBypass}
+                            registrationId={registration.id}
+                            status={registration.status}
+                          />
+                          {event?.status === "open" && cancellableRegistration.includes(registration.status) ? (
+                            <CancelRegistrationForm
+                              className="mt-3 w-fit"
+                              eventName={event?.name ?? "กิจกรรม"}
+                              registrationId={registration.id}
+                            />
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
+            </MemberSection>
+          ) : null}
+
+          {modules.news && announcements?.length ? (
+            <MemberSection icon={NewsIcon} id="news" title="ข่าวจากชมรม">
+              <ul className="divide-y divide-line">
+                {announcements.slice(0, 2).map((news) => (
+                  <li className="py-3 first:pt-0 last:pb-0" key={news.id}>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-subtle">
+                      {news.is_pinned ? (
+                        <span className="rounded-full bg-gold-500 px-2 font-medium text-gold-ink">ประกาศสำคัญ</span>
+                      ) : null}
+                      {news.category ? <span className="font-medium">{news.category}</span> : null}
+                      <span>{formatThaiDateShort(news.published_at)}</span>
+                    </div>
+                    <h3 className="mt-1 text-base font-semibold text-ink">{news.title}</h3>
+                    {news.summary ? <p className="mt-1 line-clamp-3 text-sm text-ink-muted">{news.summary}</p> : null}
                   </li>
                 ))}
               </ul>
-            </section>
-          ) : null}
-        </section>
-
-        <section className="grid min-w-0 grid-cols-1 gap-4">
-          {nothingOpen ? (
-            <article className="rounded-lg border border-dashed border-[#d9d3e6] bg-white/80 p-8 text-center">
-              <p className="text-lg font-semibold text-[#722257]">ระบบกำลังจะเปิดให้บริการ</p>
-              <p className="mt-2 text-sm text-[#6b6475]">ชมรมกำลังเตรียมข้อมูล จะแจ้งให้ทราบเมื่อเปิดจองเรียนและสมัครกิจกรรม</p>
-            </article>
-          ) : null}
-
-          {modules.lessons ? (
-          <>
-          <article className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
-                  <GraduationCap className="size-5" aria-hidden="true" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-[#722257]">
-                    จองคลาสเรียน
-                  </h2>
-                  <p className="mt-1 text-sm text-[#6b6475]">
-                    เลือกรอบที่สะดวก ระบบจัดที่นั่งตามลำดับการจอง
-                  </p>
-                </div>
-              </div>
-              <ChevronRight className="size-5 text-[#9a94a6]" aria-hidden="true" />
-            </div>
-
-            <div className="mt-4" id="lessons">
-              {mustAckAnnouncement ? (
-                <div className="rounded-lg border border-[#e6d9a8] bg-[#fffaf0] p-5">
-                  <span className="inline-flex rounded-full bg-[#fff5d8] px-3 py-1 text-xs font-semibold text-[#805300]">
-                    ประกาศ{lessonSettings.announcement_version > 1 ? ` · ฉบับที่ ${lessonSettings.announcement_version}` : ""}
-                  </span>
-                  {lessonSettings.announcement_title ? (
-                    <h3 className="mt-3 text-lg font-semibold text-[#3f3a48]">{lessonSettings.announcement_title}</h3>
-                  ) : null}
-                  <div className="mt-3 whitespace-pre-wrap border-l-4 border-[#c69214] bg-white/70 px-4 py-3 text-sm leading-7 text-[#3f3a48]">
-                    {lessonSettings.announcement_body}
-                  </div>
-                  <form action={acknowledgeLessonAnnouncement} className="mt-4 grid gap-3">
-                    <input name="version" type="hidden" value={lessonSettings.announcement_version} />
-                    <label className="flex items-start gap-3 text-sm text-[#3f3a48]">
-                      <input className="mt-1 size-4 accent-[#722257]" name="accepted" required type="checkbox" />
-                      ฉันได้อ่านและยอมรับเงื่อนไขข้างต้น
-                    </label>
-                    <button className="h-11 w-fit rounded-md bg-[#722257] px-5 text-sm font-semibold text-white" type="submit">
-                      รับทราบ
-                    </button>
-                  </form>
-                </div>
-              ) : (
-                <>
-                  <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#6b6475]">
-                    <span>จองได้สูงสุด {lessonSettings.max_bookings_per_member ? `${lessonSettings.max_bookings_per_member} รอบ` : "ไม่จำกัด"}</span>
-                    <span>ยกเลิกได้ก่อนเรียน {lessonSettings.cancel_cutoff_hours} ชม.</span>
-                    <span>คิวสำรองเลื่อนขึ้นอัตโนมัติเมื่อมีที่ว่าง</span>
-                    {lessonSettings.booking_close_at && bookingPhase === "open" ? (
-                      <span>ปิดลงทะเบียน {formatBangkokDateTime(lessonSettings.booking_close_at)}</span>
-                    ) : null}
-                  </div>
-                  {hasLessonAnnouncement(lessonSettings) ? (
-                    <details className="mb-4 rounded-md border border-[#e6e2ee] bg-white/70 px-4 py-3 text-sm">
-                      <summary className="cursor-pointer font-semibold text-[#722257]">
-                        ดูประกาศ{lessonSettings.announcement_title ? ` · ${lessonSettings.announcement_title}` : ""}
-                      </summary>
-                      <div className="mt-3 whitespace-pre-wrap leading-7 text-[#3f3a48]">{lessonSettings.announcement_body}</div>
-                    </details>
-                  ) : null}
-                  {memberSlotTableItems.length ? (
-                    <InteractiveSlotBoard
-                      bookAction={bookLessonSlot}
-                      canBook={canRegister}
-                      cancelAction={cancelLessonBooking}
-                      cancelCutoffHours={lessonSettings.cancel_cutoff_hours}
-                      changeAction={changeLessonSlot}
-                      courses={lessonCourses}
-                      currentBookingId={currentLessonBooking?.id}
-                      key={memberSlotTableItems.map((slot) => `${slot.id}:${slot.bookedCount}:${slot.myPosition ?? ""}`).join("|")}
-                      openAt={lessonSettings.booking_open_at}
-                      phase={bookingPhase}
-                      slots={memberSlotTableItems}
-                    />
-                  ) : (
-                    <div className="rounded-md border border-dashed border-[#d9d3e6] bg-white/60 px-4 py-6 text-center text-sm text-[#6b6475]">
-                      ยังไม่มีรอบที่เปิดจอง
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          </article>
-          </>
-          ) : null}
-
-          <article className="rounded-lg border border-[#e6e2ee] bg-white/95 p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-            <div className="flex items-center gap-3">
-              <div className="flex size-10 items-center justify-center rounded-md bg-[#fff5d8] text-[#8a6000]">
-                <ClipboardCheck className="size-5" aria-hidden="true" />
-              </div>
-              <div>
-                <h2 className="text-lg font-semibold text-[#722257]">รายการของฉัน</h2>
-                <p className="mt-1 text-sm text-[#6b6475]">
-                  กิจกรรมและคลาสเรียนที่สมัครไว้
-                </p>
-              </div>
-            </div>
-
-            {(modules.events && registrations?.length) || (modules.lessons && lessonBookings?.length) ? (
-              <div className={`mt-4 grid gap-4 ${modules.events && modules.lessons ? "md:grid-cols-2" : ""}`}>
-                {modules.events ? (
-                <>
-                <section className="rounded-md border border-[#e6e2ee] bg-white/70 p-4">
-                  <h3 className="text-sm font-semibold text-[#722257]">กิจกรรมของฉัน</h3>
-                  <div className="mt-3 grid gap-3">
-                    {registrations?.length ? (
-                      registrations.map((registration) => {
-                        const event = firstRelated(registration.events);
-                        const payment = paymentByRegistration.get(registration.id);
-
-                        return (
-                          <div className="border-t border-[#ece8f1] pt-3 first:border-t-0 first:pt-0" key={registration.id}>
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <p className="font-semibold text-[#3f3a48]">
-                                {event?.name ?? "กิจกรรม"}
-                              </p>
-                              <span className="rounded-md bg-[#f8edf4] px-2 py-1 text-xs font-semibold text-[#722257]">
-                                {eventRegistrationStatusLabels[registration.status] ??
-                                  registration.status}
-                              </span>
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#6b6475]">
-                              <span className="flex items-center gap-1">
-                                <CalendarDays className="size-3.5" aria-hidden="true" />
-                                {formatThaiDate(event?.event_date)}
-                                {event?.tee_off_time ? ` · ${event.tee_off_time.slice(0, 5)} น.` : ""}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <MapPin className="size-3.5" aria-hidden="true" />
-                                {event?.venue ?? "ยังไม่ระบุสนาม"}
-                              </span>
-                            </div>
-                            {(() => {
-                              const group = firstRelated(registration.event_pairing_groups);
-                              if (registration.status === "waitlist") {
-                                return (
-                                  <p className="mt-2 rounded-md bg-[#eef2ff] px-3 py-2 text-xs font-semibold text-[#3538cd]">
-                                    อยู่ในรายชื่อสำรอง ระบบจะเลื่อนสิทธิ์และแจ้งให้ทราบเมื่อมีที่ว่าง
-                                  </p>
-                                );
-                              }
-                              if (!group && !registration.checked_in_at) return null;
-                              return (
-                                <p className="mt-2 flex flex-wrap items-center gap-2 rounded-md bg-[#edf9f3] px-3 py-2 text-xs font-semibold text-[#16794b]">
-                                  {group ? (
-                                    <span>
-                                      ก๊วน {group.group_no} · ออกตัว {group.tee_time ? `${group.tee_time.slice(0, 5)} น.` : UNSET} · หลุม {group.start_hole}
-                                    </span>
-                                  ) : null}
-                                  {registration.checked_in_at ? <span>· เช็กอินแล้ว</span> : null}
-                                </p>
-                              );
-                            })()}
-                            {registration.status === "pending_payment" &&
-                            (event?.member_price ?? 0) > 0 ? (
-                              <form
-                                action={uploadEventPaymentProof}
-                                className="mt-3 grid gap-3 rounded-md bg-[#fff9e8] p-3"
-                              >
-                                <input name="registrationId" type="hidden" value={registration.id} />
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <p className="text-sm font-semibold text-[#722257]">
-                                    ยอดชำระ {(event?.member_price ?? 0).toLocaleString()} บาท
-                                  </p>
-                                  {payment?.status === "rejected" ? (
-                                    <span className="text-xs font-semibold text-[#9f1d1d]">
-                                      หลักฐานเดิมไม่ผ่าน กรุณาส่งใหม่
-                                    </span>
-                                  ) : null}
-                                </div>
-                                <div className="grid gap-2 sm:grid-cols-[1fr_180px_auto] sm:items-end">
-                                  <label className="text-xs font-semibold text-[#3f3a48]">
-                                    หลักฐานการโอน
-                                    <input
-                                      accept="image/jpeg,image/png,image/webp,application/pdf"
-                                      className="mt-1 block h-10 w-full rounded-md border border-[#d9d3e6] bg-white px-2 py-1 text-xs"
-                                      name="paymentProof"
-                                      required
-                                      type="file"
-                                    />
-                                  </label>
-                                  <label className="text-xs font-semibold text-[#3f3a48]">
-                                    วันและเวลาที่โอน
-                                    <input
-                                      className="mt-1 h-10 w-full rounded-md border border-[#d9d3e6] bg-white px-2 text-xs"
-                                      name="transferredAt"
-                                      type="datetime-local"
-                                    />
-                                  </label>
-                                  <button className="flex h-10 items-center justify-center gap-2 rounded-md bg-[#722257] px-3 text-xs font-semibold text-white" type="submit">
-                                    <Upload className="size-3.5" aria-hidden="true" /> ส่งหลักฐาน
-                                  </button>
-                                </div>
-                              </form>
-                            ) : null}
-                            {registration.status === "payment_review" ? (
-                              <p className="mt-3 rounded-md bg-[#fff5d8] px-3 py-2 text-xs font-medium text-[#805300]">
-                                ได้รับหลักฐานแล้ว ผู้ดูแลกำลังตรวจสอบ
-                              </p>
-                            ) : null}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-sm text-[#6b6475]">ยังไม่มีกิจกรรมที่สมัครไว้</p>
-                    )}
-                  </div>
-                </section>
-                </>
-                ) : null}
-
-                {modules.lessons ? (
-                <>
-                <section className="rounded-md border border-[#e6e2ee] bg-white/70 p-4">
-                  <h3 className="text-sm font-semibold text-[#722257]">ตารางเรียนของฉัน</h3>
-                  <div className="mt-3 grid gap-3">
-                    {lessonBookings?.length ? (
-                      lessonBookings.map((booking) => {
-                        const slot = firstRelated(booking.lesson_slots);
-                        const program = firstRelated(slot?.lesson_programs);
-
-                        return (
-                          <div className="border-t border-[#ece8f1] pt-3 first:border-t-0 first:pt-0" key={booking.id}>
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                              <div>
-                                <p className="font-semibold text-[#3f3a48]">
-                                  {slot?.title ?? "รอบเรียน"}
-                                </p>
-                                <p className="mt-1 text-xs text-[#6b6475]">
-                                  {program?.name ?? "คอร์สเรียน"}
-                                </p>
-                              </div>
-                              <span className="rounded-md bg-[#f8edf4] px-2 py-1 text-xs font-semibold text-[#722257]">
-                                {booking.status === "booked" && queueByBooking.has(booking.id) && slot
-                                  ? queueStatusLabel(queueByBooking.get(booking.id)!, slot.capacity)
-                                  : lessonBookingStatusLabels[booking.status] ?? booking.status}
-                              </span>
-                            </div>
-                            <div className="mt-2 flex flex-wrap gap-3 text-xs text-[#6b6475]">
-                              <span className="flex items-center gap-1">
-                                <Clock className="size-3.5" aria-hidden="true" />
-                                {formatThaiDate(slot?.lesson_date)}
-                                {slot?.start_time ? ` · ${slot.start_time.slice(0, 5)}-${slot.end_time?.slice(0, 5) ?? ""} น.` : ""}
-                              </span>
-                              <span className="flex items-center gap-1">
-                                <MapPin className="size-3.5" aria-hidden="true" />
-                                {slot?.venue ?? "ยังไม่ระบุสถานที่"}
-                              </span>
-                            </div>
-                            {booking.status === "booked" &&
-                            slot &&
-                            queueByBooking.has(booking.id) &&
-                            queueByBooking.get(booking.id)! <= slot.capacity ? (
-                              <a
-                                className="mt-2 inline-flex h-8 items-center gap-1.5 rounded-md border border-[#d9d3e6] bg-white px-2.5 text-xs font-semibold text-[#722257] hover:border-[#722257]"
-                                href={googleCalendarUrl({
-                                  date: slot.lesson_date,
-                                  details: `${program?.name ?? "คอร์สเรียนกอล์ฟ"} · PEA Golf Club`,
-                                  endTime: slot.end_time,
-                                  location: slot.venue,
-                                  startTime: slot.start_time,
-                                  title: `เรียนกอล์ฟ: ${slot.title}`,
-                                })}
-                                rel="noopener noreferrer"
-                                target="_blank"
-                              >
-                                <CalendarPlus className="size-3.5" aria-hidden="true" />
-                                เพิ่มลงปฏิทิน
-                              </a>
-                            ) : null}
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <p className="text-sm text-[#6b6475]">ยังไม่มีเวลาเรียนที่จองไว้</p>
-                    )}
-                  </div>
-                </section>
-                </>
-                ) : null}
-              </div>
-            ) : (
-              <div className="mt-4 rounded-md border border-dashed border-[#d9d3e6] bg-white/60 px-4 py-6 text-center text-sm text-[#6b6475]">
-                ยังไม่มีรายการ
-              </div>
-            )}
-          </article>
-
-          {modules.events ? (
-          <>
-          <article className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
-                  <CalendarDays className="size-5" aria-hidden="true" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-[#722257]">
-                    กิจกรรมที่เปิดรับสมัคร
-                  </h2>
-                  <p className="mt-1 text-sm text-[#6b6475]">
-                    สมัครได้เมื่อสมาชิกได้รับการอนุมัติแล้ว
-                  </p>
-                </div>
-              </div>
-              <ChevronRight className="size-5 text-[#9a94a6]" aria-hidden="true" />
-            </div>
-
-            <div className="mt-4 grid gap-3">
-              {visibleOpenEvents?.length ? (
-                visibleOpenEvents.map((event) => {
-                  const registration = registrationByEvent.get(event.id);
-
-                  return (
-                    <div
-                      className="rounded-md border border-[#e6e2ee] bg-white/70 p-4"
-                      key={event.id}
-                    >
-                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <p className="font-semibold text-[#722257]">{event.name}</p>
-                          <div className="mt-2 flex flex-wrap gap-3 text-sm text-[#6b6475]">
-                            <span className="flex items-center gap-1">
-                              <CalendarDays className="size-4" aria-hidden="true" />
-                              {formatThaiDate(event.event_date)}
-                              {event.tee_off_time ? ` · ${event.tee_off_time.slice(0, 5)} น.` : ""}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <MapPin className="size-4" aria-hidden="true" />
-                              {event.venue ?? "ยังไม่ระบุสนาม"}
-                            </span>
-                            {event.capacity ? (
-                              <span>
-                                รับสมัคร {event.capacity} คน
-                                {seatsByEvent.has(event.id)
-                                  ? (() => {
-                                      const counts = seatsByEvent.get(event.id)!;
-                                      const left = event.capacity - counts.seats;
-                                      return left > 0
-                                        ? ` · เหลือ ${left} ที่`
-                                        : ` · เต็มแล้ว (สำรอง ${counts.waitlist} คน)`;
-                                    })()
-                                  : null}
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-                        <div className="flex flex-col gap-2 sm:items-end">
-                          <span className="w-fit rounded-md bg-white px-3 py-1 text-sm font-semibold text-[#722257]">
-                            {event.member_price.toLocaleString()} บาท
-                          </span>
-                          {registration ? (
-                            <div className="grid justify-items-end gap-1">
-                              <span className="flex h-10 w-fit items-center gap-2 rounded-md bg-[#f8edf4] px-3 text-sm font-semibold text-[#722257]">
-                                <CheckCircle2 className="size-4" aria-hidden="true" />
-                                {registration.status === "waitlist" ? "อยู่ในรายชื่อสำรอง" : "สมัครแล้ว"}
-                              </span>
-                              {["registered", "pending_payment", "payment_review", "waitlist"].includes(
-                                registration.status,
-                              ) ? (
-                                <form action={cancelEventRegistration}>
-                                  <input
-                                    name="registrationId"
-                                    type="hidden"
-                                    value={registration.id}
-                                  />
-                                  <ConfirmSubmitButton
-                                    className="h-9 rounded-md px-3 text-sm font-semibold text-[#8a3442] transition hover:bg-[#fff0f1]"
-                                    message="ยืนยันยกเลิกการสมัครกิจกรรมนี้หรือไม่"
-                                  >
-                                    ยกเลิกการสมัคร
-                                  </ConfirmSubmitButton>
-                                </form>
-                              ) : null}
-                            </div>
-                          ) : canRegister ? (
-                            <form action={registerForEvent}>
-                              <input name="eventId" type="hidden" value={event.id} />
-                              <button
-                                className="flex h-10 items-center justify-center gap-2 rounded-md bg-[#722257] px-4 text-sm font-semibold text-white"
-                                type="submit"
-                              >
-                                <ClipboardCheck className="size-4" aria-hidden="true" />
-                                {event.capacity && (seatsByEvent.get(event.id)?.seats ?? 0) >= event.capacity
-                                  ? "ลงชื่อสำรอง"
-                                  : "สมัครกิจกรรม"}
-                              </button>
-                            </form>
-                          ) : (
-                            <span className="w-fit rounded-md bg-[#f4f6fa] px-3 py-2 text-sm font-medium text-[#6b6475]">
-                              {access.isBypass
-                                ? "โหมดทดลอง"
-                                : "รออนุมัติสมาชิก"}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-md border border-[#e6e2ee] bg-white/70 p-4 text-sm text-[#6b6475]">
-                  ยังไม่มีกิจกรรมที่เปิดรับสมัคร
-                </div>
-              )}
-            </div>
-          </article>
-          </>
-          ) : null}
-
-          {modules.news ? (
-          <>
-          <article className="overflow-hidden rounded-lg border border-[#e2e8ef] bg-white shadow-[0_8px_24px_rgba(30,41,59,.05)]">
-            <div className="flex items-center justify-between border-b border-[#edf0f3] px-5 py-4">
-              <div className="flex items-center gap-3"><span className="flex size-9 items-center justify-center rounded-md bg-[#e9f7fa] text-[#168aad]"><Newspaper className="size-4" /></span><div><h2 className="font-semibold text-[#243244]">ข่าวประชาสัมพันธ์ชมรม</h2><p className="text-xs text-[#667085]">ประกาศและข่าวล่าสุดสำหรับสมาชิก</p></div></div>
-            </div>
-            <div className="grid gap-px bg-[#edf0f3] sm:grid-cols-2 xl:grid-cols-4">
-              {announcements?.length ? announcements.map((news, index) => (
-                <div className="bg-white p-4" key={news.id}><div className="flex items-center justify-between"><span className={`rounded-full px-2 py-1 text-[11px] font-semibold ${index === 0 ? "bg-[#fff4d7] text-[#8b6508]" : "bg-[#eef7fa] text-[#16738f]"}`}>{news.is_pinned ? "ประกาศสำคัญ" : news.category}</span><span className="text-[11px] text-[#98a2b3]">{new Intl.DateTimeFormat("th-TH", { day: "numeric", month: "short" }).format(new Date(news.published_at))}</span></div><h3 className="mt-3 text-sm font-semibold text-[#344054]">{news.title}</h3><p className="mt-2 line-clamp-2 text-xs leading-5 text-[#667085]">{news.summary ?? "ติดตามรายละเอียดเพิ่มเติมจากชมรม"}</p></div>
-              )) : <div className="col-span-full bg-white p-6 text-center text-sm text-[#667085]">ยังไม่มีประกาศ</div>}
-            </div>
-          </article>
-          </>
+            </MemberSection>
           ) : null}
 
           {modules.scores ? (
-          <>
-          <article className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="flex size-10 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
-                  <Trophy className="size-5" aria-hidden="true" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-[#722257]">
-                    คะแนนและผลการแข่งขัน
-                  </h2>
-                  <p className="mt-1 text-sm text-[#6b6475]">
-                    ประวัติคะแนนจากกิจกรรมที่เข้าร่วม
-                  </p>
-                </div>
-              </div>
-              <ChevronRight className="size-5 text-[#9a94a6]" aria-hidden="true" />
-            </div>
-
-            {latestScoredRegistration ? (
-              <section className="mt-4 overflow-hidden rounded-lg border border-[#e2e8ef] bg-white">
-                <div className="flex flex-wrap items-center justify-between gap-3 bg-[#243244] px-4 py-3 text-white">
-                  <div><p className="text-xs text-white/60">สกอร์ล่าสุด 18 หลุม</p><p className="mt-1 text-sm font-semibold">{firstRelated(latestScoredRegistration.events)?.name ?? "รายการล่าสุด"}</p></div>
-                  <div className="flex gap-4 text-center"><div><p className="text-[10px] text-white/55">คะแนนรวม</p><p className="text-xl font-bold">{latestScoredRegistration.gross_score ?? "-"}</p></div><div><p className="text-[10px] text-white/55">คะแนนสุทธิ</p><p className="text-xl font-bold text-[#f1cf79]">{latestScoredRegistration.net_score ?? "-"}</p></div></div>
-                </div>
-                <div className="overflow-x-auto"><div className="min-w-[760px] p-3">{[
-                  { label: "หลุม", values: Array.from({ length: 18 }, (_, index) => index + 1) },
-                  { label: "พาร์", values: Array.from({ length: 18 }, (_, index) => latestHoleScores.find((item) => item.hole_number === index + 1)?.par ?? "-") },
-                  { label: "สกอร์", values: Array.from({ length: 18 }, (_, index) => latestHoleScores.find((item) => item.hole_number === index + 1)?.strokes ?? "-") },
-                ].map((row) => <div className="grid grid-cols-[54px_repeat(18,minmax(36px,1fr))] border-b border-[#edf0f3] last:border-0" key={row.label}><div className="px-2 py-2 text-xs font-semibold text-[#667085]">{row.label}</div>{row.values.map((value, index) => <div className={`border-l border-[#edf0f3] px-1 py-2 text-center text-xs ${row.label === "สกอร์" && value !== "-" ? "font-bold text-[#722257]" : "text-[#475467]"}`} key={index}>{value}</div>)}</div>)}</div></div>
-              </section>
-            ) : null}
-
-            <div className="mt-4 grid gap-3">
-              {scoreHistory?.length ? (
-                scoreHistory.map((score) => {
-                  const event = firstRelated(score.events);
-
-                  return (
-                    <div
-                      className="rounded-md border border-[#e6e2ee] bg-white/70 p-4"
-                      key={score.id}
-                    >
-                      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="font-semibold text-[#722257]">
-                              {event?.name ?? "กิจกรรม"}
-                            </p>
-                            <span className="rounded-md bg-white px-2 py-1 text-xs font-semibold text-[#6b6475]">
-                              {getScoreStatusLabel(score.score_status)}
-                            </span>
-                          </div>
-                          <p className="mt-1 text-sm text-[#6b6475]">
-                            {formatThaiDate(event?.event_date)} · {event?.venue ?? "ยังไม่ระบุสนาม"}
-                          </p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-2 text-sm sm:grid-cols-5">
-                          {[
-                            ["คะแนนรวม", orUnset(score.gross_score)],
-                            ["คะแนนสุทธิ", orUnset(score.net_score)],
-                            ["สเตเบิลฟอร์ด", orUnset(score.stableford_points)],
-                            ["กลุ่ม", orUnset(score.flight)],
-                            ["อันดับ", score.overall_rank ? `#${score.overall_rank}` : UNSET],
-                          ].map(([label, value]) => (
-                            <div className="rounded-md bg-white px-3 py-2" key={label}>
-                              <p className="text-xs font-semibold text-[#6b6475]">
-                                {label}
-                              </p>
-                              <p className="mt-1 font-semibold text-[#722257]">
-                                {value}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+            <MemberSection icon={ScoresIcon} id="scores" title="สกอร์และผลการแข่งขัน">
+              <EventsMemberScoreCards isBypass={access.isBypass} />
+              {latestScoredRegistration ? (
+                <section aria-label="สกอร์ล่าสุด" className="mb-4 overflow-hidden rounded-lg border border-line">
+                  <div className="flex flex-wrap items-end justify-between gap-3 bg-canvas px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-ink-subtle">สกอร์ล่าสุด</p>
+                      <p className="font-semibold text-ink">{latestScoreEvent?.name ?? "รายการล่าสุด"}</p>
+                      {latestScoreEvent?.event_date ? (
+                        <p className="text-sm text-ink-muted">{formatThaiDateShort(latestScoreEvent.event_date)}</p>
+                      ) : null}
                     </div>
-                  );
-                })
-              ) : (
-                <div className="rounded-md border border-[#e6e2ee] bg-white/70 p-4 text-sm text-[#6b6475]">
-                  ยังไม่มีประวัติคะแนนจากกิจกรรมที่เข้าร่วม
-                </div>
-              )}
-            </div>
-          </article>
+                    <dl className="flex gap-6 text-center">
+                      <div>
+                        <dt className="text-xs font-medium text-ink-subtle">สกอร์รวม (Gross)</dt>
+                        <dd className="text-kpi font-semibold tabular-nums text-ink">
+                          {latestScoredRegistration.gross_score ?? <span className="text-sm font-medium text-ink-subtle">{UNSET}</span>}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs font-medium text-ink-subtle">สกอร์สุทธิ (Net)</dt>
+                        <dd className="text-kpi font-semibold tabular-nums text-brand-600">
+                          {latestScoredRegistration.net_score ?? <span className="text-sm font-medium text-ink-subtle">{UNSET}</span>}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                  {latestHoleScores.length ? (
+                    <div className="overflow-x-auto border-t border-line">
+                      <table className="w-full min-w-[720px] text-center text-sm tabular-nums">
+                        <caption className="sr-only">สกอร์รายหลุม</caption>
+                        <thead>
+                          <tr className="border-b border-line">
+                            <th className="px-2 py-2 text-left text-xs font-medium text-ink-subtle" scope="row">
+                              หลุม
+                            </th>
+                            {holes.map((hole) => (
+                              <th className="border-l border-line px-1 py-2 text-xs font-medium text-ink-subtle" key={hole} scope="col">
+                                {hole}
+                              </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr className="border-b border-line">
+                            <th className="px-2 py-2 text-left text-xs font-medium text-ink-subtle" scope="row">
+                              พาร์
+                            </th>
+                            {holes.map((hole) => (
+                              <td className="border-l border-line px-1 py-2 text-ink-muted" key={hole}>
+                                {holeByNumber.get(hole)?.par ?? ""}
+                              </td>
+                            ))}
+                          </tr>
+                          <tr>
+                            <th className="px-2 py-2 text-left text-xs font-medium text-ink-subtle" scope="row">
+                              สกอร์
+                            </th>
+                            {holes.map((hole) => (
+                              <td className="border-l border-line px-1 py-2 font-semibold text-ink" key={hole}>
+                                {holeByNumber.get(hole)?.strokes ?? ""}
+                              </td>
+                            ))}
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
 
-          <article className="rounded-lg border border-[#e2e8ef] bg-white p-5 shadow-[0_8px_24px_rgba(30,41,59,.05)]">
-            <div className="flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-md bg-[#fff4d7] text-[#a87308]"><Award className="size-5" /></span><div><h2 className="text-lg font-semibold text-[#243244]">รางวัลและความสำเร็จ</h2><p className="mt-1 text-sm text-[#667085]">ผลงานที่ได้รับจากกิจกรรมและการแข่งขันของชมรม</p></div></div>
-            {awards?.length ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{awards.map((award) => <div className="flex items-start gap-3 rounded-lg border border-[#ece5d2] bg-[#fffcf4] p-4" key={award.id}><span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#C69214] text-white"><Trophy className="size-4" /></span><div><p className="font-semibold text-[#344054]">{award.title}</p><p className="mt-1 text-xs text-[#667085]">{firstRelated(award.events)?.name ?? award.award_type}</p><p className="mt-2 text-[11px] text-[#98701b]">{new Intl.DateTimeFormat("th-TH", { dateStyle: "medium" }).format(new Date(award.awarded_at))}</p></div></div>)}</div>
-            ) : <div className="mt-4 rounded-lg border border-dashed border-[#dce3ea] p-6 text-center text-sm text-[#667085]">รางวัลจากการแข่งขันจะแสดงที่นี่</div>}
-          </article>
-          </>
+              {scoreHistory?.length ? (
+                <ul className="grid gap-3">
+                  {scoreHistory.map((score) => {
+                    const event = firstRelated(score.events);
+                    const entered = Boolean(score.score_status) && score.score_status !== "not_entered";
+                    return (
+                      <li className="rounded-lg border border-line p-4" key={score.id}>
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="font-semibold text-ink">{event?.name ?? "กิจกรรม"}</p>
+                            <p className="mt-0.5 text-sm text-ink-muted">
+                              {formatThaiDateShort(event?.event_date)} · {event?.venue || NO_VENUE}
+                            </p>
+                          </div>
+                          <StatusBadge kind="score" status={score.score_status ?? "not_entered"}>
+                            {getScoreStatusLabel(score.score_status)}
+                          </StatusBadge>
+                        </div>
+                        {entered ? (
+                          <dl className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-5">
+                            {[
+                              ["สกอร์รวม (Gross)", orUnset(score.gross_score)],
+                              ["สกอร์สุทธิ (Net)", orUnset(score.net_score)],
+                              ["สเตเบิลฟอร์ด", orUnset(score.stableford_points)],
+                              ["ไฟลท์", orUnset(score.flight)],
+                              ["อันดับ", score.overall_rank ? String(score.overall_rank) : UNSET],
+                            ].map(([label, value]) => (
+                              <div className="min-w-0 rounded-md bg-canvas px-3 py-2" key={label}>
+                                <dt className="text-xs font-medium text-ink-subtle">{label}</dt>
+                                <dd className="mt-0.5 font-semibold tabular-nums text-ink">{value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <EmptyNote>ยังไม่มีสกอร์ ผลจะขึ้นที่นี่หลังผู้ดูแลประกาศผล</EmptyNote>
+              )}
+
+              <div className="mt-6">
+                <h3 className="flex items-center gap-2 text-base font-semibold text-ink">
+                  <AwardIcon className="size-4 text-gold-700" aria-hidden="true" />
+                  รางวัล
+                </h3>
+                {awards?.length ? (
+                  <ul className="mt-2 grid gap-3 sm:grid-cols-2">
+                    {awards.map((award) => (
+                      <li className="flex items-start gap-3 rounded-lg border border-line p-4" key={award.id}>
+                        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-gold-500 text-gold-ink">
+                          <AwardIcon className="size-5" aria-hidden="true" />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-ink">{award.title}</p>
+                          <p className="mt-0.5 text-sm text-ink-muted">{firstRelated(award.events)?.name ?? award.award_type}</p>
+                          <p className="mt-1 text-xs text-ink-subtle">{formatThaiDate(award.awarded_at)}</p>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-sm text-ink-muted">ยังไม่มีรางวัล</p>
+                )}
+              </div>
+              <EventsMemberHandicap clubId={clubId} isBypass={access.isBypass} manualHandicap={currentMember?.handicap} memberId={memberId} />
+            </MemberSection>
           ) : null}
 
-          {[
-            {
-              detail: "การจัดกลุ่มและเวลาออกรอบจะแสดงเมื่อผู้ดูแลจัดตารางแล้ว",
-              icon: ClipboardCheck,
-              module: "events" as const,
-              title: "กลุ่มและเวลาออกรอบ",
-            },
-            {
-              detail: "ตารางอันดับจะแสดงเมื่อประกาศผลการแข่งขัน",
-              icon: Trophy,
-              module: "scores" as const,
-              title: "ผลการแข่งขัน",
-            },
-          ].filter((item) => modules[item.module]).map((item) => (
-            <article
-              className="rounded-lg border border-[#e6e2ee] bg-white/95 backdrop-blur p-5 shadow-[0_18px_45px_rgba(114,34,87,0.08)]"
-              key={item.title}
-            >
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex size-10 items-center justify-center rounded-md bg-[#f8edf4] text-[#722257]">
-                    <item.icon className="size-5" aria-hidden="true" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-[#722257]">
-                      {item.title}
-                    </h2>
-                    <p className="mt-1 text-sm text-[#6b6475]">{item.detail}</p>
-                  </div>
+          <PointsMemberSection clubId={currentMember?.club_id} isBypass={access.isBypass} memberId={memberId} memberStatus={currentMember?.status} status={params.status} />
+        </div>
+
+        <aside aria-labelledby="me-title" className="grid min-w-0 content-start gap-4" id="me">
+          <h2 className="text-h2 font-semibold text-ink" id="me-title">
+            ข้อมูลของฉัน
+          </h2>
+          <MembershipMemberCard displayName={displayName} isBypass={access.isBypass} member={currentMember} userId={access.userId} />
+
+          <div className={memberCard}>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+              {[
+                ["แต้มต่อ", orUnset(currentMember?.handicap)],
+                ["ระดับฝีมือ", skillLevelLabels[currentMember?.skill_level ?? ""] ?? UNSET],
+                ["หน่วยงาน", orUnset(currentMember?.department ?? currentMember?.organization)],
+                ["ตำแหน่ง", orUnset(currentMember?.position ?? currentMember?.affiliation)],
+              ].map(([label, value]) => (
+                <div className="min-w-0" key={label}>
+                  <dt className="text-xs font-medium text-ink-subtle">{label}</dt>
+                  <dd className="mt-0.5 font-semibold text-ink">{value}</dd>
                 </div>
-                <ChevronRight className="size-5 text-[#9a94a6]" aria-hidden="true" />
-              </div>
-            </article>
-          ))}
-        </section>
+              ))}
+            </dl>
+            <Link className={`${buttonClass("secondary", "lg")} mt-4 w-full`} href={profileHref}>
+              <EditIcon className="size-4" aria-hidden="true" />
+              แก้ไขข้อมูลส่วนตัว
+            </Link>
+          </div>
+
+          <MemberPaymentHistory isBypass={access.isBypass} memberId={memberId} />
+
+          {notifications?.length ? (
+            <MemberSection
+              action={
+                unreadCount ? (
+                  <form action={markNotificationsRead}>
+                    <button className={buttonClass("ghost", "sm")} type="submit">
+                      อ่านทั้งหมด
+                    </button>
+                  </form>
+                ) : undefined
+              }
+              icon={NotificationsIcon}
+              id="inbox"
+              title={
+                <>
+                  การแจ้งเตือน
+                  {unreadCount ? (
+                    <span className="ml-2 inline-flex rounded-full bg-gold-500 px-2 align-middle text-xs font-semibold leading-5 text-gold-ink">
+                      {unreadCount} ใหม่
+                    </span>
+                  ) : null}
+                </>
+              }
+            >
+              <ul className="grid gap-2">
+                {notifications.map((item) => (
+                  <li
+                    className={`rounded-lg px-3 py-2.5 ${item.read_at ? "bg-canvas" : "border-l-4 border-gold-500 bg-white ring-1 ring-inset ring-line"}`}
+                    key={item.id}
+                  >
+                    <p className="text-sm font-semibold text-ink">
+                      {item.read_at ? null : <span className="sr-only">ใหม่: </span>}
+                      {item.subject}
+                    </p>
+                    <p className="mt-0.5 text-sm text-ink-muted">{item.body}</p>
+                    <p className="mt-1 text-xs text-ink-subtle">{formatThaiDateTime(item.created_at)}</p>
+                  </li>
+                ))}
+              </ul>
+            </MemberSection>
+          ) : null}
+
+          <form action={signOut}>
+            <button className={`${buttonClass("secondary", "lg")} w-full`} type="submit">
+              <LogOut className="size-4" aria-hidden="true" />
+              ออกจากระบบ
+            </button>
+          </form>
+        </aside>
       </div>
+
+      <MemberTabBar
+        events={modules.events}
+        hrefs={{ lessons: lessonsHref }}
+        lessons={modules.lessons}
+        scores={modules.scores}
+        unread={unreadCount}
+      />
     </main>
   );
 }

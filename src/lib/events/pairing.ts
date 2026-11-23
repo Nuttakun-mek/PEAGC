@@ -15,13 +15,13 @@ export type RegistrationStatus =
 export const registrationStatusLabels: Record<string, string> = {
   cancelled: "ยกเลิก",
   checked_in: "เช็กอินแล้ว",
-  draft: "ร่าง",
+  draft: "ฉบับร่าง",
   no_show: "ไม่มาแสดงตัว",
   paid: "ชำระเงินแล้ว",
   payment_review: "รอตรวจหลักฐาน",
   pending_payment: "รอชำระเงิน",
   registered: "ยืนยันแล้ว",
-  waitlist: "รายชื่อสำรอง",
+  waitlist: "คิวสำรอง",
 };
 
 /** Mirrors SQL `_event_seat_status`: statuses that count against event capacity. */

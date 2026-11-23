@@ -26,6 +26,7 @@ const Scorecard = z.object({
       cells: z.array(Cell),
       name: z.string(),
       nameConfidence: z.enum(["high", "medium", "low"]),
+      totals: z.object({ in: z.string(), out: z.string(), total: z.string() }),
     }),
   ),
   printedPars: z.array(z.string()),
@@ -47,6 +48,7 @@ For each player row on the card, report:
   - enclosure: the shape drawn around the mark (circle, double_circle, square, double_square) or none.
   - confidence: high only when the mark is unambiguous; medium if two readings are plausible; low if you are guessing.
 - nameConfidence: same scale, for the name.
+- totals: the OUT (holes 1-9), IN (holes 10-18) and TOTAL values written on this player's row, copied exactly as written (they are checked against the hole cells later). Use "" for a blank or missing box.
 
 Also report:
 - notation: "relative" if the hole cells are written relative to par (+1, -1, 0, E), otherwise "absolute" (stroke counts).
@@ -100,6 +102,7 @@ export async function readScorecard(image: { base64: string; mediaType: "image/j
       })),
       name: player.name,
       nameConfidence: player.nameConfidence,
+      totals: player.totals,
     })),
     printedPars: parsed.printedPars,
   };

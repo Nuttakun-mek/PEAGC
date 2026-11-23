@@ -39,7 +39,37 @@ export const employeeMatchCheckLabels: Record<string, string> = {
 /** Values of members.employee_match_detail.reason. */
 export const employeeMatchReasonLabels: Record<string, string> = {
   employee_code_not_found: "ไม่พบรหัสพนักงานในฐานสมาชิกสมาคม",
+  external: "บุคคลภายนอก (มีสมาชิกรับรอง)",
+  inactive_in_directory: "พ้นสภาพในฐานสมาชิกสมาคม",
   left_directory: "ไม่อยู่ในฐานสมาชิกสมาคมเดือนล่าสุด",
+  name_mismatch: "ชื่อไม่ตรงกับฐานสมาชิกสมาคม",
+  not_found: "ไม่พบรหัสพนักงานในฐานสมาชิกสมาคม",
+};
+
+/** Stored members.status. "ใกล้หมดอายุ" is derived, see src/lib/membership/lifecycle.ts. */
+export const memberStatusLabels: Record<string, string> = {
+  active: "ใช้งาน",
+  archived: "เก็บถาวร",
+  expired: "หมดอายุ",
+  guest: "บุคคลภายนอก",
+  inactive: "ไม่ใช้งาน",
+  pending_verification: "รอตรวจ",
+  resigned: "พ้นสภาพ/ลาออก",
+  suspended: "ระงับ",
+};
+
+/** point_redemptions.status (แลกของรางวัลด้วยแต้มสะสม). */
+export const redemptionStatusLabels: Record<string, string> = {
+  cancelled: "ยกเลิก",
+  fulfilled: "รับของแล้ว",
+  requested: "รอรับของ",
+};
+
+/** membership_terms.status (ค่าบำรุงรายปี). */
+export const membershipTermStatusLabels: Record<string, string> = {
+  active: "ชำระแล้ว",
+  cancelled: "ยกเลิก",
+  pending_payment: "รอชำระ",
 };
 
 export function labelFor(map: Record<string, string>, value: string | null | undefined, fallback = UNSET) {
@@ -50,6 +80,7 @@ export function labelFor(map: Record<string, string>, value: string | null | und
 export const roleLabels: Record<string, string> = {
   auditor: "ผู้ตรวจสอบ",
   club_admin: "ผู้ดูแลชมรม",
+  coach: "ผู้สอน",
   committee: "กรรมการ",
   finance_officer: "เจ้าหน้าที่การเงิน",
   member: "สมาชิก",

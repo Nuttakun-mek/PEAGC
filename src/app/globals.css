@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f2f5f8;
+  --background: #f8fafc;
   --foreground: #2f3137;
   --peagc-purple: #722257;
   --peagc-purple-soft: #f8edf4;
@@ -14,8 +14,57 @@
   --peagc-dark-gray: #2f3137;
   --peagc-border: #e2e8ef;
   --peagc-border-strong: #d4dce6;
-  --peagc-muted: #6b6475;
+  --peagc-muted: #667085;
   --peagc-card: rgba(255, 255, 255, 0.94);
+}
+
+/*
+ * Design tokens (UX/UI audit, Nov 2026). Components reference these names instead of hex values:
+ * brand = plum, gold-500 = decoration only (never white text on it), gold-700 = gold button with
+ * white text (5.27:1), gold-ink = text on gold-500 (6.02:1). Status colours carry meaning only.
+ */
+@theme {
+  --color-brand-50: #f8edf4;
+  --color-brand-600: #722257;
+  --color-brand-700: #5c1b46;
+  --color-gold-500: #c69214;
+  --color-gold-700: #8c6510;
+  --color-gold-ink: #2b1a00;
+
+  --color-ink: #1f2937;
+  --color-ink-muted: #475467;
+  --color-ink-subtle: #667085;
+  --color-line: #e2e8ef;
+  --color-canvas: #f8fafc;
+
+  --color-success: #067647;
+  --color-success-bg: #ecfdf3;
+  --color-warning: #b54708;
+  --color-warning-bg: #fffaeb;
+  --color-danger: #b42318;
+  --color-danger-bg: #fef3f2;
+  --color-info: #175cd3;
+  --color-info-bg: #eff8ff;
+  --color-neutral: #475467;
+  --color-neutral-bg: #f2f4f7;
+
+  /* Type scale. Thai needs room for marks above and below: nothing under 13px, line-height ≥ 1.5. */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.625rem;
+  --text-h3: 1.0625rem;
+  --text-h3--line-height: 1.625rem;
+  --text-h2: 1.25rem;
+  --text-h2--line-height: 1.75rem;
+  --text-display: 2rem;
+  --text-display--line-height: 2.5rem;
+  --text-kpi: 2rem;
+  --text-kpi--line-height: 2.25rem;
+
+  --shadow-card: 0 1px 2px rgb(16 24 40 / 0.05);
 }
 
 @theme inline {
@@ -35,34 +84,18 @@
   --color-peagc-muted: var(--peagc-muted);
   --font-sans: var(--font-sarabun), "Sarabun", "Noto Sans Thai", "Prompt", ui-sans-serif,
     system-ui, sans-serif;
-  --font-mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", var(--font-sarabun), monospace;
+  /* Codes and member numbers use Sarabun with tabular figures, not a platform monospace font. */
+  --font-mono: var(--font-sarabun), "Sarabun", "Noto Sans Thai", ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
+  font-size: 1rem;
+  line-height: 1.625;
   font-family: var(--font-sarabun), "Sarabun", "Noto Sans Thai", "Prompt", ui-sans-serif,
     system-ui, sans-serif;
   text-rendering: optimizeLegibility;
-}
-
-body::before {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  content: "";
-  background: linear-gradient(145deg, rgba(114, 34, 87, 0.025), transparent 38%, rgba(33, 118, 174, 0.035));
-}
-
-body::after {
-  position: fixed;
-  inset: auto 0 0 0;
-  z-index: -1;
-  height: 42vh;
-  pointer-events: none;
-  content: "";
-  display: none;
 }
 
 input,
@@ -79,24 +112,6 @@ textarea {
   background: rgba(255, 255, 255, 0.9);
   border-bottom: 1px solid var(--peagc-border);
   backdrop-filter: blur(14px);
-}
-
-.login-visual {
-  background:
-    linear-gradient(135deg, rgba(70, 16, 52, 0.95), rgba(114, 34, 87, 0.91) 52%, rgba(36, 79, 108, 0.9)),
-    radial-gradient(circle at 80% 24%, rgba(198, 146, 20, 0.5), transparent 24rem);
-}
-
-.login-visual::after {
-  position: absolute;
-  inset: auto -10% -18% 12%;
-  height: 56%;
-  content: "";
-  border-radius: 50% 50% 0 0;
-  background:
-    radial-gradient(circle at 72% 26%, #fff 0 0.45rem, transparent 0.5rem),
-    repeating-radial-gradient(ellipse at 50% 100%, rgba(255,255,255,.16) 0 1px, transparent 1px 24px),
-    linear-gradient(160deg, rgba(198,146,20,.34), rgba(255,255,255,.04));
 }
 
 button {
@@ -159,46 +174,6 @@ button {
   border-color: var(--peagc-purple) !important;
 }
 
-.golf-visual {
-  position: relative;
-  overflow: hidden;
-}
-
-.golf-visual > * {
-  position: relative;
-  z-index: 1;
-}
-
-.golf-visual::before {
-  position: absolute;
-  right: -4rem;
-  bottom: -5rem;
-  width: min(34rem, 70vw);
-  height: min(18rem, 34vw);
-  content: "";
-  z-index: 0;
-  border-radius: 999px 999px 0 0;
-  background:
-    radial-gradient(circle at 72% 32%, rgba(198, 146, 20, 0.55) 0 0.55rem, transparent 0.6rem),
-    repeating-radial-gradient(ellipse at 50% 100%, rgba(255, 255, 255, 0.48) 0 1px, transparent 1px 18px),
-    linear-gradient(135deg, rgba(114, 34, 87, 0.16), rgba(0, 163, 255, 0.1));
-  opacity: 0.72;
-}
-
-.golf-visual::after {
-  position: absolute;
-  right: 4.5rem;
-  bottom: 6.4rem;
-  width: 4.5rem;
-  height: 5.8rem;
-  content: "";
-  z-index: 0;
-  background:
-    linear-gradient(#722257, #722257) left 0.15rem top / 2px 100% no-repeat,
-    linear-gradient(135deg, #C69214 0 52%, transparent 53%) left 0.2rem top 0.2rem / 4rem 2.3rem no-repeat;
-  opacity: 0.82;
-}
-
 /* ---------- Base polish (shared by every page) ---------- */
 
 html {
@@ -212,7 +187,18 @@ html {
 
 input::placeholder,
 textarea::placeholder {
-  color: #98a2b3;
+  color: #667085;
+}
+
+/*
+ * Inputs are 16px everywhere: Thai at 14px is hard to read, and iOS Safari zooms the page on
+ * focus for anything smaller. Unlayered on purpose so it wins over text-sm utilities. Add
+ * .input-compact to a deliberately tiny cell (e.g. 18-hole score grids) to opt out.
+ */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(.input-compact),
+select:not(.input-compact),
+textarea:not(.input-compact) {
+  font-size: 1rem;
 }
 
 input[type="checkbox"],
@@ -246,23 +232,64 @@ summary::-webkit-details-marker {
   display: none;
 }
 
+/*
+ * Keyboard focus ring for everything that can take focus. Unlayered, so it shows even where a
+ * component sets outline-none (inputs keep their border/ring styling and get the outline on top).
+ */
 a:focus-visible,
 button:focus-visible,
-summary:focus-visible {
+summary:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
   outline: 2px solid var(--peagc-electric-purple);
   outline-offset: 2px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--peagc-electric-purple);
+  outline-offset: 1px;
+}
+
+/* The palette's search field is the only control of its dialog and is always the focused one. */
+.command-palette input[role="combobox"]:focus-visible {
+  outline: none;
+}
+
+/* "ข้ามไปยังเนื้อหา": first stop for keyboard users, hidden until focused. */
+.skip-link {
+  position: fixed;
+  top: 0.75rem;
+  left: 1rem;
+  z-index: 100;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  background: var(--color-brand-600);
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  transform: translateY(-200%);
+  transition: transform 0.15s ease-out;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  transform: none;
 }
 
 button:not(:disabled):active {
   transform: translateY(1px);
 }
 
-table {
+table,
+.font-mono {
   font-variant-numeric: tabular-nums;
 }
 
 h1,
-h2 {
+h2,
+h3 {
   text-wrap: balance;
 }
 
@@ -366,7 +393,43 @@ h2 {
   }
 }
 
+/* ---------- Command palette (Ctrl+K) ---------- */
+
+.command-palette {
+  width: min(40rem, calc(100vw - 1.5rem));
+  max-width: none;
+  max-height: none;
+  margin: 10vh auto auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-line);
+  border-radius: 1rem;
+  background: #fff;
+  color: inherit;
+  box-shadow: 0 30px 80px rgba(16, 24, 40, 0.28);
+}
+
+.command-palette::backdrop {
+  background: rgba(29, 19, 32, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.command-palette[open] {
+  animation: dialog-in 0.18s ease-out;
+}
+
+@media (max-width: 40rem) {
+  .command-palette {
+    margin-top: 0.75rem;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .skip-link {
+    transition: none;
+  }
+
+  .command-palette[open],
   .status-toast,
   .status-toast-timer,
   .confirm-dialog[open] {

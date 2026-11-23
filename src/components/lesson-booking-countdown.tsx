@@ -8,6 +8,7 @@ import { formatCountdown } from "@/lib/lessons/booking";
 /**
  * Live "opens in HH:MM:SS" ticker. When the countdown reaches zero it refreshes the
  * server-rendered page so the booking buttons switch on for everyone at the same time.
+ * Takes its colour from the surrounding notice.
  */
 export function LessonBookingCountdown({ openAt }: { openAt: string }) {
   const router = useRouter();
@@ -29,7 +30,7 @@ export function LessonBookingCountdown({ openAt }: { openAt: string }) {
   }, [openAt, router]);
 
   return (
-    <span className="font-semibold tabular-nums text-[#805300]" suppressHydrationWarning>
+    <span className="font-semibold tabular-nums" suppressHydrationWarning>
       {formatCountdown(left)}
     </span>
   );

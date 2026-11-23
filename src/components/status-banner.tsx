@@ -5,10 +5,10 @@ import { StatusBannerShell } from "@/components/status-banner-shell";
 export type BannerTone = "success" | "info" | "warning" | "error";
 
 const toneStyles: Record<BannerTone, { icon: typeof Info; wrap: string }> = {
-  error: { icon: XCircle, wrap: "border-[#f3c6cb] bg-[#fdecec] text-[#8a1f11]" },
-  info: { icon: Info, wrap: "border-[#e6d9e2] bg-[#f8edf4] text-[#722257]" },
-  success: { icon: CheckCircle2, wrap: "border-[#bfe3cf] bg-[#edf9f3] text-[#16794b]" },
-  warning: { icon: AlertTriangle, wrap: "border-[#efd9a6] bg-[#fff9ed] text-[#805300]" },
+  error: { icon: XCircle, wrap: "border-danger/20 bg-danger-bg text-danger" },
+  info: { icon: Info, wrap: "border-info/20 bg-info-bg text-info" },
+  success: { icon: CheckCircle2, wrap: "border-success/20 bg-success-bg text-success" },
+  warning: { icon: AlertTriangle, wrap: "border-warning/20 bg-warning-bg text-warning" },
 };
 
 /** Picks a tone from a `?status=` key by its wording so every page colours feedback consistently. */

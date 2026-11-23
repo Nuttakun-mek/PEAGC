@@ -76,10 +76,19 @@ export type ProgramUsage = {
   waitlisted: number;
 };
 
+/** Booking statuses that never hold a seat: cancelled (incl. late) and club closures. */
+const releasedBookingStatuses = new Set(["cancelled", "late_cancelled", "closed"]);
+
 export function lessonUsageByProgram(slots: LessonSlotRow[], bookings: LessonBookingRow[]) {
   const activeBySlot = new Map<string, LessonBookingRow[]>();
+  const waitlistBySlot = new Map<string, number>();
   for (const booking of bookings) {
-    if (booking.status === "cancelled") continue;
+    if (releasedBookingStatuses.has(booking.status)) continue;
+    // Lessons v2 stores the queue as status "waitlist"; v1 kept everyone "booked" past capacity.
+    if (booking.status === "waitlist") {
+      waitlistBySlot.set(booking.slot_id, (waitlistBySlot.get(booking.slot_id) ?? 0) + 1);
+      continue;
+    }
     activeBySlot.set(booking.slot_id, [...(activeBySlot.get(booking.slot_id) ?? []), booking]);
   }
 
@@ -101,7 +110,7 @@ export function lessonUsageByProgram(slots: LessonSlotRow[], bookings: LessonBoo
     usage.slots += 1;
     usage.seats += slot.capacity;
     usage.booked += Math.min(active.length, slot.capacity);
-    usage.waitlisted += Math.max(0, active.length - slot.capacity);
+    usage.waitlisted += Math.max(0, active.length - slot.capacity) + (waitlistBySlot.get(slot.id) ?? 0);
     usage.attended += active.filter((b) => b.status === "attended").length;
     usage.noShow += active.filter((b) => b.status === "no_show").length;
     programs.set(slot.program_id, usage);
@@ -139,8 +148,11 @@ export function eventAttendance(events: EventRow[], registrations: RegistrationR
     .sort((a, b) => b.eventDate.localeCompare(a.eventDate));
 }
 
-export function percent(value: number | null) {
-  return value === null ? "-" : `${Math.round(value * 100)}%`;
+/** Shown wherever a rate or figure has nothing to compute from (no seats, no check-ins …). */
+export const NO_DATA = "ยังไม่มีข้อมูล";
+
+export function percent(value: number | null | undefined) {
+  return value === null || value === undefined || !Number.isFinite(value) ? NO_DATA : `${Math.round(value * 100)}%`;
 }
 
 export function baht(value: number) {

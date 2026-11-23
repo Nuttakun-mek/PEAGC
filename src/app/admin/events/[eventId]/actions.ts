@@ -3,16 +3,26 @@
 import { redirectAfterAction as redirect } from "@/lib/navigation";
 
 import { eventOperationRoles, requireStaffClub } from "@/lib/auth/staff";
+import { selectWithOptional } from "@/lib/events/db";
+import { type FlightMode, planFlightGroups } from "@/lib/events/flights";
 import {
   type AssignStrategy,
   type PairingMode,
   autoAssignPlayers,
   eventErrorToStatus,
+  isConfirmed,
   isPairable,
   isValidTime,
   planPairingGroups,
   restoredStatus,
 } from "@/lib/events/pairing";
+import { computedCategories, isPrizeCategory, suggestPrizes } from "@/lib/events/prizes";
+import { loadClubHandicaps } from "@/lib/scoring/club-handicap";
+import { loadScoringData, verifiedPlayerInputs } from "@/lib/scoring/data";
+import { computeLeaderboard, parseRules } from "@/lib/scoring/engine";
+import { chooseHandicap } from "@/lib/scoring/handicap";
+import { classifyDbError, failureStatus, logDbError } from "@/lib/supabase/errors";
+import { anyCorruptedText } from "@/lib/text-integrity";
 
 function getString(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -35,7 +45,7 @@ async function requireEventStaff(eventId: string) {
   const staff = await requireStaffClub(eventOperationRoles, `/admin/events/${eventId}`);
   const { data: event } = await staff.supabase
     .from("events")
-    .select("id, club_id, name, member_price, status")
+    .select("id, club_id, name, member_price, status, event_date")
     .eq("club_id", staff.clubId)
     .eq("id", eventId)
     .maybeSingle();
@@ -377,4 +387,246 @@ export async function updateAttendance(formData: FormData) {
     before: { checked_in_at: registration.checked_in_at, status: registration.status },
   });
   back(eventId, status, `reg-${registrationId}`);
+}
+
+// ---------- automatic flights by handicap ----------
+
+/**
+ * "จัดกลุ่มอัตโนมัติตามแต้มต่อ": replaces all groups with new ones, flights A/B/C by thirds (or the
+ * competition's handicap ranges), groups of N inside each flight, then seats every player.
+ */
+export async function autoFlightPairings(formData: FormData) {
+  const eventId = getString(formData, "eventId");
+  const staff = await requireEventStaff(eventId);
+  const mode: PairingMode = getString(formData, "mode") === "shotgun" ? "shotgun" : "tee_times";
+  const rawFlightMode = getString(formData, "flightMode");
+  const flightMode: FlightMode = rawFlightMode === "ranges" || rawFlightMode === "single" ? rawFlightMode : "thirds";
+  const groupSize = Math.min(8, Math.max(1, getInt(formData, "groupSize", 4)));
+  const confirmedOnly = getString(formData, "confirmedOnly") === "on";
+
+  // The flight column comes with the courses/handicap migration: check before deleting anything.
+  const probe = await staff.supabase.from("event_pairing_groups").select("id, flight").eq("event_id", eventId).limit(1);
+  if (probe.error) {
+    logDbError("event_pairing.auto_flight probe", probe.error);
+    back(eventId, classifyDbError(probe.error) === "schema-outdated" ? "db-outdated" : "groups-failed", "pairing");
+  }
+
+  const [{ data: competition }, registrationResult] = await Promise.all([
+    staff.supabase.from("competitions").select("rules").eq("event_id", eventId).maybeSingle(),
+    selectWithOptional<unknown[]>(
+      (columns) => staff.supabase.from("event_registrations").select(columns).eq("event_id", eventId),
+      "id, status, created_at, member_id, members(handicap, official_handicap_index)",
+      "id, status, created_at, member_id, members(handicap)",
+      "event_pairing.auto_flight registrations",
+    ),
+  ]);
+  const rules = parseRules(competition?.rules ?? null);
+  if (flightMode === "ranges" && !rules.flights.length) back(eventId, "no-flight-ranges", "pairing");
+
+  type Row = {
+    created_at: string;
+    id: string;
+    member_id: string | null;
+    members: { handicap: number | null; official_handicap_index?: number | null } | null;
+    status: string;
+  };
+  const rows = ((registrationResult.data ?? []) as unknown as Row[])
+    .filter((row) => isPairable(row.status))
+    .filter((row) => !confirmedOnly || isConfirmed(row.status));
+  if (!rows.length) back(eventId, "no-players", "pairing");
+
+  const handicaps = await loadClubHandicaps(
+    staff.supabase,
+    staff.clubId,
+    rows.flatMap((row) => (row.member_id ? [{ id: row.member_id, manual: row.members?.handicap ?? null }] : [])),
+    { before: staff.event.event_date },
+  );
+  const players = rows.map((row) => ({
+    createdAt: row.created_at,
+    handicap: chooseHandicap(rules.handicapSource === "official" ? "official" : "club", {
+      club: row.member_id ? (handicaps.get(row.member_id)?.index ?? null) : null,
+      manual: row.members?.handicap ?? null,
+      official: row.members?.official_handicap_index ?? null,
+    }).value,
+    id: row.id,
+  }));
+
+  const plan = planFlightGroups(players, { groupSize, mode: flightMode, ranges: rules.flights });
+  const times = planPairingGroups({
+    firstTeeTime: getString(formData, "firstTeeTime"),
+    groupSize,
+    intervalMinutes: getInt(formData, "intervalMinutes", 8),
+    mode,
+    playerCount: plan.length * groupSize,
+    splitTee: getString(formData, "splitTee") === "on",
+    startingGroupNo: 1,
+  });
+  if ("error" in times) back(eventId, times.error, "pairing");
+
+  // FK is ON DELETE SET NULL: everyone becomes unassigned, then is seated again below.
+  const { error: deleteError } = await staff.supabase.from("event_pairing_groups").delete().eq("event_id", eventId);
+  if (deleteError) back(eventId, "groups-failed", "pairing");
+
+  const { data: created, error: insertError } = await staff.supabase
+    .from("event_pairing_groups")
+    .insert(
+      plan.map((group, index) => ({
+        capacity: Math.max(groupSize, group.registrationIds.length),
+        club_id: staff.clubId,
+        created_by: staff.userId,
+        event_id: eventId,
+        flight: group.flight || null,
+        group_no: times.items[index].group_no,
+        start_hole: times.items[index].start_hole,
+        tee_time: times.items[index].tee_time,
+        updated_by: staff.userId,
+      })),
+    )
+    .select("id, group_no");
+  if (insertError || !created) {
+    logDbError("event_pairing.auto_flight insert", insertError);
+    back(eventId, failureStatus("groups-failed", insertError), "pairing");
+  }
+
+  const groupIdByNo = new Map(created.map((group) => [group.group_no, group.id]));
+  let failed = 0;
+  for (const [index, group] of plan.entries()) {
+    const groupId = groupIdByNo.get(times.items[index].group_no);
+    if (!groupId) continue;
+    const { error } = await staff.supabase
+      .from("event_registrations")
+      .update({ pairing_group_id: groupId, updated_by: staff.userId })
+      .eq("event_id", eventId)
+      .in("id", group.registrationIds);
+    if (error) failed += group.registrationIds.length;
+  }
+
+  await audit(staff, "event_pairing.auto_flighted", "events", eventId, {
+    after: { failed, flight_mode: flightMode, groups: plan.length, group_size: groupSize, players: players.length },
+  });
+  back(eventId, failed ? "players-assigned-partial" : "flights-generated", "pairing");
+}
+
+// ---------- prizes ----------
+
+const prizeErrorStatus = (error: { code?: string | null; message?: string | null } | null) => {
+  if (!error) return "prize-failed";
+  if ((error.message ?? "").includes("PRIZE_WINNER_MISMATCH")) return "prize-winner-mismatch";
+  if (classifyDbError(error) === "duplicate") return "prize-duplicate";
+  return failureStatus("prize-failed", error);
+};
+
+export async function savePrize(formData: FormData) {
+  const eventId = getString(formData, "eventId");
+  const staff = await requireEventStaff(eventId);
+  const category = getString(formData, "category");
+  if (!isPrizeCategory(category)) back(eventId, "prize-invalid", "prizes");
+  const registrationId = getString(formData, "registrationId") || null;
+  const guestName = getString(formData, "guestName") || null;
+  if (!registrationId && !guestName) back(eventId, "prize-no-winner", "prizes");
+  const flight = getString(formData, "flight") || null;
+  if (category === "flight_winner" && !flight) back(eventId, "prize-no-flight", "prizes");
+  const label = getString(formData, "label") || null;
+  const note = getString(formData, "note") || null;
+  if (anyCorruptedText([guestName, label, note, flight])) back(eventId, "text-corrupted", "prizes");
+
+  const payload = {
+    category,
+    club_id: staff.clubId,
+    created_by: staff.userId,
+    event_id: eventId,
+    event_registration_id: registrationId,
+    flight: category === "flight_winner" ? flight : null,
+    guest_name: registrationId ? null : guestName,
+    label,
+    note,
+    rank: Math.min(20, Math.max(1, getInt(formData, "rank", 1))),
+    source: "manual",
+    updated_by: staff.userId,
+  };
+  const { data, error } = await staff.supabase.from("event_prizes").insert(payload).select("id").single();
+  if (error || !data) {
+    logDbError("event_prizes.insert", error);
+    back(eventId, prizeErrorStatus(error), "prizes");
+  }
+  await audit(staff, "event_prize.created", "event_prizes", data.id, { after: payload });
+  back(eventId, "prize-saved", "prizes");
+}
+
+export async function deletePrize(formData: FormData) {
+  const eventId = getString(formData, "eventId");
+  const prizeId = getString(formData, "prizeId");
+  const staff = await requireEventStaff(eventId);
+  const { data, error } = await staff.supabase
+    .from("event_prizes")
+    .delete()
+    .eq("event_id", eventId)
+    .eq("id", prizeId)
+    .select("id, category, rank, member_id, guest_name, label, flight");
+  if (error || !data?.length) {
+    logDbError("event_prizes.delete", error);
+    back(eventId, failureStatus("prize-failed", error), "prizes");
+  }
+  await audit(staff, "event_prize.deleted", "event_prizes", prizeId, { before: data[0] });
+  back(eventId, "prize-deleted", "prizes");
+}
+
+/** Fill best gross / net / stableford / flight winners from the verified leaderboard. */
+export async function applySuggestedPrizes(formData: FormData) {
+  const eventId = getString(formData, "eventId");
+  const staff = await requireEventStaff(eventId);
+  const topN = Math.min(10, Math.max(1, getInt(formData, "topN", 1)));
+  const oneWin = getString(formData, "oneWin") === "on";
+
+  const data = await loadScoringData(staff.supabase, staff.clubId, eventId);
+  if (!data.competition || !data.rules) back(eventId, "prize-no-competition", "prizes");
+  const board = computeLeaderboard(data.rules, verifiedPlayerInputs(data));
+  const suggestions = suggestPrizes(board, data.rules, { oneWinPerPlayer: oneWin, topN });
+  if (!suggestions.length) back(eventId, "prize-nothing-verified", "prizes");
+
+  const { data: existing, error: loadError } = await staff.supabase
+    .from("event_prizes")
+    .select("id, category, rank, flight, label, source")
+    .eq("event_id", eventId);
+  if (loadError) {
+    logDbError("event_prizes.load", loadError);
+    back(eventId, failureStatus("prize-failed", loadError), "prizes");
+  }
+  // Replace earlier suggestions; never touch prizes typed in by staff.
+  const { error: clearError } = await staff.supabase
+    .from("event_prizes")
+    .delete()
+    .eq("event_id", eventId)
+    .eq("source", "leaderboard")
+    .in("category", computedCategories);
+  if (clearError) back(eventId, failureStatus("prize-failed", clearError), "prizes");
+
+  const manualKeys = new Set(
+    (existing ?? [])
+      .filter((row) => row.source === "manual")
+      .map((row) => `${row.category}|${row.flight ?? ""}|${row.label ?? ""}|${row.rank}`),
+  );
+  const rows = suggestions
+    .filter((item) => !manualKeys.has(`${item.category}|${item.flight ?? ""}||${item.rank}`))
+    .map((item) => ({
+      category: item.category,
+      club_id: staff.clubId,
+      created_by: staff.userId,
+      event_id: eventId,
+      event_registration_id: item.registrationId,
+      flight: item.flight,
+      note: item.value === null ? null : `สกอร์ ${item.value}`,
+      rank: item.rank,
+      source: "leaderboard",
+      updated_by: staff.userId,
+    }));
+  if (rows.length) {
+    const { error } = await staff.supabase.from("event_prizes").insert(rows);
+    if (error) {
+      logDbError("event_prizes.suggest", error);
+      back(eventId, prizeErrorStatus(error), "prizes");
+    }
+  }
+  await audit(staff, "event_prize.suggested", "events", eventId, { after: { count: rows.length, one_win: oneWin, top_n: topN } });
+  back(eventId, "prizes-suggested", "prizes");
 }
