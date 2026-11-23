@@ -127,7 +127,8 @@ Built from the UX/UI audit's phases 2–3 (LINE login/notifications were dropped
 - **Events and scoring** (`20261123097000_golf_courses_handicap.sql`): courses and tees (par / SI / rating / slope), แต้มต่อชมรม (WHS-style) + Handicap Index ทางการ, auto flights, tee sheet, public event page with share image `/events/[eventId]`, live leaderboard, prizes, keypad score entry, player → marker confirmation, OCR sum checks.
 - **Fixes**: `20261123090000_fix_directory_replace_flags.sql` (replace imports no longer flag members who were never linked to the directory), `20261123098000_scope_club_read_policies.sql` (coaches and `member`-role rows can no longer read every member, registration, notification or file).
 - **Crons** (`vercel.json`, all need `CRON_SECRET`): `/api/cron/lessons` (offers, no-shows, credit expiry), `/api/cron/membership` (expiry, reminders, directory grace, points expiry), `/api/cron/payments` (slip retention).
-- **Applying the migrations**: `npx supabase db push --db-url "$MIGRATION_DATABASE_URL"`, or paste `supabase/snippets/uat-apply-2026-11-23.sql` (all eight in one transaction, records the versions) into the SQL Editor. Until then the new screens show "ฐานข้อมูลยังไม่ได้อัปเดต" and the old flows keep working.
+- **Applying the migrations**: `npx supabase db push --db-url "$MIGRATION_DATABASE_URL"`, or paste `supabase/snippets/uat-apply-2026-11-23.sql` (20261116090000 plus the eight above, one transaction, records the versions) into the SQL Editor. Until then the new screens show "ฐานข้อมูลยังไม่ได้อัปเดต" and the old flows keep working.
+- **UAT status (2026-11-23):** remote project `dlaeluakeqcbizvmosdg` has every migration through `20261123098000` applied (via the Management API); `peagc.vercel.app` deploys from `main`.
 
 ## Notes
 
